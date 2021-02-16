@@ -14,7 +14,7 @@ This is the HLP group project for team 5.
 ###### Symbol
   * Chizu
   * Marcus
-###### Wire
+###### BusWire
   * Wei Loon
   * Sofia
 ###### Sheet
