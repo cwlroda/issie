@@ -4,7 +4,7 @@ This is the HLP group project for team 5.
 ## File structure
     <root>
     |- indivial
-    |  \ <college code>
+    |  \ <login>-<module>
     |    \ <individual project code>
     \- common
        |- interfaces.md
