@@ -13,9 +13,9 @@ This is the HLP group project for team 5.
 ## Project allocation
 ###### Symbol
   * Chizu
-  * Wei Loon
-###### Wire
   * Marcus
+###### Wire
+  * Wei Loon
   * Sofia
 ###### Sheet
   * Ole
