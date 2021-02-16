@@ -3,7 +3,7 @@ This is the HLP group project for team 5.
 
 ## File structure
     <root>
-    |- indivial
+    |- individual
     |  \ <login>-<module>
     |    \ <individual project code>
     \- common
