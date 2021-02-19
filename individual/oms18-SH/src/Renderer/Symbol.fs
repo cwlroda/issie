@@ -22,6 +22,7 @@ type Symbol =
     {
         Pos: XYPos
         LastDragPos : XYPos
+        IsSelected : bool
         IsDragging : bool
         Id : CommonTypes.ComponentId
     }
@@ -39,6 +40,7 @@ type Msg =
     /// Mouse info with coords adjusted form top-level zoom
     | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
+    | Select of sId: CommonTypes.ComponentId
     | StartDragging of sId : CommonTypes.ComponentId * pagePos: XYPos
     /// coords not adjusted for top-level zoom
     | Dragging of sId : CommonTypes.ComponentId * pagePos: XYPos
@@ -75,7 +77,8 @@ let createNewSymbol (pos:XYPos) =
     {
         Pos = pos
         LastDragPos = {X=0. ; Y=0.} // initial value can always be this
-        IsDragging = false // initial value can always be this
+        IsSelected = false
+        IsDragging = false
         Id = CommonTypes.ComponentId (Helpers.uuid()) // create a unique id for this symbol
     }
 
@@ -83,8 +86,7 @@ let createNewSymbol (pos:XYPos) =
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
     List.allPairs [1..14] [1..14]
-    |> List.map (fun (x,y) -> {X = float (x*64+30); Y=float (y*64+30)})
-    |> List.map createNewSymbol
+    |> List.map ((fun (x,y) -> {X = float (x*64+30); Y=float (y*64+30)}) >> createNewSymbol)
     , Cmd.none
 
 /// update function which displays symbols
@@ -94,23 +96,31 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         createNewSymbol pos :: model, Cmd.none
     | DeleteSymbol sId -> 
         List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
+    | Select sId ->
+        model
+        |> List.map (fun sym ->
+            if sId = sym.Id then
+                {sym with IsSelected = true}
+            else
+                sym
+        ), Cmd.none
     | StartDragging (sId, pagePos) ->
         model
         |> List.map (fun sym ->
-            if sId <> sym.Id then
-                sym
-            else
+            if sym.IsSelected then
                 { sym with
                     LastDragPos = pagePos
                     IsDragging = true
                 }
+            else
+                sym
         )
         , Cmd.none
 
     | Dragging (rank, pagePos) ->
         model
         |> List.map (fun sym ->
-            if sym.IsDragging then
+            if sym.IsSelected then
                 let diff = posDiff pagePos sym.LastDragPos
                 { sym with
                     Pos = posAdd sym.Pos diff
@@ -124,10 +134,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     | EndDragging sId ->
         model
         |> List.map (fun sym ->
-                document.removeEventListener("mousemove", handleMouseMove.current)
-                { sym with
-                    IsDragging = false 
-                }
+            { sym with IsDragging = false }
         )
         , Cmd.none
     | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
@@ -158,7 +165,7 @@ let private renderCircle =
                 )
 
             let color =
-                if props.Circle.IsDragging then
+                if props.Circle.IsSelected then
                     "lightblue"
                 else
                     "grey"
@@ -172,6 +179,8 @@ let private renderCircle =
                     )
                     OnMouseDown (fun ev -> 
                         // See note above re coords wrong if zoom <> 1.0
+                        Select props.Circle.Id
+                        |> props.Dispatch
                         StartDragging (props.Circle.Id, posOf ev.pageX ev.pageY)
                         |> props.Dispatch
                         document.addEventListener("mousemove", handleMouseMove.current)
