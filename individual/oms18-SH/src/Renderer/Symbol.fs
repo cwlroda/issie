@@ -110,23 +110,21 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     | Dragging (rank, pagePos) ->
         model
         |> List.map (fun sym ->
-            if rank <> sym.Id then
-                sym
-            else
+            if sym.IsDragging then
                 let diff = posDiff pagePos sym.LastDragPos
                 { sym with
                     Pos = posAdd sym.Pos diff
                     LastDragPos = pagePos
                 }
+            else
+                sym
         )
         , Cmd.none
 
     | EndDragging sId ->
         model
         |> List.map (fun sym ->
-            if sId <> sym.Id then 
-                sym
-            else
+                document.removeEventListener("mousemove", handleMouseMove.current)
                 { sym with
                     IsDragging = false 
                 }
