@@ -87,7 +87,7 @@ let withinSelectedBoundary (compTopLeft:XYPos) (compBotRight:XYPos) (boundTopLef
 /// The parameters of this function must be enough to specify the symbol completely
 /// in its initial form. This is called by the AddSymbol message and need not be exposed.
 let rng = System.Random 0
-let createNewSymbol (comp:CommonTypes.Component)  =
+let createNewSymbol () (comp:CommonTypes.Component)  =
     
     {
         LastDragPos = {X=0. ; Y=0.} // initial value can always be this
@@ -101,11 +101,14 @@ let createNewSymbol (comp:CommonTypes.Component)  =
             | _ -> failwithf "not implemented"
     }
 
-let (testComponent:CommonTypes.Component) =
+let testComponent () :CommonTypes.Component =
         
         let compId = CommonTypes.ComponentId (Helpers.uuid())
-        let inputPorts:CommonTypes.Port list = List.map (fun x-> {PortId=CommonTypes.PortId (Helpers.uuid()); PortNumber = Some (CommonTypes.PortNumber x); PortType = CommonTypes.PortType.Input;HostId = compId;Hover = CommonTypes.PortHover false}) [0..rng.Next(0,10)]
-        let outputPorts:CommonTypes.Port list = List.map (fun x-> {PortId=CommonTypes.PortId (Helpers.uuid()); PortNumber = Some (CommonTypes.PortNumber x); PortType = CommonTypes.PortType.Output;HostId = compId;Hover = CommonTypes.PortHover false}) [0..rng.Next(0,10)]
+        let rng1 () = rng.Next(0,10)
+        let inputPorts :CommonTypes.Port list = List.map (fun x-> {PortId=CommonTypes.PortId (Helpers.uuid()); PortNumber = Some (CommonTypes.PortNumber x); PortType = CommonTypes.PortType.Input;HostId = compId;Hover = CommonTypes.PortHover false}) [0..rng1()]
+        let outputPorts:CommonTypes.Port list = List.map (fun x-> {PortId=CommonTypes.PortId (Helpers.uuid()); PortNumber = Some (CommonTypes.PortNumber x); PortType = CommonTypes.PortType.Output;HostId = compId;Hover = CommonTypes.PortHover false}) [0..rng1()]
+        // let inputPorts =  inputPortsFn ()
+        // let outputPorts = outputPortsFn ()
         // let inputPorts:CommonTypes.Port list = [{PortId=CommonTypes.PortId (Helpers.uuid()); PortNumber = Some (CommonTypes.PortNumber 0); PortType = CommonTypes.PortType.Input;HostId = compId}; {PortId= CommonTypes.PortId (Helpers.uuid()); PortNumber = Some (CommonTypes.PortNumber 1); PortType = CommonTypes.PortType.Input;HostId = compId}]
         // let outputPorts:CommonTypes.Port list = [{PortId=CommonTypes.PortId (Helpers.uuid()); PortNumber = Some (CommonTypes.PortNumber 0); PortType = CommonTypes.PortType.Output;HostId = compId}]
         {
@@ -122,7 +125,7 @@ let (testComponent:CommonTypes.Component) =
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
     
-    let createTestList (testComponent:CommonTypes.Component) (xIn,yIn) =
+    let createTestList (testComponent :CommonTypes.Component) (xIn,yIn) =
     
         {testComponent with X = testComponent.X + xIn; Y=testComponent.Y+yIn}
 
@@ -131,7 +134,7 @@ let init () =
     // |> List.map (createNewSymbol (rng.Next(2)))
     //Factorised to the below expression
     
-    List.map ((createTestList testComponent) >> createNewSymbol) (List.allPairs [100.;200.;300.] [40.; 150.;300.])
+    List.map ((createTestList (testComponent ())) >> createNewSymbol ()) (List.allPairs [100.;200.;300.] [40.; 150.;300.])
     // List.allPairs [12..14] [3]
     // |> List.map (fun (x,y) -> {X = float (x*64+30); Y=float (y*64+30)})
     // |> List.map (createNewSymbol testComponent) 
@@ -154,7 +157,7 @@ let setSelectedFunction (topLeft:XYPos, topRight:XYPos) (model:Model) : Model =
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     | AddSymbol (comp,pos)-> 
-        (createNewSymbol  comp) :: model, Cmd.none
+        (createNewSymbol ()  comp) :: model, Cmd.none
     | DeleteSymbol sId -> 
         List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
     | SetSelected (topLeft, topRight) ->
@@ -306,7 +309,7 @@ type private RenderSymbolProps =
     {
         Symbol : Symbol // name works for the demo!
         Dispatch : Dispatch<Msg>
-        key: string // special field used by react to detect whether lists have changed, set to symbol Id
+        Key: string // special field used by react to detect whether lists have changed, set to symbol Id
     }
 
 /// View for one symbol with caching for efficient execution when input does not change
@@ -339,6 +342,7 @@ let private renderSymbol (model:Model) =
                 |CommonTypes.ComponentType.Not-> "1"
                 |CommonTypes.ComponentType.Or | CommonTypes.ComponentType.Nor-> "≥"
                 |CommonTypes.ComponentType.Xor | CommonTypes.ComponentType.Xnor -> "=1"
+                |_ -> failwithf "Not implemented yet"
             
             let invertedOutput = 
                 match props.Symbol.Component.Type with
@@ -422,11 +426,11 @@ let private renderSymbol (model:Model) =
                         |CommonTypes.PortHover false ->
                             SVGAttr.Fill color
                             SVGAttr.Stroke color
-                            SVGAttr.StrokeWidth 2
+                            SVGAttr.StrokeWidth 4
                         |_ -> 
                             SVGAttr.Fill "red"
                             SVGAttr.Stroke "red"
-                            SVGAttr.StrokeWidth 5
+                            SVGAttr.StrokeWidth 8
                     ] []) portList
                 (generateLines inputPorts) @ (generateLines outputPorts)
             
@@ -601,7 +605,7 @@ let view (model : Model) (dispatch : Msg -> unit) =
             {
                 Symbol = symbol
                 Dispatch = dispatch
-                key = id
+                Key = id
             }
     )
     |> ofList
