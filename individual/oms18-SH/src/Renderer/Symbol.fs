@@ -122,7 +122,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
             else
                 sym
         ), Cmd.none
-    | StartDragging (sId, pagePos) ->
+    | StartDragging (_, pagePos) ->
         model
         |> List.map (fun sym ->
             if sym.IsSelected then
@@ -135,7 +135,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         )
         , Cmd.none
 
-    | Dragging (rank, pagePos) ->
+    | Dragging (_, pagePos) ->
         model
         |> List.map (fun sym ->
             if sym.IsSelected then
@@ -149,13 +149,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         )
         , Cmd.none
 
-    | EndDragging sId ->
+    | EndDragging _ ->
         model
         |> List.map (fun sym ->
             { sym with IsDragging = false }
         )
         , Cmd.none
-    | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
+    | MouseMsg _ -> model, Cmd.none
     | _ -> failwithf "Not implemented"
 
 //----------------------------View Function for Symbols----------------------------//
