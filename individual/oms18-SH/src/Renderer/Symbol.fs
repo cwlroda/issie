@@ -238,14 +238,20 @@ let symbolPos (symModel: Model) (sId: CommonTypes.ComponentId) : XYPos =
     List.find (fun sym -> sym.Id = sId) symModel
     |> (fun sym -> sym.Pos)
 
-//let BBoxFromSymbol (sym: Symbol) =
-//    let pos = posDiff sym.Pos (posOf 10 10)
-//    BBox.toBBox pos.X pos.Y 20 20
-//
-//let getTargetedSymbol (symModel: Model) (p: XYPos) : CommonTypes.ComponentId option =
-//    model
-//    |> List.filter (fun sym -> 
+let BBoxFromSymbol (sym: Symbol) =
+    let pos = posDiff sym.Pos (posOf 20. 20.)
+    BBox.toBBox pos.X pos.Y 40. 40.
 
+let getTargetedSymbol (symModel: Model) (p: XYPos) : CommonTypes.ComponentId option =
+    symModel
+    |> List.filter (fun sym -> BBoxFromSymbol sym |> containsPoint p)
+    |> List.map (fun sym -> sym.Id)
+    |> List.tryHead
+
+let getSymbolsInBBox (symModel: Model) (bb: BBox) : CommonTypes.ComponentId list =
+    symModel
+    |> List.filter (fun sym -> BBoxFromSymbol sym |> overlaps bb)
+    |> List.map (fun sym -> sym.Id)
 
 /// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
 let updateSymbolModelWithComponent (symModel: Model) (comp:CommonTypes.Component) =
