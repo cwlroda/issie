@@ -33,7 +33,7 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
     let mouseOp op (ev:Types.MouseEvent) = 
-        dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.x / zoom ; Y = ev.y / zoom}})
+        dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.clientX / zoom ; Y = ev.clientY / zoom}})
     div [ Style 
             [ 
                 Height "100vh" 
@@ -112,3 +112,4 @@ let init() =
     {
         Wire = model
     }, Cmd.map Wire cmds
+    
