@@ -41,6 +41,8 @@ type Msg =
     | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
     | Select of sId: CommonTypes.ComponentId
+    | SelectOnly of sId: CommonTypes.ComponentId
+    | ToggleSelect of sId: CommonTypes.ComponentId
     | StartDragging of sId : CommonTypes.ComponentId * pagePos: XYPos
     /// coords not adjusted for top-level zoom
     | Dragging of sId : CommonTypes.ComponentId * pagePos: XYPos
@@ -101,6 +103,22 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         |> List.map (fun sym ->
             if sId = sym.Id then
                 {sym with IsSelected = true}
+            else
+                sym
+        ), Cmd.none
+    | SelectOnly sId ->
+        model
+        |> List.map (fun sym ->
+            if sId = sym.Id then
+                {sym with IsSelected = true}
+            else
+                {sym with IsSelected = false}
+        ), Cmd.none
+    | ToggleSelect sId ->
+        model
+        |> List.map (fun sym ->
+            if sId = sym.Id then
+                {sym with IsSelected = (not sym.IsSelected)}
             else
                 sym
         ), Cmd.none
@@ -172,15 +190,17 @@ let private renderCircle =
 
             circle
                 [ 
-                    OnMouseUp (fun ev -> 
+                    OnMouseUp (fun _ -> 
                         document.removeEventListener("mousemove", handleMouseMove.current)
                         EndDragging props.Circle.Id
                         |> props.Dispatch
                     )
                     OnMouseDown (fun ev -> 
                         // See note above re coords wrong if zoom <> 1.0
-                        Select props.Circle.Id
-                        |> props.Dispatch
+                        props.Dispatch <| if props.Circle.IsSelected || ev.ctrlKey then
+                                              Select props.Circle.Id
+                                          else
+                                              SelectOnly props.Circle.Id
                         StartDragging (props.Circle.Id, posOf ev.pageX ev.pageY)
                         |> props.Dispatch
                         document.addEventListener("mousemove", handleMouseMove.current)
