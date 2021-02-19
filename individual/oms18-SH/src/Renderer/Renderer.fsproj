@@ -23,6 +23,7 @@
     <Compile Include="BusWire.fs" />
     <Compile Include="Sheet.fs" />
     <Compile Include="Renderer.fs" />
+    <Compile Include="BBox.fs" />
   </ItemGroup>
   <!-- Dependencies -->
   <Import Project="..\..\.paket\Paket.Restore.targets" />
