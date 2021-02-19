@@ -46,12 +46,28 @@ type Msg =
     | SetColor of CommonTypes.HighLightColor
     | MouseMsg of MouseT
 
+///--------------------Helpers Functions -------------------------------------///
+/// Useful helper functions
+let posOf x y = {X = x; Y = y}
+
+let addjustedPos (orgPos: XYPos) (adjPos: XYPos) : XYPos =
+    {
+        X = orgPos.X + adjPos.X
+        Y = orgPos.Y + adjPos.Y
+    }
+
+let midPt (aPos: XYPos) (bPos: XYPos) : XYPos =
+    {
+        X = (aPos.X + bPos.X)/2.
+        Y = (aPos.X + bPos.Y)/2.
+    }
 
 
 
 /// look up wire in WireModel
 let wire (wModel: Model) (wId: CommonTypes.ConnectionId): Wire =
-    failwithf "Not impelmented"
+    List.find (fun w -> w.Id = wId)  wModel.WX
+
 
 type WireRenderProps = {
     key : CommonTypes.ConnectionId
@@ -63,18 +79,27 @@ type WireRenderProps = {
 
 /// react virtual DOM SVG for one wire
 /// In general one wire will be multiple (right-angled) segments.
+    /// 
+
+let wireSeg (vert1: XYPos) (vert2: XYPos) (color: string) (w: string) : ReactElement = 
+    line [
+            X1 vert1.X
+            Y1 vert1.Y
+            X2 vert2.X
+            Y2 vert2.Y
+            // Qualify these props to avoid name collision with CSSProp
+            SVGAttr.Stroke color
+            SVGAttr.StrokeWidth w] []
+
 
 let singleWireView = 
     FunctionComponent.Of(
         fun (props: WireRenderProps) ->
-            line [
-                X1 props.SrcP.X
-                Y1 props.SrcP.Y
-                X2 props.TgtP.X
-                Y2 props.TgtP.Y
-                // Qualify these props to avoid name collision with CSSProp
-                SVGAttr.Stroke props.ColorP
-                SVGAttr.StrokeWidth props.StrokeWidthP ] [])
+            ( List.pairwise [props.SrcP; {X = props.TgtP.X; Y = props.SrcP.Y}; props.TgtP]
+              |> List.map (fun (a,b)  -> wireSeg a b props.ColorP props.StrokeWidthP)
+              |> ofList 
+            )
+        )
 
 
 let view (model:Model) (dispatch: Dispatch<Msg>)=
