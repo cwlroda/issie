@@ -21,15 +21,19 @@ Therefore i will be amending the stuffs below, and providing you with my definit
 * (Previously Discussed) GetTargetedSymbol (Msg)
 	- Takes: XYPos
 	- Returns: Symbol option
-* (Marcus' Redefinition) getTargetedSymbol (selectionBoxTopLeft:XYPos) (selectionBoxBottomRight:XYPos) : ComponentId list
+* (Marcus' Redefinition) getTargetedSymbol (symModel: Model) (selectionBoxTopLeft:XYPos) (selectionBoxBottomRight:XYPos) : ComponentId list
 (As mentioned earlier, GetTargetedSymbol does not really change the model, all it does is just query and gets a response. so instead i have redefined it as a helper function).
 
 In the skeleton code the opposite of getTargetedSymbol is also defined. 
 * (Skeleton Code) symbolPos (symModel: Model) (sId: ComponentId) : XYPos
 	
-* GetPortPosition (Msg)
+* (Previously Discussed) GetPortPosition (Msg)
 	- Takes: Port
 	- Return: XYPos option
+* (Marcus' Redefinition) portPos (symModel: Model) (portId: PortId) (sId: ComponentId) : XYPos
+
+
+
 (Similar to the previous, GetPortPosition is also just a query, so it is redefined as a helper function)
 * CreateSymbolOfType (Msg)
 	- Takes: Component
