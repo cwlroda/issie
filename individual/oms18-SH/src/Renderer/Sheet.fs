@@ -29,7 +29,7 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
     let sizeInPixels = sprintf "%.2fpx" ((1000. * zoom))
     /// Is the mouse button currently down?
     let mDown (ev:Types.MouseEvent) = 
-        if ev.buttons <> 0. then true else false
+        ev.buttons <> 0.
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
     let mouseOp op (ev:Types.MouseEvent) = 
