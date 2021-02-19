@@ -1,5 +1,4 @@
 module BBox
-
 open Helpers
 
 let posOf x y = {X=x;Y=y}
@@ -17,7 +16,13 @@ let posDist a b =
 
 type Bounds = { Width: float; Height: float }
 
+let boundsOf w h =
+    { Width=w; Height=h }
+
 type BBox = { Pos: XYPos; Bounds: Bounds }
+
+let toBBox x y w h : BBox =
+    { Pos=(posOf x y);Bounds=(boundsOf w h) }
 
 let containsPoint (p: XYPos) (bb: BBox) =
     p.X >= bb.Pos.X
