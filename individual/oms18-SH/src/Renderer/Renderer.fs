@@ -82,7 +82,7 @@
     Program.mkProgram Sheet.init update' view'
     |> Program.withReactBatched "app"
     |> Program.withSubscription attachMenusAndKeyShortcuts
-    |> Program.withTrace traceFn
+    //|> Program.withTrace traceFn
     //|> Program.withConsoleTrace
     |> Program.run
 
