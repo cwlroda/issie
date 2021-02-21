@@ -67,27 +67,24 @@ type Msg =
 /// Useful helper functions
 let posOf x y = {X = x; Y = y}
 
-let addjustedPos (orgPos: XYPos) (adjPos: (float*float)) : XYPos =
+/// Takes a set of coordinates and returns a new set of cooridantes adjusted according to the adjPos floats given
+    /// each in the X and Y respectively
+let addjustedPos (orgPos: XYPos) ((adjPosX, adjPosY): (float*float)) : XYPos =
+
     {
-        X = orgPos.X + (fst adjPos)
-        Y = orgPos.Y + (snd adjPos)
+        X = orgPos.X + adjPosX
+        Y = orgPos.Y + adjPosY
     }
 
+//Given two points returns the coordinates for the point in the middle inbetween the given points
 let midPt (aPos: XYPos) (bPos: XYPos) : XYPos =
     {
         X = (aPos.X + bPos.X)/2.
         Y = (aPos.X + bPos.Y)/2.
     }
 
-let containsPt (pt: XYPos) (box: BoundingBox): bool =
-    let bottomLeft = addjustedPos pt (-(float box.W)/2., -(float box.H)/2. )
-    let topRight = addjustedPos pt ((float box.W)/2., (float box.H)/2. )
-    
-    match pt.X, pt.Y with
-    | x,_ when (bottomLeft.X > x ||topRight.X < x) -> false
-    | _,y when (bottomLeft.Y > y || topRight.Y < y) -> false
-    | _,_ -> true
-
+///Creates a BB type given two points and a width and height
+    /// Assumes that Pos is the mid point of the rectangule which the BBox represents
 let createBoundingBox (w: int) (h: int) ((pt1, pt2) : XYPos* XYPos) : BoundingBox =
     {
         Pos = midPt pt1 pt2
@@ -95,6 +92,47 @@ let createBoundingBox (w: int) (h: int) ((pt1, pt2) : XYPos* XYPos) : BoundingBo
         H = h
     }
 
+/// Takes a wire segment and the width of the wire as input and using its oritenation returns the correct BBox
+let  createSegBB (wireW: int) (seg: WireSegment) : BoundingBox =
+    match seg.Orien with
+    | V -> createBoundingBox (4+ wireW) (int(seg.EndPt.Y - seg.StartPt.Y)) (seg.StartPt, seg.EndPt)
+    | H -> createBoundingBox (int(seg.EndPt.X - seg.StartPt.X)) (4 + wireW) (seg.StartPt, seg.EndPt)
+
+///Takes a point and a BBox and checks if the point are within the bounderies of the box
+    /// Returns true if the points is within the bounderires of the BBox
+    /// Otherwise returns false
+
+let ptInBB (pt: XYPos) (bb: BoundingBox): bool = 
+    let diffX = pt.X - bb.Pos.X
+    let diffY = pt.Y - bb.Pos.Y
+    match diffX, diffY with
+    | x,_ when abs(x)>((float bb.W)/2.) -> false
+    | _, y when abs(y)>((float bb.H)/2.) -> false
+    | _ -> true
+
+///Takes as input a wire and a point and checks if the pt is within the BBox of any of the segments
+    /// Returns true if it is close to one of the segments
+    /// Returns false otherwise
+let ptCloseToWire (pt: XYPos) (wire : Wire) =
+    let ptCloseToSeg (seg: WireSegment): bool =
+        seg 
+        |> createSegBB wire.WireWidth 
+        |> (ptInBB pt)
+
+    List.tryFind ptCloseToSeg wire.WireSegments 
+
+
+//Calculates the distance between a point and a wire segment
+let distPtToWire (pt: XYPos) (wSeg: WireSegment) =
+    let ptToPtA = posOf (pt.X-wSeg.EndPt.X) (pt.Y - wSeg.EndPt.Y)
+    let ptAToB = posOf (wSeg.EndPt.X - wSeg.StartPt.X) (wSeg.EndPt.Y - wSeg.StartPt.Y)
+    let magPtAToPtB = ((ptAToB.X)**2.) + ((ptAToB.Y)**2.)**0.5
+    let crossProd = (ptAToB.X)(ptToPtA.Y)-(ptToPtA.X)(ptAToB)
+    abs(crossProd)/magPtAToPtB
+
+
+
+///Creates the wireSegement list which represents the verticies of the wire between the two points
 let autoRoute (startPt: XYPos) (endPt: XYPos) : WireSegment list =
     let midPt = (posOf endPt.X startPt.Y)
     [
@@ -110,7 +148,7 @@ let autoRoute (startPt: XYPos) (endPt: XYPos) : WireSegment list =
         }
     ]
      
-
+/// Creates a wire instance given the starting Port and the ending Port
 let createWire (srcP:Symbol.Symbol ) (tgtP: Symbol.Symbol): Wire =
             {
             Id=CommonTypes.ConnectionId (uuid())
@@ -211,7 +249,24 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
 /// or None if no such. Where there are two close wires the nearest is taken. Used
 /// to determine which wire (if any) to select on a mouse click
 let wireToSelectOpt (wModel: Model) (pos: XYPos) : CommonTypes.ConnectionId option = 
-    failwithf "Not implmented"
+    let wiresClose lst (w:Wire) =
+        match (ptCloseToWire pos) w with
+        | Some seg -> lst@[(w.Id, seg)]
+        | None -> lst
+    
+   
+    let closestWire (lst:(CommonTypes.ConnectionId* WireSegment) list) =
+        lst
+        |> List.map (fun (w,seg) -> (w, (distPtToWire pos) seg) )
+        |> List.maxBy (fun (w, dist) -> -dist )
+        |> fst
+
+    
+    match List.fold wiresClose [] wModel.WX with
+    | [] -> None
+    | [(w, seg)] -> Some w
+    | wireLst -> Some (closestWire wireLst)
+   
 
 
 let getSelected (wModel: Model) : Wire list =
