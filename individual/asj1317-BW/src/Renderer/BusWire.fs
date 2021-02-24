@@ -18,8 +18,8 @@ type Orientation =
 
 type WireSegment =
     { 
-      StartPt: XYPos
-      EndPt: XYPos
+      StartPt: XYPos //Left/bottom
+      EndPt: XYPos  //Top/Right
       Orien: Orientation }
 /// type for buswires
 /// for demo only. The real wires will
@@ -42,7 +42,7 @@ type Wire =
 
 type Model = { Symbol: Symbol.Model; WX: Wire list }
 
-type BoundingBox =
+type BBox =
     { Pos: XYPos //Top left corner of box
       W: int
       H: int }
@@ -67,10 +67,11 @@ let posOf x y = { X = x; Y = y }
 
 /// Takes a set of coordinates and returns a new set of cooridantes adjusted according to the adjPos floats given
 /// each in the X and Y respectively
-let addjustedPos (orgPos: XYPos) ((adjPosX, adjPosY): (float * float)): XYPos =
+let posDiff a b =
+    {X=a.X-b.X; Y=a.Y-b.Y}
 
-    { X = orgPos.X + adjPosX
-      Y = orgPos.Y + adjPosY }
+let posAdd a b =
+    {X=a.X+b.X; Y=a.Y+b.Y}
 
 //Given two points returns the coordinates for the point in the middle inbetween the given points
 let midPt (aPos: XYPos) (bPos: XYPos): XYPos =
@@ -79,25 +80,28 @@ let midPt (aPos: XYPos) (bPos: XYPos): XYPos =
 
 ///Creates a BB type given two points and a width and height
 /// Assumes that Pos is the mid point of the rectangule which the BBox represents
-let createBoundingBox (w: int) (h: int) ((pt1, pt2): XYPos * XYPos): BoundingBox = { Pos = midPt pt1 pt2; W = w; H = h }
+let createBoundingBox (w: int) (h: int) (pos: XYPos): BBox =
+    let topLeftPos = 
+        posAdd pos (posOf (float w/2.) (float h/2.))
+    {Pos =  topLeftPos; W = w; H = h }
 
 /// Takes a wire segment and the width of the wire as input and using its oritenation returns the correct BBox
-let createSegBB (wireW: int) (seg: WireSegment): BoundingBox =
+let createSegBB (wireW: int) (seg: WireSegment): BBox =
     match seg.Orien with
-    | V -> createBoundingBox (4 + wireW) (int (seg.EndPt.Y - seg.StartPt.Y)) (seg.StartPt, seg.EndPt)
-    | H -> createBoundingBox (int (seg.EndPt.X - seg.StartPt.X)) (4 + wireW) (seg.StartPt, seg.EndPt)
+    | V -> createBoundingBox (4 + wireW) (int (seg.EndPt.Y - seg.StartPt.Y) + 4) (seg.EndPt)
+    | H -> createBoundingBox (int (seg.EndPt.X - seg.StartPt.X)) (4 + wireW) (seg.StartPt)
 
 ///Takes a point and a BBox and checks if the point are within the bounderies of the box
 /// Returns true if the points is within the bounderires of the BBox
 /// Otherwise returns false
 
-let ptInBB (pt: XYPos) (bb: BoundingBox): bool =
-    let diffX = pt.X - bb.Pos.X
-    let diffY = pt.Y - bb.Pos.Y
+let ptInBB (pt: XYPos) (bb: BBox): bool =
+    let diffX =  pt.X - bb.Pos.X
+    let diffY =  bb.Pos.Y - pt.Y
 
     match diffX, diffY with
-    | x, _ when abs (x) > ((float bb.W) / 2.) -> false
-    | _, y when abs (y) > ((float bb.H) / 2.) -> false
+    | x, _ when x < (float bb.W) -> false
+    | _, y when y > (float bb.H) -> false
     | _ -> true
 
 ///Takes as input a wire and a point and checks if the pt is within the BBox of any of the segments
