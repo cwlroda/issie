@@ -17,7 +17,8 @@ type Orientation =
     | H
 
 type WireSegment =
-    { StartPt: XYPos
+    { 
+      StartPt: XYPos
       EndPt: XYPos
       Orien: Orientation }
 /// type for buswires
@@ -30,8 +31,8 @@ type WireSegment =
 /// component coordinates are held in some other way, is up to groups.
 type Wire =
     { Id: CommonTypes.ConnectionId
-      SrcSymbol: CommonTypes.ComponentId
-      TargetSymbol: CommonTypes.ComponentId
+      SrcPort: string
+      TargetPort: string
       WireSegments: WireSegment list
       WireColor: CommonTypes.HighLightColor
       WireWidth: int
@@ -57,6 +58,8 @@ type Msg =
     | AddWire of (CommonTypes.ConnectionId * CommonTypes.ConnectionId)
     | SetColor of CommonTypes.HighLightColor
     | MouseMsg of MouseT
+(*     | StartDragging of wId: CommonTypes.ConnectionId * pos: XYPos
+    | EndDragging of wId: CommonTypes.ConnectionId * pos: XYPos *)
 
 ///--------------------Helpers Functions -------------------------------------///
 /// Useful helper functions
@@ -137,11 +140,13 @@ let autoRoute (startPt: XYPos) (endPt: XYPos): WireSegment list =
         Orien = H } ]
 
 /// Creates a wire instance given the starting Port and the ending Port
-let createWire (srcP: Symbol.Symbol) (tgtP: Symbol.Symbol): Wire =
+let createWire (symLst : Symbol.Model) (srcId: string) (tgtId:string): Wire =
+    let srcP = Symbol.portPos symLst srcId
+    let tgtP = Symbol.portPos symLst tgtId
     { Id = CommonTypes.ConnectionId(uuid ())
-      SrcSymbol = srcP.Id
-      TargetSymbol = tgtP.Id
-      WireSegments = (autoRoute srcP.Pos tgtP.Pos)
+      SrcPort = srcId
+      TargetPort = tgtId
+      WireSegments = (autoRoute srcP tgtP)
       Selected = false
       WireWidth = 2
       WireColor = CommonTypes.Red }
@@ -192,8 +197,8 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
                 let props =
                     { key = w.Id
                       WireP = w
-                      SrcP = Symbol.symbolPos model.Symbol w.SrcSymbol
-                      TgtP = Symbol.symbolPos model.Symbol w.TargetSymbol
+                      SrcP = Symbol.portPos model.Symbol w.SrcPort
+                      TgtP = Symbol.portPos model.Symbol w.TargetPort
                       ColorP = w.WireColor.Text()
                       StrokeWidthP = "%d{w.WireWidth}px" }
 
@@ -220,12 +225,19 @@ let init n () =
 
         let s1, s2 =
             match rng.Next(0, n - 1), rng.Next(0, n - 2) with
-            | r1, r2 when r1 = r2 -> symbols.[r1], symbols.[n - 1] // prevents wire target and source being same
-            | r1, r2 -> symbols.[r1], symbols.[r2]
+            | r1, r2 when r1 = r2 -> symbols.[r1].Ports, symbols.[n - 1].Ports // prevents wire target and source being same
+            | r1, r2 -> symbols.[r1].Ports, symbols.[r2].Ports
+        List.allPairs s1 s2
+        |> List.fold (fun (lst: Wire list) (p1:CommonTypes.Port, p2:CommonTypes.Port) -> 
+                                        match p1,p2 with
+                                            | p1, p2 when p1.PortType= p2.PortType -> lst
+                                            | p1, p2 when p1.PortType = CommonTypes.PortType.Input -> [createWire symbols p1.Id p2.Id]@lst
+                                            | p1, p2 -> [createWire symbols p2.Id p1.Id]@lst
+                        ) []
 
-        createWire s1 s2
+         
 
-    List.map (fun i -> makeRandomWire ()) [ 1 .. n ]
+    List.fold (fun lst i -> makeRandomWire ()@lst) [] [ 1 .. n ]
     |> (fun wires -> { WX = wires; Symbol = symbols }, Cmd.none)
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
