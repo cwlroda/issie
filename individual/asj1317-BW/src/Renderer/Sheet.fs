@@ -25,15 +25,32 @@ let zoom = 1.0
 /// This function zooms an SVG canvas by transforming its content and altering its size.
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
 /// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
-let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch<Msg>)=
+let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch<Msg>)=
     let sizeInPixels = sprintf "%.2fpx" ((1000. * zoom))
     /// Is the mouse button currently down?
     let mDown (ev:Types.MouseEvent) = 
         if ev.buttons <> 0. then true else false
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
-    let mouseOp op (ev:Types.MouseEvent) = 
-        dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.clientX / zoom ; Y = ev.clientY / zoom}})
+    let mouseOp op (ev:Types.MouseEvent) =
+
+        
+        match op with
+        | Down ->  
+            match BusWire.getTargetedWire model.Wire {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+            | Some w -> dispatch <| Wire (BusWire.SetSelected w) 
+            | None -> ()
+        | Drag -> 
+            
+            let targetedWire = 
+                match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+                | Some v -> BusWire.getWiresInTargetBBox model.Wire v   
+                | None -> []
+            dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.clientX / zoom ; Y = ev.clientY / zoom}})
+            dispatch <| Wire (BusWire.StartDragging  (targetedWire, { X = ev.clientX / zoom ; Y = ev.clientY / zoom}))
+        | _ -> ()
+        
+        
     div [ Style 
             [ 
                 Height "100vh" 
@@ -86,7 +103,7 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
 let view (model:Model) (dispatch : Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
     let wireSvg = BusWire.view model.Wire wDispatch
-    displaySvgWithZoom zoom wireSvg dispatch
+    displaySvgWithZoom model zoom wireSvg dispatch
        
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
@@ -97,6 +114,9 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | KeyPress AltShiftZ -> 
         printStats() // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
+    | KeyPress CtrlS ->
+        let wModel, wCmd = BusWire.update BusWire.UnselectAll model.Wire
+        {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with
