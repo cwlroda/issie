@@ -5,6 +5,7 @@ open Browser
 open Elmish
 open Elmish.React
 open Helpers
+open BBox
 
 //------------------------------------------------------------------------//
 //-------------------------------Symbol Types-----------------------------//
@@ -22,6 +23,7 @@ type Symbol =
     {
         Pos: XYPos
         LastDragPos : XYPos
+        IsSelected : bool
         IsDragging : bool
         Id : CommonTypes.ComponentId
     }
@@ -39,10 +41,14 @@ type Msg =
     /// Mouse info with coords adjusted form top-level zoom
     | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
+    | DeselectAll
+    | Select of sId: CommonTypes.ComponentId
+    | SelectOnly of sId: CommonTypes.ComponentId
+    | ToggleSelect of sId: CommonTypes.ComponentId
     | StartDragging of sId : CommonTypes.ComponentId * pagePos: XYPos
     /// coords not adjusted for top-level zoom
-    | Dragging of sId : CommonTypes.ComponentId * pagePos: XYPos
-    | EndDragging of sId : CommonTypes.ComponentId
+    | Dragging of pagePos: XYPos
+    | EndDragging
     | AddCircle of XYPos // used by demo code to add a circle
     | DeleteSymbol of sId:CommonTypes.ComponentId 
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
@@ -63,7 +69,25 @@ let posOf x y = {X=x;Y=y}
 
 //-----------------------------Skeleton Model Type for symbols----------------//
 
+//---------------Other interface functions--------------------//
 
+let symbolPos (symModel: Model) (sId: CommonTypes.ComponentId) : XYPos = 
+    List.find (fun sym -> sym.Id = sId) symModel
+    |> (fun sym -> sym.Pos)
+
+let BBoxFromSymbol (sym: Symbol) =
+    let pos = posDiff sym.Pos (posOf 20. 20.)
+    BBox.toBBox pos.X pos.Y 40. 40.
+
+let getTargetedSymbol (symModel: Model) (p: XYPos) : Symbol option =
+    symModel
+    |> List.filter (fun sym -> BBoxFromSymbol sym |> containsPoint p)
+    |> List.tryHead
+
+let getSymbolsInBBox (symModel: Model) (bb: BBox) : CommonTypes.ComponentId list =
+    symModel
+    |> List.filter (fun sym -> BBoxFromSymbol sym |> overlaps bb)
+    |> List.map (fun sym -> sym.Id)
 
 
 //-----------------------Skeleton Message type for symbols---------------------//
@@ -75,7 +99,8 @@ let createNewSymbol (pos:XYPos) =
     {
         Pos = pos
         LastDragPos = {X=0. ; Y=0.} // initial value can always be this
-        IsDragging = false // initial value can always be this
+        IsSelected = false
+        IsDragging = false
         Id = CommonTypes.ComponentId (Helpers.uuid()) // create a unique id for this symbol
     }
 
@@ -83,8 +108,7 @@ let createNewSymbol (pos:XYPos) =
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
     List.allPairs [1..14] [1..14]
-    |> List.map (fun (x,y) -> {X = float (x*64+30); Y=float (y*64+30)})
-    |> List.map createNewSymbol
+    |> List.map ((fun (x,y) -> {X = float (x*64+30); Y=float (y*64+30)}) >> createNewSymbol)
     , Cmd.none
 
 /// update function which displays symbols
@@ -94,45 +118,73 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         createNewSymbol pos :: model, Cmd.none
     | DeleteSymbol sId -> 
         List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
-    | StartDragging (sId, pagePos) ->
+    | DeselectAll ->
         model
         |> List.map (fun sym ->
-            if sId <> sym.Id then
-                sym
+            { sym with IsSelected=false }
+        ), Cmd.none
+    | Select sId ->
+        model
+        |> List.map (fun sym ->
+            if sId = sym.Id then
+                {sym with IsSelected = true}
             else
-                { sym with
-                    LastDragPos = pagePos
-                    IsDragging = true
-                }
+                sym
+        ), Cmd.none
+    | SelectOnly sId ->
+        model
+        |> List.map (fun sym ->
+            if sId = sym.Id then
+                {sym with IsSelected = true}
+            else
+                {sym with IsSelected = false}
+        ), Cmd.none
+    | ToggleSelect sId ->
+        model
+        |> List.map (fun sym ->
+            if sId = sym.Id then
+                {sym with IsSelected = (not sym.IsSelected)}
+            else
+                sym
+        ), Cmd.none
+    | Dragging pagePos ->
+        model
+        |> List.map (fun sym ->
+            if sym.IsSelected then
+                if sym.IsDragging then
+                    let diff = posDiff pagePos sym.LastDragPos
+                    { sym with
+                        Pos = posAdd sym.Pos diff
+                        LastDragPos = pagePos
+                    }
+                else
+                    { sym with
+                        LastDragPos = pagePos
+                        IsDragging = true
+                    }
+            else
+                sym
         )
         , Cmd.none
 
-    | Dragging (rank, pagePos) ->
+    | EndDragging ->
         model
         |> List.map (fun sym ->
-            if rank <> sym.Id then
-                sym
-            else
-                let diff = posDiff pagePos sym.LastDragPos
-                { sym with
-                    Pos = posAdd sym.Pos diff
-                    LastDragPos = pagePos
-                }
+            { sym with IsDragging = false }
         )
         , Cmd.none
-
-    | EndDragging sId ->
-        model
-        |> List.map (fun sym ->
-            if sId <> sym.Id then 
-                sym
-            else
-                { sym with
-                    IsDragging = false 
-                }
-        )
-        , Cmd.none
-    | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
+    | MouseMsg mT -> 
+        match (mT.Op, mT.Pos) with
+        | (Down, p) ->
+            model
+            |> List.map (fun sym ->
+                let bb = BBoxFromSymbol sym
+                if containsPoint p bb then
+                    { sym with IsSelected = true }
+                else
+                    sym
+            ), Cmd.none
+        | _ -> model, Cmd.none
     | _ -> failwithf "Not implemented"
 
 //----------------------------View Function for Symbols----------------------------//
@@ -150,42 +202,19 @@ type private RenderCircleProps =
 let private renderCircle =
     FunctionComponent.Of(
         fun (props : RenderCircleProps) ->
-            let handleMouseMove =
-                Hooks.useRef(fun (ev : Types.Event) ->
-                    let ev = ev :?> Types.MouseEvent
-                    // x,y coordinates here do not compensate for transform in Sheet
-                    // and are wrong unless zoom=1.0 MouseMsg coordinates are correctly compensated.
-                    Dragging(props.Circle.Id, posOf ev.pageX ev.pageY)
-                    |> props.Dispatch
-                )
-
             let color =
-                if props.Circle.IsDragging then
+                if props.Circle.IsSelected then
                     "lightblue"
                 else
                     "grey"
 
-            circle
-                [ 
-                    OnMouseUp (fun ev -> 
-                        document.removeEventListener("mousemove", handleMouseMove.current)
-                        EndDragging props.Circle.Id
-                        |> props.Dispatch
-                    )
-                    OnMouseDown (fun ev -> 
-                        // See note above re coords wrong if zoom <> 1.0
-                        StartDragging (props.Circle.Id, posOf ev.pageX ev.pageY)
-                        |> props.Dispatch
-                        document.addEventListener("mousemove", handleMouseMove.current)
-                    )
-                    Cx props.Circle.Pos.X
-                    Cy props.Circle.Pos.Y
-                    R 20.
-                    SVGAttr.Fill color
-                    SVGAttr.Stroke color
-                    SVGAttr.StrokeWidth 1
-                ]
-                [ ]
+            let bb = BBoxFromSymbol props.Circle
+
+            polygon [ // Bus decoder square
+                    SVGAttr.Points <| sprintf "%f,%f %f,%f %f,%f %f,%f" bb.Pos.X bb.Pos.Y bb.Pos.X (bb.Pos.Y + bb.Bounds.Height) (bb.Pos.X + bb.Bounds.Width) (bb.Pos.Y + bb.Bounds.Height) (bb.Pos.X + bb.Bounds.Width) bb.Pos.Y
+                    SVGAttr.StrokeWidth "1px"
+                    SVGAttr.Stroke "Red"
+                    SVGAttr.Fill color] []
     , "Circle"
     , equalsButFunctions
     )
@@ -202,14 +231,6 @@ let view (model : Model) (dispatch : Msg -> unit) =
             }
     )
     |> ofList
-
-
-//---------------Other interface functions--------------------//
-
-let symbolPos (symModel: Model) (sId: CommonTypes.ComponentId) : XYPos = 
-    List.find (fun sym -> sym.Id = sId) symModel
-    |> (fun sym -> sym.Pos)
-
 
 
 /// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
