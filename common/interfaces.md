@@ -63,8 +63,9 @@ In the skeleton code the opposite of getTargetedSymbol is also defined.
 
 
 ### BusWire
-* GetTargetedWire (pos: XYPOs) : (wireId: CommonTypes.ConnectedId),  Option 
-* GetWireInTargetArea (bbox: BBox): CommonTypes.ConnectionId list
+* GetTargetedWire (wModel:Model) (pos: XYPOs) :  CommonTypes.ConnectedId Option	
+* GetWireInTargetArea (wModel: Model) (bbox: BBox): CommonTypes.ConnectionId list
+
 
 * AddWire (srtPortId: PortId) (tgtPortId: PortId) 
 * DeleteWire (wireId: CommonTypes.ConnectionId)
