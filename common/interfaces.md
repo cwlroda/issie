@@ -33,7 +33,9 @@ In the skeleton code the opposite of getTargetedSymbol is also defined.
 	
 
 * portPos (symModel: Model) (portId: PortId)  : XYPos
-
+* portType (symModel: Model) (portId: PortId) : PortType
+* portWidth (symModel: Model) (portId: PorttId) : PortWidth
+ 
 (Similar to the previous, GetPortPosition is also just a query, so it is redefined as a helper function)
 
 
@@ -67,7 +69,9 @@ In the skeleton code the opposite of getTargetedSymbol is also defined.
 * GetWireInTargetArea (wModel: Model) (bbox: BBox): CommonTypes.ConnectionId list
 
 
-* AddWire (srtPortId: PortId) (tgtPortId: PortId) 
+
+
+* AddWire ((portA: PortId) * (portB: PortId))
 * DeleteWire (wireId: CommonTypes.ConnectionId)
 
 * SetSelected (wireId: CommonTypes.ConnectionId)
@@ -82,6 +86,7 @@ In the skeleton code the opposite of getTargetedSymbol is also defined.
 	* Dragging (wireId: CommonTypes.ConnectionId) (pos: XYPos)
 		
 	* EndDrag
+
 
 
 
