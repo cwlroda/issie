@@ -39,6 +39,7 @@ type BBox = {
 //--------------------------------------------------------------------------//
 //-----------------------------Helpers--------------------------------------//
 //--------------------------------------------------------------------------//
+let posOf x y = {X=x;Y=y}
 
 let containsPoint (pos : XYPos) (bb : BBox) : bool =
     pos.X >= bb.XYPos.X
@@ -46,8 +47,19 @@ let containsPoint (pos : XYPos) (bb : BBox) : bool =
     && pos.Y >= bb.XYPos.Y
     && pos.Y <= (bb.XYPos.Y + bb.Height)
 
-let posOf x y = {X=x;Y=y}
+let corners (bb : BBox) : XYPos list =
+    [
+        bb.XYPos
+        posOf (bb.XYPos.X + bb.Width) bb.XYPos.Y
+        posOf (bb.XYPos.X + bb.Width) (bb.XYPos.Y + bb.Height)
+        posOf bb.XYPos.X (bb.XYPos.Y + bb.Height)
+    ]
 
+let overlaps (bb1 : BBox) (bb2 : BBox) : bool =
+    (
+        corners bb1
+        |> List.sumBy (fun corner -> if containsPoint corner bb2 then 1 else 0)
+    ) > 0
 
 let polygonPointsString (point:XYPos) (diagonalPoint:XYPos) =
     let polygonPoints = [
