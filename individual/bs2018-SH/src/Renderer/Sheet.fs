@@ -19,7 +19,7 @@ type KeyboardMsg =
 type Msg =
     | Wire of BusWire.Msg
     | KeyPress of KeyboardMsg
-    | MouseDown of XYPos
+    | MouseDown of XYPos * bool
     | MouseMove of XYPos
     | MouseUp of XYPos
     | Symbol of Symbol.Msg
@@ -52,7 +52,7 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
         //   OnMouseUp (fun ev -> (mouseOp Up ev))
         //   OnMouseMove (fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
           OnMouseDown (fun ev -> 
-            MouseDown(posOf ev.pageX ev.pageY)
+            MouseDown((posOf ev.pageX ev.pageY), ev.shiftKey)
             |> dispatch
           )
 
@@ -131,14 +131,23 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | _ -> CommonTypes.Grey
         printfn "Key:%A" c
         model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
-    | MouseDown pos ->
-        let idlst = match Symbol.getTargetedSymbol model.Wire.Symbol pos with
-                    | None -> []
-                    | Some id -> [id]
-        {model with MouseIsDown = true; SelectedSymbols = idlst},
+    | MouseDown (pos, isShift) ->
+        let idLst = match Symbol.getTargetedSymbol model.Wire.Symbol pos with
+                        | Some targetedId ->
+                            if List.contains targetedId model.SelectedSymbols then
+                                if isShift then
+                                    List.filter (fun el -> el <> targetedId) model.SelectedSymbols
+                                else
+                                    model.SelectedSymbols
+                            else
+                                if isShift then List.append model.SelectedSymbols [targetedId]
+                                else [targetedId]
+                        | None -> []
+        
+        {model with MouseIsDown = true; SelectedSymbols = idLst},
         Cmd.batch[
-            Cmd.ofMsg (Symbol <| Symbol.StartDragging (idlst, pos));
-            Cmd.ofMsg (Symbol <| Symbol.SetSelected idlst);
+            Cmd.ofMsg (Symbol <| Symbol.StartDragging (idLst, pos));
+            Cmd.ofMsg (Symbol <| Symbol.SetSelected idLst);
         ]
     | MouseUp pos ->
         {model with MouseIsDown = false}, 
