@@ -13,13 +13,20 @@ type SelectionBox = {
     Show: bool
 }
 
+type Grid = {
+    Size: float
+    SnapToGrid: bool
+    Show: bool
+}
+
 
 type Model = {
     Wire: BusWire.Model
     SelectedSymbols: CommonTypes.ComponentId list
     MouseIsDown: bool
     SelectionBox: SelectionBox
-    }
+    Grid: Grid
+}
 
 type KeyboardMsg =
     | CtrlS | AltC | AltV | AltZ | AltShiftZ | DEL | CtrlA
@@ -41,9 +48,9 @@ let zoom = 1.0
 /// This function zooms an SVG canvas by transforming its content and altering its size.
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
 /// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
-let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (selectionBox: SelectionBox) (dispatch: Dispatch<Msg>)=
-    
-    let sizeInPixels = sprintf "%.2fpx" ((1000. * zoom))
+let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (selectionBox: SelectionBox) (grid : Grid) (dispatch: Dispatch<Msg>)=
+    let size = 1000.0
+    let sizeInPixels = sprintf "%.2fpx" ((size * zoom))
     /// Is the mouse button currently down?
     let mDown (ev:Types.MouseEvent) = 
         if ev.buttons <> 0. then true else false
@@ -60,6 +67,35 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (selectionBox: Sele
                                     SVGAttr.StrokeWidth 1 ] []
                             ]
                   else bodyLst
+    
+    let bodyLst =
+        if grid.Show then
+            [0 .. int (size / grid.Size)]
+            |> List.collect (fun i ->
+                [
+                    line [
+                        X1 0.
+                        X2 size
+                        Y1 ((float i)*grid.Size)
+                        Y2 ((float i)*grid.Size)
+                        SVGAttr.Stroke "grey"
+                        SVGAttr.StrokeWidth 1
+                    ] []
+
+                    line [
+                        X1 ((float i)*grid.Size)
+                        X2 ((float i)*grid.Size)
+                        Y1 0.
+                        Y2 size
+                        SVGAttr.Stroke "grey"
+                        SVGAttr.StrokeWidth 1
+                    ] []
+                
+                ]
+            )
+            |> List.append bodyLst
+        else
+            bodyLst
 
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
@@ -106,7 +142,8 @@ let view (model:Model) (dispatch : Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
     let wireSvg = BusWire.view model.Wire wDispatch
     let selectionBox = model.SelectionBox
-    displaySvgWithZoom zoom wireSvg selectionBox dispatch
+    let grid = model.Grid
+    displaySvgWithZoom zoom wireSvg selectionBox grid dispatch
        
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
@@ -221,5 +258,10 @@ let init() =
             FixedCorner = posOf 0.0 0.0
             MovingCorner = posOf 0.0 0.0
             Show = false
+        }
+        Grid = {
+            Size = 20.
+            SnapToGrid = true
+            Show = true
         }
     }, Cmd.map Wire cmds
