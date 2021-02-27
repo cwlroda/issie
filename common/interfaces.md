@@ -10,6 +10,7 @@
 ### Symbol
 
 ##### Interfaces
+* getAllSymbols : Model -> ComponentId List
 * getTargetedSymbol: Model -> XYPos -> ComponentId Option
 * getSymbolsInTargetArea: Model -> BBox -> ComponentId List
 * getTargetedPort: Model -> XYPos -> PortId Option
