@@ -167,17 +167,17 @@ let private renderCircle =
 
             circle
                 [ 
-                    OnMouseUp (fun ev -> 
-                        document.removeEventListener("mousemove", handleMouseMove.current)
-                        EndDragging props.Circle.Id
-                        |> props.Dispatch
-                    )
-                    OnMouseDown (fun ev -> 
-                        // See note above re coords wrong if zoom <> 1.0
-                        StartDragging (props.Circle.Id, posOf ev.pageX ev.pageY)
-                        |> props.Dispatch
-                        document.addEventListener("mousemove", handleMouseMove.current)
-                    )
+                    // OnMouseUp (fun ev -> 
+                    //     document.removeEventListener("mousemove", handleMouseMove.current)
+                    //     EndDragging props.Circle.Id
+                    //     |> props.Dispatch
+                    // )
+                    // OnMouseDown (fun ev -> 
+                    //     // See note above re coords wrong if zoom <> 1.0
+                    //     StartDragging (props.Circle.Id, posOf ev.pageX ev.pageY)
+                    //     |> props.Dispatch
+                    //     document.addEventListener("mousemove", handleMouseMove.current)
+                    // )
                     Cx props.Circle.Pos.X
                     Cy props.Circle.Pos.Y
                     R 20.
