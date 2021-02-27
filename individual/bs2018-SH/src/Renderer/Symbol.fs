@@ -66,6 +66,15 @@ let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Op
     | None -> None
     | Some sym -> Some sym.Id
 
+let getSymbolsInTargetArea (symModel: Model) (bb:BBox) : CommonTypes.ComponentId list =
+    symModel
+    |> List.filter (fun el -> containsPoint el.Pos bb)
+    |> List.map (fun el -> el.Id)
+
+let getAllSymbols (symModel: Model) : CommonTypes.ComponentId list =
+    symModel
+    |> List.map (fun el-> el.Id)
+
 let posDiff a b =
     {X=a.X-b.X; Y=a.Y-b.Y}
 

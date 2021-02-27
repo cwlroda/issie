@@ -14,7 +14,7 @@ type Model = {
     }
 
 type KeyboardMsg =
-    | CtrlS | AltC | AltV | AltZ | AltShiftZ | DEL
+    | CtrlS | AltC | AltV | AltZ | AltShiftZ | DEL | CtrlA
 
 type Msg =
     | Wire of BusWire.Msg
@@ -74,8 +74,6 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
             [ g // group list of elements with list of attributes
                 [ Style [Transform (sprintf "scale(%f)" zoom)]] // top-level transform style attribute for zoom
                 [ 
-                    
-
                     svgReact // the application code
                 ]
             ]
@@ -102,6 +100,10 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | KeyPress AltShiftZ -> 
         printStats() // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
+    | KeyPress CtrlA ->
+        let idLst = Symbol.getAllSymbols model.Wire.Symbol
+        {model with SelectedSymbols = idLst},
+        Cmd.ofMsg (Symbol <| Symbol.SetSelected idLst)
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with
