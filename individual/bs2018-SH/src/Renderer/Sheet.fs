@@ -7,10 +7,18 @@ open Elmish.React
 
 open Helpers
 
+type SelectionBox = {
+    FixedCorner: XYPos
+    MovingCorner: XYPos
+    Show: bool
+}
+
+
 type Model = {
     Wire: BusWire.Model
     SelectedSymbols: CommonTypes.ComponentId list
     MouseIsDown: bool
+    SelectionBox: SelectionBox
     }
 
 type KeyboardMsg =
@@ -21,7 +29,7 @@ type Msg =
     | KeyPress of KeyboardMsg
     | MouseDown of XYPos * bool
     | MouseMove of XYPos
-    | MouseUp of XYPos
+    | MouseUp of XYPos * bool
     | Symbol of Symbol.Msg
 
 /// Determines top-level zoom, > 1 => magnify.
@@ -33,12 +41,26 @@ let zoom = 1.0
 /// This function zooms an SVG canvas by transforming its content and altering its size.
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
 /// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
-let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch<Msg>)=
+let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (selectionBox: SelectionBox) (dispatch: Dispatch<Msg>)=
     
     let sizeInPixels = sprintf "%.2fpx" ((1000. * zoom))
     /// Is the mouse button currently down?
     let mDown (ev:Types.MouseEvent) = 
         if ev.buttons <> 0. then true else false
+
+    let bodyLst = [svgReact]
+
+    let bodyLst = if selectionBox.Show then
+                    List.append bodyLst [ 
+                                polygon [
+                                    SVGAttr.Points (polygonPointsString selectionBox.FixedCorner selectionBox.MovingCorner)
+                                    SVGAttr.Fill "LightBlue"
+                                    SVGAttr.Stroke "Blue"
+                                    SVGAttr.FillOpacity 0.5
+                                    SVGAttr.StrokeWidth 1 ] []
+                            ]
+                  else bodyLst
+
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
     div [ Style 
@@ -59,7 +81,7 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
           )
           
           OnMouseUp (fun ev -> 
-            MouseUp(posOf ev.pageX ev.pageY)
+            MouseUp((posOf ev.pageX ev.pageY), ev.shiftKey)
             |> dispatch
           )
         ]
@@ -73,9 +95,7 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
             ]
             [ g // group list of elements with list of attributes
                 [ Style [Transform (sprintf "scale(%f)" zoom)]] // top-level transform style attribute for zoom
-                [ 
-                    svgReact // the application code
-                ]
+                bodyLst
             ]
         ]
 
@@ -85,7 +105,8 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
 let view (model:Model) (dispatch : Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
     let wireSvg = BusWire.view model.Wire wDispatch
-    displaySvgWithZoom zoom wireSvg dispatch
+    let selectionBox = model.SelectionBox
+    displaySvgWithZoom zoom wireSvg selectionBox dispatch
        
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
@@ -114,9 +135,9 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         printfn "Key:%A" c
         model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
     | MouseDown (pos, isShift) ->
-        let idLst = match Symbol.getTargetedSymbol model.Wire.Symbol pos with
+        let idLst, onObj = match Symbol.getTargetedSymbol model.Wire.Symbol pos with
                         | Some targetedId ->
-                            if List.contains targetedId model.SelectedSymbols then
+                            (if List.contains targetedId model.SelectedSymbols then
                                 if isShift then
                                     List.filter (fun el -> el <> targetedId) model.SelectedSymbols
                                 else
@@ -124,19 +145,57 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                             else
                                 if isShift then List.append model.SelectedSymbols [targetedId]
                                 else [targetedId]
-                        | None -> []
+                            ),
+                            true
+                        | None -> [], false
         
-        {model with MouseIsDown = true; SelectedSymbols = idLst},
+        {model with
+            MouseIsDown = true;
+            SelectedSymbols = idLst;
+            SelectionBox = {
+                model.SelectionBox with
+                    FixedCorner = pos
+                    MovingCorner = pos
+                    Show = not onObj
+            }
+        },
         Cmd.batch[
             Cmd.ofMsg (Symbol <| Symbol.StartDragging (idLst, pos));
             Cmd.ofMsg (Symbol <| Symbol.SetSelected idLst);
         ]
-    | MouseUp pos ->
-        {model with MouseIsDown = false}, 
-        Cmd.ofMsg (Symbol <| Symbol.EndDragging)
+    | MouseUp (pos, isShift) ->
+        let symbolsInSelectionBox =
+            let selectionBBox = {
+                XYPos = model.SelectionBox.FixedCorner
+                Height = model.SelectionBox.MovingCorner.Y - model.SelectionBox.FixedCorner.Y
+                Width = model.SelectionBox.MovingCorner.X - model.SelectionBox.FixedCorner.Y
+            }
+            Symbol.getSymbolsInTargetArea model.Wire.Symbol selectionBBox
+
+        let selectedSymbols = 
+            if List.length symbolsInSelectionBox > 1 then symbolsInSelectionBox
+            else model.SelectedSymbols
+
+        {
+            model with
+                SelectedSymbols = selectedSymbols
+                MouseIsDown = false
+                SelectionBox = {
+                    model.SelectionBox with
+                        Show = false
+                }
+        }, 
+        Cmd.batch[Cmd.ofMsg (Symbol <| Symbol.EndDragging);Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)]
     | MouseMove pos ->
         if model.MouseIsDown then
-            model, Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, pos))
+            {
+                model with
+                    SelectionBox = {
+                        model.SelectionBox with
+                            MovingCorner = pos
+                    }
+            },
+            Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, pos))
         else
             model, Cmd.none
     | _ -> failwithf "Sheet - message not implemented"
@@ -147,4 +206,9 @@ let init() =
         Wire = model
         SelectedSymbols = []
         MouseIsDown = false
+        SelectionBox = {
+            FixedCorner = posOf 0.0 0.0
+            MovingCorner = posOf 0.0 0.0
+            Show = false
+        }
     }, Cmd.map Wire cmds

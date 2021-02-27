@@ -49,6 +49,21 @@ let containsPoint (pos : XYPos) (bb : BBox) : bool =
 let posOf x y = {X=x;Y=y}
 
 
+let polygonPointsString (point:XYPos) (diagonalPoint:XYPos) =
+    let polygonPoints = [
+        (point.X, point.Y)
+        (point.X, diagonalPoint.Y)
+        (diagonalPoint.X, diagonalPoint.Y)
+        (diagonalPoint.X, point.Y)
+    ]
+    let pointToStr (x, y) =
+        String.concat "" [(x.ToString());",";(y.ToString())]
+
+    polygonPoints
+    |> List.map pointToStr
+    |> String.concat " "
+
+
 /// return a v4 (random) universally unique identifier (UUID)
 let uuid():string = import "v4" "uuid"
 
