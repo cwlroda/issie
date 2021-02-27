@@ -24,6 +24,8 @@ type Symbol =
         LastDragPos : XYPos
         IsDragging : bool
         Id : CommonTypes.ComponentId
+        Component : CommonTypes.Component
+        Selected : bool
     }
 
 
@@ -50,7 +52,18 @@ type Msg =
 
 //---------------------------------helper types and functions----------------//
 
+let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Option = 
+    let clickInSym sym =
+        let bb = {
+            XYPos = posOf (sym.Pos.X - 20.0) (sym.Pos.Y - 20.0)
+            Height = float sym.Component.H
+            Width = float sym.Component.W
+        }
+        containsPoint pos bb
 
+    match (symModel |> List.tryFind clickInSym) with
+    | None -> None
+    | Some sym -> Some sym.Id
 
 let posDiff a b =
     {X=a.X-b.X; Y=a.Y-b.Y}
@@ -77,7 +90,21 @@ let createNewSymbol (pos:XYPos) =
         LastDragPos = {X=0. ; Y=0.} // initial value can always be this
         IsDragging = false // initial value can always be this
         Id = CommonTypes.ComponentId (Helpers.uuid()) // create a unique id for this symbol
+        Component = {
+            Id = uuid()
+            Type = CommonTypes.And
+            Label = ""
+            InputPorts = []
+            OutputPorts = []
+            X = int pos.X
+            Y = int pos.Y
+            H = 40
+            W = 40
+        }
+        Selected = false
     }
+
+
 
 
 /// Dummy function for test. The real init would probably have no symbols.

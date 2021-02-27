@@ -30,9 +30,24 @@ type MouseT = {
     Pos: XYPos
     Op: MouseOp}
 
+type BBox = {
+    XYPos : XYPos
+    Width: float
+    Height: float
+}
+
 //--------------------------------------------------------------------------//
 //-----------------------------Helpers--------------------------------------//
 //--------------------------------------------------------------------------//
+
+let containsPoint (pos : XYPos) (bb : BBox) : bool =
+    pos.X >= bb.XYPos.X
+    && pos.X <= (bb.XYPos.X + bb.Width)
+    && pos.Y >= bb.XYPos.Y
+    && pos.Y <= (bb.XYPos.Y + bb.Height)
+
+let posOf x y = {X=x;Y=y}
+
 
 /// return a v4 (random) universally unique identifier (UUID)
 let uuid():string = import "v4" "uuid"

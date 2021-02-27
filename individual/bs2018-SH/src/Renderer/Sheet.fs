@@ -17,10 +17,13 @@ type KeyboardMsg =
 type Msg =
     | Wire of BusWire.Msg
     | KeyPress of KeyboardMsg
+    | MouseUp of XYPos
 
 /// Determines top-level zoom, > 1 => magnify.
 /// This should be moved into the model as state
-let zoom = 1.0
+let zoom = 1.0    
+
+
 
 /// This function zooms an SVG canvas by transforming its content and altering its size.
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
@@ -32,8 +35,6 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
         if ev.buttons <> 0. then true else false
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
-    let mouseOp op (ev:Types.MouseEvent) = 
-        dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.x / zoom ; Y = ev.y / zoom}})
     div [ Style 
             [ 
                 Height "100vh" 
@@ -41,9 +42,13 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
                 CSSProp.OverflowX OverflowOptions.Auto 
                 CSSProp.OverflowY OverflowOptions.Auto
             ] 
-          OnMouseDown (fun ev -> (mouseOp Down ev))
-          OnMouseUp (fun ev -> (mouseOp Up ev))
-          OnMouseMove (fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
+        //   OnMouseDown (fun ev -> (mouseOp Down ev))
+        //   OnMouseUp (fun ev -> (mouseOp Up ev))
+        //   OnMouseMove (fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
+          OnMouseUp (fun ev -> 
+            MouseUp(posOf ev.pageX ev.pageY)
+            |> dispatch
+          )
         ]
         [ svg
             [ Style 
@@ -106,6 +111,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | _ -> CommonTypes.Grey
         printfn "Key:%A" c
         model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
+    | MouseUp pos ->
+        match Symbol.getTargetedSymbol model.Wire.Symbol pos with
+        | None -> printf "None"
+        | Some id -> printf $"{id}"
+        model, Cmd.none
 
 let init() = 
     let model,cmds = (BusWire.init 400)()
