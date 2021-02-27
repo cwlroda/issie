@@ -10,34 +10,33 @@
 ### Symbol
 
 ##### Interfaces
-* getTargetedSymbol (symModel: Model) (pos: XYPos) : CompenentId  Option
-* getSymbolsInTargetArea (symModel: Model) (bbox: BBox) : ComponentId List
-* getTargetedPort (symModel: Model) (pos: XYPos) : PortId Option
-* portPos (symModel: Model) (portId: PortId)  : XYPos
-* portType (symModel: Model) (portId: PortId) : PortType
-* portWidth (symModel: Model) (portId: PorttId) : PortWidth
+* getTargetedSymbol: Model -> XYPos -> ComponentId Option
+* getSymbolsInTargetArea: Model -> BBox -> ComponentId List
+* getTargetedPort: Model -> XYPos -> PortId Option
+* portPos: symModel -> PortId -> XYPos
+* portType: Model -> PortId -> PortType
+* portWidth: Model -> PortId -> PortWidth
 
 ##### Messages
 
-* AddSymbol of (comp:CommonTypes.ComponentId, pos:XYPos) 
-* StartDraging  (sIdLst:CommonTypes.ComponentId list) (pagePos:XYPos)
-* Dragging (sIdLst:CommonTypes.ComponentId list) (pagePos:XYPos)
+* AddSymbol of (comp: CommonTypes.ComponentType, pos: XYPos) 
+* StartDraging of (sIdLst: CommonTypes.ComponentId list) (pagePos: XYPos)
+* Dragging of (sIdLst: CommonTypes.ComponentId list) (pagePos: XYPos)
 * EndDragging 
-* SetSelected (sIdLst: CommonTypes.ComponentId list)
-* HighlightPort (pId: PortId)
+* SetSelected of (sIdLst: CommonTypes.ComponentId list)
+* HighlightPort of (pId: PortId)
 * UnhighlightPorts
 
 ### BusWire
 
 ##### Interfaces
-* getTargetedWire (wModel:Model) (pos: XYPOs) :  CommonTypes.ConnectedId Option	
-* getWireInTargetArea (wModel: Model) (bbox: BBox): CommonTypes.ConnectionId list
+* getTargetedWire: Model -> XYPos -> CommonTypes.ConnectionId Option	
 
 ##### Messages
-* AddWire (portA: PortId) * (portB: PortId)
-* DeleteWire (wireId: CommonTypes.ConnectionId)
-* SetSelected (wireId: CommonTypes.ConnectionId)
+* AddWire of (portA: PortId) * (portB: PortId)
+* DeleteWire of (wireId: CommonTypes.ConnectionId)
+* SetSelected of (wireId: CommonTypes.ConnectionId)
 * UnselectAll
-* StartDrag (wireId: CommonTypes.ConnectionId) (pos: XYPos)
-* Dragging (wireId: CommonTypes.ConnectionId) (pos: XYPos)
+* StartDrag of (wireId: CommonTypes.ConnectionId) (pos: XYPos)
+* Dragging of (wireId: CommonTypes.ConnectionId) (pos: XYPos)
 * EndDrag
