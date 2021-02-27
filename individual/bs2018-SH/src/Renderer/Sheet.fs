@@ -9,6 +9,8 @@ open Helpers
 
 type Model = {
     Wire: BusWire.Model
+    SelectedSymbols: CommonTypes.ComponentId list
+    MouseIsDown: bool
     }
 
 type KeyboardMsg =
@@ -17,6 +19,8 @@ type KeyboardMsg =
 type Msg =
     | Wire of BusWire.Msg
     | KeyPress of KeyboardMsg
+    | MouseDown of XYPos
+    | MouseMove of XYPos
     | MouseUp of XYPos
     | Symbol of Symbol.Msg
 
@@ -30,6 +34,7 @@ let zoom = 1.0
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
 /// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
 let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch<Msg>)=
+    
     let sizeInPixels = sprintf "%.2fpx" ((1000. * zoom))
     /// Is the mouse button currently down?
     let mDown (ev:Types.MouseEvent) = 
@@ -46,6 +51,16 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
         //   OnMouseDown (fun ev -> (mouseOp Down ev))
         //   OnMouseUp (fun ev -> (mouseOp Up ev))
         //   OnMouseMove (fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
+          OnMouseDown (fun ev -> 
+            MouseDown(posOf ev.pageX ev.pageY)
+            |> dispatch
+          )
+
+          OnMouseMove (fun ev -> 
+            MouseMove(posOf ev.pageX ev.pageY)
+            |> dispatch
+          )
+          
           OnMouseUp (fun ev -> 
             MouseUp(posOf ev.pageX ev.pageY)
             |> dispatch
@@ -116,16 +131,29 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | _ -> CommonTypes.Grey
         printfn "Key:%A" c
         model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
-    | MouseUp pos ->
-
+    | MouseDown pos ->
         let idlst = match Symbol.getTargetedSymbol model.Wire.Symbol pos with
                     | None -> []
                     | Some id -> [id]
-        model, Cmd.ofMsg (Symbol <| Symbol.SetSelected idlst)
+        {model with MouseIsDown = true; SelectedSymbols = idlst},
+        Cmd.batch[
+            Cmd.ofMsg (Symbol <| Symbol.StartDragging (idlst, pos));
+            Cmd.ofMsg (Symbol <| Symbol.SetSelected idlst);
+        ]
+    | MouseUp pos ->
+        {model with MouseIsDown = false}, 
+        Cmd.ofMsg (Symbol <| Symbol.EndDragging)
+    | MouseMove pos ->
+        if model.MouseIsDown then
+            model, Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, pos))
+        else
+            model, Cmd.none
     | _ -> failwithf "Sheet - message not implemented"
 
 let init() = 
     let model,cmds = (BusWire.init 400)()
     {
         Wire = model
+        SelectedSymbols = []
+        MouseIsDown = false
     }, Cmd.map Wire cmds

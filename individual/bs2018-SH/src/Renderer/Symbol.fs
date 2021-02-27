@@ -41,10 +41,10 @@ type Msg =
     /// Mouse info with coords adjusted form top-level zoom
     | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
-    | StartDragging of sId : CommonTypes.ComponentId * pagePos: XYPos
+    | StartDragging of idLst : CommonTypes.ComponentId list * pagePos: XYPos
     /// coords not adjusted for top-level zoom
-    | Dragging of sId : CommonTypes.ComponentId * pagePos: XYPos
-    | EndDragging of sId : CommonTypes.ComponentId
+    | Dragging of idLst : CommonTypes.ComponentId list * pagePos: XYPos
+    | EndDragging
     | AddCircle of XYPos // used by demo code to add a circle
     | DeleteSymbol of sId:CommonTypes.ComponentId 
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
@@ -122,43 +122,40 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         createNewSymbol pos :: model, Cmd.none
     | DeleteSymbol sId -> 
         List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
-    | StartDragging (sId, pagePos) ->
+    | StartDragging (sLst, pagePos) ->
         model
         |> List.map (fun sym ->
-            if sId <> sym.Id then
-                sym
-            else
+            if List.contains sym.Id sLst then
                 { sym with
                     LastDragPos = pagePos
-                    IsDragging = true
+                    //IsDragging = true
                 }
+            else
+                sym
         )
         , Cmd.none
 
-    | Dragging (rank, pagePos) ->
+    | Dragging (sLst, pagePos) ->
         model
         |> List.map (fun sym ->
-            if rank <> sym.Id then
-                sym
-            else
+            if List.contains sym.Id sLst then
                 let diff = posDiff pagePos sym.LastDragPos
                 { sym with
                     Pos = posAdd sym.Pos diff
                     LastDragPos = pagePos
                 }
+            else
+                sym
         )
         , Cmd.none
 
-    | EndDragging sId ->
+    | EndDragging ->
         model
-        |> List.map (fun sym ->
-            if sId <> sym.Id then 
-                sym
-            else
-                { sym with
-                    IsDragging = false 
-                }
-        )
+        // |> List.map (fun sym ->
+        //     { sym with
+        //         IsDragging = false 
+        //     }
+        // )
         , Cmd.none
     | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
     | SetSelected symlst ->
@@ -191,14 +188,14 @@ type private RenderCircleProps =
 let private renderCircle =
     FunctionComponent.Of(
         fun (props : RenderCircleProps) ->
-            let handleMouseMove =
-                Hooks.useRef(fun (ev : Types.Event) ->
-                    let ev = ev :?> Types.MouseEvent
-                    // x,y coordinates here do not compensate for transform in Sheet
-                    // and are wrong unless zoom=1.0 MouseMsg coordinates are correctly compensated.
-                    Dragging(props.Circle.Id, posOf ev.pageX ev.pageY)
-                    |> props.Dispatch
-                )
+            // let handleMouseMove =
+            //     Hooks.useRef(fun (ev : Types.Event) ->
+            //         let ev = ev :?> Types.MouseEvent
+            //         // x,y coordinates here do not compensate for transform in Sheet
+            //         // and are wrong unless zoom=1.0 MouseMsg coordinates are correctly compensated.
+            //         Dragging(props.Circle.Id, posOf ev.pageX ev.pageY)
+            //         |> props.Dispatch
+            //     )
 
             let color =
                 if props.Circle.IsDragging then
