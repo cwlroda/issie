@@ -49,13 +49,20 @@ module CommonTypes
     [<Erase>]
     type PortHover  = | PortHover of bool
 
+    [<Erase>]
+    type PortWidth = | PortWidth of int
+
 // Specify the position and type of a port in a JSComponent.
 
     //==========================================//
     // Canvas state mapped to f# data structure //
     //==========================================//
 
-    
+    type BBox = {
+        Point:Helpers.XYPos
+        Width:float
+        Height:float
+    }
 
     /// Name identified the LoadedComponent used.
     /// The labels define legends on symbol.
@@ -98,8 +105,10 @@ module CommonTypes
         // If the port is used in a Connection record as Source or Target, the Number is None. 
         PortNumber : PortNumber option
         PortType : PortType
+        PortPos : Helpers.XYPos
         HostId : ComponentId
         Hover : PortHover
+        Width : PortWidth
         
     }
     // Types instantiating objects in the Digital extension.

@@ -89,17 +89,17 @@ let singleWireView =
             SVGAttr.Stroke props.ColorP
             SVGAttr.FillOpacity 0
             SVGAttr.StrokeWidth props.StrokeWidthP ] []
-        text [ // a demo text svg element
-                        X (srcX + 40.); 
-                        Y (srcY - 20.); 
-                        Style [
-                            TextAnchor "middle" // left/right/middle: horizontal algnment vs (X,Y)
-                            DominantBaseline "hanging" // auto/middle/hanging: vertical alignment vs (X,Y)
-                            FontSize "18px"
-                            FontWeight "Bold"
-                            Fill "Blue" // demo font color
-                        ]
-                    ] [str <| sprintf "0..x"]
+        // text [ // a demo text svg element
+        //                 X (srcX + 40.); 
+        //                 Y (srcY - 20.); 
+        //                 Style [
+        //                     TextAnchor "middle" // left/right/middle: horizontal algnment vs (X,Y)
+        //                     DominantBaseline "hanging" // auto/middle/hanging: vertical alignment vs (X,Y)
+        //                     FontSize "18px"
+        //                     FontWeight "Bold"
+        //                     Fill "Blue" // demo font color
+        //                 ]
+        //             ] [str <| sprintf "0..x"]
         ]
 let busWidthView = 
     FunctionComponent.Of(
@@ -155,7 +155,8 @@ let init n () =
             SrcSymbol = s1.Id
             TargetSymbol = s2.Id
         }
-    List.map (fun i -> makeRandomWire()) [1..n]
+    // List.map (fun i -> makeRandomWire()) [[1..n]]
+    List.map (fun i -> makeRandomWire()) [[1..n]]
     |> (fun wires -> {WX=wires;Symbol=symbols; Color=CommonTypes.Red},Cmd.none)
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
