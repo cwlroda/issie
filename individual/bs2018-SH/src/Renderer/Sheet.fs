@@ -165,11 +165,18 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         ]
     | MouseUp (pos, isShift) ->
         let symbolsInSelectionBox =
-            let selectionBBox = {
-                XYPos = model.SelectionBox.FixedCorner
-                Height = model.SelectionBox.MovingCorner.Y - model.SelectionBox.FixedCorner.Y
-                Width = model.SelectionBox.MovingCorner.X - model.SelectionBox.FixedCorner.Y
-            }
+            let c1 = model.SelectionBox.FixedCorner
+            let c2 = model.SelectionBox.MovingCorner
+            let selectionBBox = 
+                let x =  if c1.X < c2.X then c1.X else c2.X
+                let y = if c1.Y < c2.Y then c1.Y else c2.Y
+                let h = if c1.Y - c2.Y > 0. then c1.Y - c2.Y else c2.Y - c1.Y
+                let w = if c1.X - c2.X > 0. then c1.X - c2.X else c2.X - c1.X
+                {
+                    XYPos = posOf x y
+                    Height = h
+                    Width = w
+                }
             Symbol.getSymbolsInTargetArea model.Wire.Symbol selectionBBox
 
         let selectedSymbols = 
