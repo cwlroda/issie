@@ -56,7 +56,7 @@ type Msg =
 let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Option = 
     let clickInSym sym =
         let bb = {
-            XYPos = posOf (sym.Pos.X - 20.0) (sym.Pos.Y - 20.0)
+            XYPos = sym.Pos
             Height = float sym.Component.H
             Width = float sym.Component.W
         }
@@ -212,7 +212,7 @@ let private renderCircle =
                 else
                     "grey"
 
-            circle
+            polygon
                 [ 
                     // OnMouseUp (fun ev -> 
                     //     document.removeEventListener("mousemove", handleMouseMove.current)
@@ -227,7 +227,7 @@ let private renderCircle =
                     // )
                     Cx props.Circle.Pos.X
                     Cy props.Circle.Pos.Y
-                    R 20.
+                    SVGAttr.Points (polygonPointsString props.Circle.Pos (posOf (props.Circle.Pos.X + 40.) (props.Circle.Pos.Y + 40.)))
                     SVGAttr.Fill color
                     SVGAttr.Stroke color
                     SVGAttr.StrokeWidth 1
