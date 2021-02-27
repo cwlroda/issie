@@ -48,9 +48,6 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
                 CSSProp.OverflowX OverflowOptions.Auto 
                 CSSProp.OverflowY OverflowOptions.Auto
             ] 
-        //   OnMouseDown (fun ev -> (mouseOp Down ev))
-        //   OnMouseUp (fun ev -> (mouseOp Up ev))
-        //   OnMouseMove (fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
           OnMouseDown (fun ev -> 
             MouseDown((posOf ev.pageX ev.pageY), ev.shiftKey)
             |> dispatch
@@ -77,26 +74,9 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
             [ g // group list of elements with list of attributes
                 [ Style [Transform (sprintf "scale(%f)" zoom)]] // top-level transform style attribute for zoom
                 [ 
-                    text [ // a demo text svg element
-                        X 500; 
-                        Y 50; 
-                        Style [
-                            TextAnchor "middle" // horizontal algnment vs (X,Y)
-                            DominantBaseline "middle" // vertical alignment vs (X,Y)
-                            FontSize "40px"
-                            FontWeight "Bold"
-                            Fill "Green" // font color
-                        ]
-                    ] [str "sample text"]
+                    
 
                     svgReact // the application code
-
-                    polygon [ // a demo svg polygon triangle written on top of the application
-                        SVGAttr.Points "10,10 900,900 10,900"
-                        SVGAttr.StrokeWidth "5px"
-                        SVGAttr.Stroke "Black"
-                        SVGAttr.FillOpacity 0.1
-                        SVGAttr.Fill "Blue"] []
                 ]
             ]
         ]
