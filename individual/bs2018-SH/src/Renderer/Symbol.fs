@@ -48,6 +48,7 @@ type Msg =
     | AddCircle of XYPos // used by demo code to add a circle
     | DeleteSymbol of sId:CommonTypes.ComponentId 
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
+    | SetSelected of CommonTypes.ComponentId list
 
 
 //---------------------------------helper types and functions----------------//
@@ -160,6 +161,19 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         )
         , Cmd.none
     | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
+    | SetSelected symlst ->
+        model
+        |> List.map (fun sym ->
+            if List.contains sym.Id symlst then 
+                { sym with
+                    IsDragging = true 
+                }
+            else
+                { sym with
+                    IsDragging = false 
+                }
+        )
+        , Cmd.none
     | _ -> failwithf "Not implemented"
 
 //----------------------------View Function for Symbols----------------------------//

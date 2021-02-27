@@ -18,6 +18,7 @@ type Msg =
     | Wire of BusWire.Msg
     | KeyPress of KeyboardMsg
     | MouseUp of XYPos
+    | Symbol of Symbol.Msg
 
 /// Determines top-level zoom, > 1 => magnify.
 /// This should be moved into the model as state
@@ -99,6 +100,10 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | Wire wMsg -> 
         let wModel, wCmd = BusWire.update wMsg model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
+    | Symbol sMsg ->
+        let sModel, sCmd = Symbol.update sMsg model.Wire.Symbol
+        let wModel = {model.Wire with Symbol = sModel}
+        {model with Wire = wModel}, Cmd.map Symbol sCmd
     | KeyPress AltShiftZ -> 
         printStats() // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
@@ -112,10 +117,12 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         printfn "Key:%A" c
         model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
     | MouseUp pos ->
-        match Symbol.getTargetedSymbol model.Wire.Symbol pos with
-        | None -> printf "None"
-        | Some id -> printf $"{id}"
-        model, Cmd.none
+
+        let idlst = match Symbol.getTargetedSymbol model.Wire.Symbol pos with
+                    | None -> []
+                    | Some id -> [id]
+        model, Cmd.ofMsg (Symbol <| Symbol.SetSelected idlst)
+    | _ -> failwithf "Sheet - message not implemented"
 
 let init() = 
     let model,cmds = (BusWire.init 400)()
