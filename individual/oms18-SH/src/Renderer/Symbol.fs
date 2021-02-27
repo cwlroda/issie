@@ -42,9 +42,7 @@ type Msg =
     | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
     | DeselectAll
-    | Select of sId: CommonTypes.ComponentId
-    | SelectOnly of sId: CommonTypes.ComponentId
-    | ToggleSelect of sId: CommonTypes.ComponentId
+    | Select of sIdLst: CommonTypes.ComponentId list
     | StartDragging of sId : CommonTypes.ComponentId * pagePos: XYPos
     /// coords not adjusted for top-level zoom
     | Dragging of pagePos: XYPos
@@ -123,29 +121,15 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         |> List.map (fun sym ->
             { sym with IsSelected=false }
         ), Cmd.none
-    | Select sId ->
+    | Select sIdLst ->
+        let sIdSet = Set.ofList sIdLst
+
         model
         |> List.map (fun sym ->
-            if sId = sym.Id then
-                {sym with IsSelected = true}
-            else
-                sym
-        ), Cmd.none
-    | SelectOnly sId ->
-        model
-        |> List.map (fun sym ->
-            if sId = sym.Id then
+            if Set.contains sym.Id sIdSet then
                 {sym with IsSelected = true}
             else
                 {sym with IsSelected = false}
-        ), Cmd.none
-    | ToggleSelect sId ->
-        model
-        |> List.map (fun sym ->
-            if sId = sym.Id then
-                {sym with IsSelected = (not sym.IsSelected)}
-            else
-                sym
         ), Cmd.none
     | Dragging pagePos ->
         model
