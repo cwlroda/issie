@@ -7,8 +7,14 @@ open Elmish
 open Elmish.React
 
 open Helpers
+open BBox
 
-type Model = { Wire: BusWire.Model }
+type Model = {
+    Wire: BusWire.Model
+    SelectedSymbols: CommonTypes.ComponentId list
+    AreaSelectStart: (XYPos * XYPos) option
+    AdditiveSelect: bool
+}
 
 type KeyboardMsg =
     | CtrlS
@@ -34,7 +40,7 @@ let zoom = 1.0
 /// This function zooms an SVG canvas by transforming its content and altering its size.
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
 /// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
-let displaySvgWithZoom (zoom: float) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
+let displaySvgWithZoom (model: Model) (zoom: float) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
     let sizeInPixels = sprintf "%.2fpx" ((1000. * zoom))
     /// Is the mouse button currently down?
     let mDown (ev: Types.MouseEvent) = ev.buttons <> 0.
@@ -46,8 +52,8 @@ let displaySvgWithZoom (zoom: float) (svgReact: ReactElement) (dispatch: Dispatc
         <| MouseMsg(
             { Op = op
               Pos =
-                  { X = -3. + ev.pageX / zoom
-                    Y = -3. + ev.pageY / zoom } },
+                  { X = ev.clientX / zoom
+                    Y = ev.clientY / zoom } },
             if ev.ctrlKey then
                 Control
             else
@@ -65,7 +71,27 @@ let displaySvgWithZoom (zoom: float) (svgReact: ReactElement) (dispatch: Dispatc
                       Height sizeInPixels
                       Width sizeInPixels ] ] [
             g [ Style [ Transform(sprintf "scale(%f)" zoom) ] ] [  // top-level transform style attribute for zoom
-                svgReact // the application code
+                match model.AreaSelectStart with
+                | Some (p1, p2) ->
+                    let area = pointsToBBox p1 p2
+                    let color =
+                        if model.AdditiveSelect then
+                            "Green"
+                        else
+                            "Blue"
+
+                    svgReact // the application code
+                    rect [
+                        X area.Pos.X
+                        Y area.Pos.Y
+                        SVGAttr.Width area.Bounds.Width
+                        SVGAttr.Height area.Bounds.Height
+                        SVGAttr.Fill color
+                        SVGAttr.Stroke color
+                        SVGAttr.StrokeWidth "1px"
+                        SVGAttr.FillOpacity 0.3
+                    ] []
+                | None -> svgReact
             ]
         ] // top-level transform style attribute for zoom
     ] // top-level transform style attribute for zoom
@@ -76,7 +102,7 @@ let displaySvgWithZoom (zoom: float) (svgReact: ReactElement) (dispatch: Dispatc
 let view (model: Model) (dispatch: Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
     let wireSvg = BusWire.view model.Wire wDispatch
-    displaySvgWithZoom zoom wireSvg dispatch
+    displaySvgWithZoom model zoom wireSvg dispatch
 
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
@@ -88,16 +114,71 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 Symbol.getTargetedSymbol model.Wire.Symbol p
 
             match (selectedSymbol, m) with
-            | (Some sym, Control) ->  model, Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.ToggleSelect sym.Id)))
-            | (Some sym, NoModifier) ->
-                if sym.IsSelected then
-                    model, Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.Select sym.Id)))
-                else
-                    model, Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.SelectOnly sym.Id)))
-            | (None, Control) -> model, Cmd.none
-            | (None, NoModifier) -> model, Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.DeselectAll)))
-        | (Drag, p, _) -> model, Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.Dragging p)))
-        | (Up, _, _) -> model, Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.EndDragging)))
+            | (Some sym, m) ->
+                let isSelected =
+                    model.SelectedSymbols
+                    |> Set.ofList
+                    |> Set.contains sym.Id
+
+                let selectedSymbols =
+                    if isSelected then
+                        model.SelectedSymbols
+                    else
+                        if m = Control then
+                            model.SelectedSymbols
+                            |> Set.ofList
+                            |> Set.add sym.Id
+                            |> Set.toList
+                        else
+                            [sym.Id]
+
+                { model with SelectedSymbols = selectedSymbols}
+                , Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.Select selectedSymbols)))
+            | (None, Control) ->
+                { model with
+                    AreaSelectStart=Some (p, p)
+                    AdditiveSelect=true
+                }, Cmd.none
+            | (None, NoModifier) ->
+                { model with
+                    SelectedSymbols=[]
+                    AreaSelectStart=Some (p, p)
+                    AdditiveSelect=false
+                }, Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.Select [])))
+        | (Drag, p, _) ->
+            match model.AreaSelectStart with
+            | Some (start, _) ->
+                { model with AreaSelectStart=Some(start, p)}
+                , Cmd.none
+            | None -> model, Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.Dragging p)))
+        | (Up, _, _) ->
+            match model.AreaSelectStart with
+            | Some (p1, p2) ->
+                let area = pointsToBBox p1 p2
+                let selectedSymbols =
+                    if model.AdditiveSelect then
+                        model.SelectedSymbols
+                        |> Set.ofList
+                        |> Set.union (
+                            Set.ofList (
+                                Symbol.getSymbolsInBBox model.Wire.Symbol area
+                                )
+                            )
+                        |> Set.toList
+                    else
+                        Symbol.getSymbolsInBBox model.Wire.Symbol area
+
+                {model with
+                    AreaSelectStart=None
+                    SelectedSymbols=selectedSymbols
+                }
+                , Cmd.batch [
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
+                ]
+            | None ->
+                {model with AreaSelectStart=None}
+                , Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.EndDragging)))
         | _ -> model, Cmd.none
     | Wire wMsg ->
         let wModel, wCmd = BusWire.update wMsg model.Wire
@@ -118,4 +199,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
 let init () =
     let model, cmds = (BusWire.init 400) ()
-    { Wire = model }, Cmd.map Wire cmds
+    {
+        Wire = model
+        SelectedSymbols = []
+        AreaSelectStart=None
+        AdditiveSelect=false
+    }, Cmd.map Wire cmds
