@@ -201,6 +201,10 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let idLst = Symbol.getAllSymbols model.Wire.Symbol
         {model with SelectedSymbols = idLst},
         Cmd.ofMsg (Symbol <| Symbol.SetSelected idLst)
+    | KeyPress DEL ->
+        match model.SelectedWire with
+        | None -> model, Cmd.none
+        | Some wId -> {model with SelectedWire = None}, Cmd.ofMsg (Wire <| BusWire.DeleteWire wId)
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with

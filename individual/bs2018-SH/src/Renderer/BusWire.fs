@@ -48,6 +48,7 @@ type Msg =
     | MouseMsg of MouseT
     | SetSelected of CommonTypes.ConnectionId
     | UnselectAll
+    | DeleteWire of CommonTypes.ConnectionId
 
 
 let getTargetedWire (wModel : Model) (pos : XYPos) : CommonTypes.ConnectionId Option = 
@@ -166,6 +167,10 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 {w with Selected = false}
             )
 
+        {model with WX = newWx}, Cmd.none
+
+    | DeleteWire wId ->
+        let newWx = List.collect (fun el -> if el.Id = wId then [] else [el]) model.WX
         {model with WX = newWx}, Cmd.none
 //---------------Other interface functions--------------------//
 
