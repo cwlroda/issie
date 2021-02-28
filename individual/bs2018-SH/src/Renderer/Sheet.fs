@@ -136,6 +136,14 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (selectionBox: Sele
         ]
 
 
+let closestPosOnGrid (grid : Grid) (pos : XYPos) : XYPos =
+    let leftDist = pos.X % grid.Size
+    let upDist = pos.Y % grid.Size
+    let x = if leftDist < grid.Size - leftDist then pos.X - leftDist else pos.X + grid.Size - leftDist
+    let y = if upDist < grid.Size - upDist then pos.Y - upDist else pos.Y + grid.Size - upDist
+    printf $"{x},{y}"
+    posOf x y
+
 
 /// for the demo code
 let view (model:Model) (dispatch : Msg -> unit) =
