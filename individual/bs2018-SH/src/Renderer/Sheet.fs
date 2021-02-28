@@ -29,6 +29,7 @@ type MouseDown =
 type Model = {
     Wire: BusWire.Model
     SelectedSymbols: CommonTypes.ComponentId list
+    SelectedWire: CommonTypes.ConnectionId Option
     MouseState: MouseDown
     SelectionBox: SelectionBox
     Grid: Grid
@@ -273,6 +274,18 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | FromEmpty -> processSelectionBox
             | _ -> model.SelectedSymbols
 
+        let selectWireCommands, selectedWire =
+            if selectedSymbols = model.SelectedSymbols then
+                match BusWire.getTargetedWire model.Wire pos with
+                | None -> [], None
+                | Some wId -> [Cmd.ofMsg (Wire <| BusWire.SetSelected wId)], Some wId
+            else
+                [], None
+
+        let selectWireCommands = 
+            selectWireCommands
+            |> List.append [Cmd.ofMsg (Wire <| BusWire.UnselectAll)]
+
         let addWireCommands =
             match model.MouseState with
             | FromPort (fromPid, toPos) ->
@@ -289,10 +302,12 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let cmds = 
             [Cmd.ofMsg (Symbol <| Symbol.EndDragging);Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)]
             |> List.append addWireCommands
+            |> List.append selectWireCommands
 
         {
             model with
                 SelectedSymbols = selectedSymbols
+                SelectedWire = selectedWire
                 MouseState = MouseIsUp
                 SelectionBox = {
                     model.SelectionBox with
@@ -336,6 +351,7 @@ let init() =
     {
         Wire = model
         SelectedSymbols = []
+        SelectedWire = None
         MouseState = MouseIsUp
         SelectionBox = {
             FixedCorner = posOf 0.0 0.0

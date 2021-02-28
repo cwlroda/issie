@@ -25,6 +25,7 @@ type Wire = {
     Id: CommonTypes.ConnectionId 
     SrcPort: CommonTypes.PortId
     TargetPort: CommonTypes.PortId
+    Selected: bool
     }
 
 type Model = {
@@ -45,6 +46,8 @@ type Msg =
     | AddWire of (CommonTypes.PortId * CommonTypes.PortId)
     | SetColor of CommonTypes.HighLightColor
     | MouseMsg of MouseT
+    | SetSelected of CommonTypes.ConnectionId
+    | UnselectAll
 
 
 let getTargetedWire (wModel : Model) (pos : XYPos) : CommonTypes.ConnectionId Option = 
@@ -62,14 +65,13 @@ let getTargetedWire (wModel : Model) (pos : XYPos) : CommonTypes.ConnectionId Op
         |> List.tryFind (
             fun wire ->
                 (
-                    [-3..3]
-                    |> List.map (fun i -> List.map (fun j -> ((float i)+pos.X, (float j)+pos.Y)) [-3..3])
+                    [-5..5]
+                    |> List.map (fun i -> List.map (fun j -> ((float i)+pos.X, (float j)+pos.Y)) [-5..5])
                     |> List.collect id
                     |> List.map (fun (x, y) -> posOf x y)
                     |> List.sumBy (fun pos -> if pointOnWire wire pos then 1 else 0)
                 ) > 0
         )
-    printf $"{res}"
     match res with
     | Some wire -> Some wire.Id
     | None -> None
@@ -111,7 +113,7 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
                 WireP = w
                 SrcP = Symbol.portPos model.Symbol w.SrcPort
                 TgtP = Symbol.portPos model.Symbol w.TargetPort
-                ColorP = model.Color.Text()
+                ColorP = if w.Selected then "blue" else "teal"
                 StrokeWidthP = "2px" }
             singleWireView props)
     let symbols = Symbol.view model.Symbol (fun sMsg -> dispatch (Symbol sMsg))
@@ -135,11 +137,32 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 Id = CommonTypes.ConnectionId ( uuid() )
                 SrcPort = sPid
                 TargetPort = tPid
+                Selected = false
             }]
         {model with WX=wires},Cmd.none
     | SetColor c -> {model with Color = c}, Cmd.none
     | MouseMsg mMsg -> model, Cmd.ofMsg (Symbol (Symbol.MouseMsg mMsg))
+    | SetSelected wId ->
+        printf $"setting {wId} as selected"
+        let newWx =
+            model.WX
+            |> List.map (fun w ->
+                if w.Id = wId then
+                    {w with Selected = true}
+                else
+                    w
+            )
 
+        {model with WX = newWx}, Cmd.none
+    | UnselectAll ->
+        printf $"deselcting all wires"
+        let newWx =
+            model.WX
+            |> List.map (fun w ->
+                {w with Selected = false}
+            )
+
+        {model with WX = newWx}, Cmd.none
 //---------------Other interface functions--------------------//
 
 /// Given a point on the canvas, returns the wire ID of a wire within a few pixels
