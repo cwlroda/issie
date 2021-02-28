@@ -54,23 +54,29 @@ let getTargetedWire (wModel : Model) (pos : XYPos) : CommonTypes.ConnectionId Op
     let pointOnWire (wire : Wire) (point : XYPos) : bool =
         let src = Symbol.portPos wModel.Symbol wire.SrcPort
         let dst = Symbol.portPos wModel.Symbol wire.TargetPort
-        // y = mx + c
-        let m = (dst.Y - src.Y)/(dst.X - src.X)
-        let c  = dst.Y - m*dst.X
 
-        point.Y = m*point.X + c
+        let wireBox = extendBBoxForError (bboxFromDiagonals src dst) 10.
+
+        if not (containsPoint pos wireBox) then
+            false
+        else
+            // y = mx + c
+            let m = (dst.Y - src.Y)/(dst.X - src.X)
+            let c  = dst.Y - m*dst.X
+
+            if c > 1000. || c < -1000. then
+                true
+            else
+                let err = (point.Y - m*point.X - c)
+                let err = if err < 0. then (err * -1.) else err
+
+                err < 10.
 
     let res = 
         wModel.WX
         |> List.tryFind (
             fun wire ->
-                (
-                    [-5..5]
-                    |> List.map (fun i -> List.map (fun j -> ((float i)+pos.X, (float j)+pos.Y)) [-5..5])
-                    |> List.collect id
-                    |> List.map (fun (x, y) -> posOf x y)
-                    |> List.sumBy (fun pos -> if pointOnWire wire pos then 1 else 0)
-                ) > 0
+                pointOnWire wire pos
         )
     match res with
     | Some wire -> Some wire.Id
@@ -114,7 +120,7 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
                 SrcP = Symbol.portPos model.Symbol w.SrcPort
                 TgtP = Symbol.portPos model.Symbol w.TargetPort
                 ColorP = if w.Selected then "blue" else "teal"
-                StrokeWidthP = "2px" }
+                StrokeWidthP = if w.Selected then "2.5px" else "2px" }
             singleWireView props)
     let symbols = Symbol.view model.Symbol (fun sMsg -> dispatch (Symbol sMsg))
     g [] [(g [] wires); symbols]
@@ -143,7 +149,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | SetColor c -> {model with Color = c}, Cmd.none
     | MouseMsg mMsg -> model, Cmd.ofMsg (Symbol (Symbol.MouseMsg mMsg))
     | SetSelected wId ->
-        printf $"setting {wId} as selected"
         let newWx =
             model.WX
             |> List.map (fun w ->
@@ -155,7 +160,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
 
         {model with WX = newWx}, Cmd.none
     | UnselectAll ->
-        printf $"deselcting all wires"
         let newWx =
             model.WX
             |> List.map (fun w ->

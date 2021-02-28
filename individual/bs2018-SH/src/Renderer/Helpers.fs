@@ -41,6 +41,24 @@ type BBox = {
 //--------------------------------------------------------------------------//
 let posOf x y = {X=x;Y=y}
 
+let bboxFromDiagonals (c1 : XYPos) (c2 : XYPos) : BBox =
+    let x =  if c1.X < c2.X then c1.X else c2.X
+    let y = if c1.Y < c2.Y then c1.Y else c2.Y
+    let h = if c1.Y - c2.Y > 0. then c1.Y - c2.Y else c2.Y - c1.Y
+    let w = if c1.X - c2.X > 0. then c1.X - c2.X else c2.X - c1.X
+    {
+        XYPos = posOf x y
+        Height = h
+        Width = w
+    }
+
+let extendBBoxForError (bb : BBox) (e : float) : BBox =
+    {
+        XYPos = posOf (bb.XYPos.X - e) (bb.XYPos.Y - e)
+        Height = bb.Height + (e * 2.)
+        Width = bb.Width + (e * 2.)
+    }
+
 let containsPoint (pos : XYPos) (bb : BBox) : bool =
     pos.X >= bb.XYPos.X
     && pos.X <= (bb.XYPos.X + bb.Width)

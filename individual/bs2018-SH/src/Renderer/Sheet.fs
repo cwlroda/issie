@@ -255,16 +255,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             let symbolsInSelectionBox =
                 let c1 = model.SelectionBox.FixedCorner
                 let c2 = pos
-                let selectionBBox = 
-                    let x =  if c1.X < c2.X then c1.X else c2.X
-                    let y = if c1.Y < c2.Y then c1.Y else c2.Y
-                    let h = if c1.Y - c2.Y > 0. then c1.Y - c2.Y else c2.Y - c1.Y
-                    let w = if c1.X - c2.X > 0. then c1.X - c2.X else c2.X - c1.X
-                    {
-                        XYPos = posOf x y
-                        Height = h
-                        Width = w
-                    }
+                let selectionBBox = bboxFromDiagonals c1 c2
                 Symbol.getSymbolsInTargetArea model.Wire.Symbol selectionBBox
             if List.length symbolsInSelectionBox > 1 then symbolsInSelectionBox
             else model.SelectedSymbols
