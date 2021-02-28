@@ -19,11 +19,17 @@ type Grid = {
     Show: bool
 }
 
+type MouseDown =
+    | MouseIsUp
+    | FromPort of CommonTypes.PortId
+    | FromSymbol
+    | FromEmpty
+
 
 type Model = {
     Wire: BusWire.Model
     SelectedSymbols: CommonTypes.ComponentId list
-    MouseIsDown: bool
+    MouseState: MouseDown
     SelectionBox: SelectionBox
     Grid: Grid
 }
@@ -189,84 +195,104 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | _ -> CommonTypes.Grey
         printfn "Key:%A" c
         model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
+
+
     | MouseDown (pos, isShift) ->
-        let idLst, onObj = match Symbol.getTargetedSymbol model.Wire.Symbol pos with
-                        | Some targetedId ->
-                            (if List.contains targetedId model.SelectedSymbols then
-                                if isShift then
-                                    List.filter (fun el -> el <> targetedId) model.SelectedSymbols
-                                else
-                                    model.SelectedSymbols
-                            else
-                                if isShift then List.append model.SelectedSymbols [targetedId]
-                                else [targetedId]
-                            ),
-                            true
-                        | None -> [], false
+        let processSelectedSymbols targetedId =
+            if List.contains targetedId model.SelectedSymbols then
+                if isShift then
+                    List.filter (fun el -> el <> targetedId) model.SelectedSymbols
+                else
+                    model.SelectedSymbols
+            else
+                if isShift then List.append model.SelectedSymbols [targetedId]
+                else [targetedId]
+
+        let mouseState, selectedSymbols, showSelection =
+            let targetedPort = Symbol.getTargetedPort model.Wire.Symbol pos
+            match targetedPort with
+            | Some portId -> FromPort portId, model.SelectedSymbols, false
+            | None ->
+                let targetedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol pos
+                match targetedSymbol with
+                | Some symbolId -> FromSymbol, processSelectedSymbols symbolId, false
+                | None -> FromEmpty, [], true
+
+        
         
         {model with
-            MouseIsDown = true;
-            SelectedSymbols = idLst;
+            MouseState = mouseState;
+            SelectedSymbols = selectedSymbols;
             SelectionBox = {
                 model.SelectionBox with
                     FixedCorner = pos
                     MovingCorner = pos
-                    Show = not onObj
+                    Show = showSelection
             }
         },
         Cmd.batch[
-            Cmd.ofMsg (Symbol <| Symbol.StartDragging (idLst, pos));
-            Cmd.ofMsg (Symbol <| Symbol.SetSelected idLst);
+            Cmd.ofMsg (Symbol <| Symbol.StartDragging (selectedSymbols, pos));
+            Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols);
         ]
-    | MouseUp (pos, isShift) ->
         
+    | MouseUp (pos, isShift) ->
+        let processSelectionBox =
+            let symbolsInSelectionBox =
+                let c1 = model.SelectionBox.FixedCorner
+                let c2 = pos
+                let selectionBBox = 
+                    let x =  if c1.X < c2.X then c1.X else c2.X
+                    let y = if c1.Y < c2.Y then c1.Y else c2.Y
+                    let h = if c1.Y - c2.Y > 0. then c1.Y - c2.Y else c2.Y - c1.Y
+                    let w = if c1.X - c2.X > 0. then c1.X - c2.X else c2.X - c1.X
+                    {
+                        XYPos = posOf x y
+                        Height = h
+                        Width = w
+                    }
+                Symbol.getSymbolsInTargetArea model.Wire.Symbol selectionBBox
+            if List.length symbolsInSelectionBox > 1 then symbolsInSelectionBox
+            else model.SelectedSymbols
 
         let selectedSymbols =
-            if model.SelectionBox.Show then
-                let symbolsInSelectionBox =
-                    let c1 = model.SelectionBox.FixedCorner
-                    let c2 = pos
-                    let selectionBBox = 
-                        let x =  if c1.X < c2.X then c1.X else c2.X
-                        let y = if c1.Y < c2.Y then c1.Y else c2.Y
-                        let h = if c1.Y - c2.Y > 0. then c1.Y - c2.Y else c2.Y - c1.Y
-                        let w = if c1.X - c2.X > 0. then c1.X - c2.X else c2.X - c1.X
-                        {
-                            XYPos = posOf x y
-                            Height = h
-                            Width = w
-                        }
-                    Symbol.getSymbolsInTargetArea model.Wire.Symbol selectionBBox
-                if List.length symbolsInSelectionBox > 1 then symbolsInSelectionBox
-                else model.SelectedSymbols
-            else
-                model.SelectedSymbols
+            match model.MouseState with
+            | FromEmpty -> processSelectionBox
+            | _ -> model.SelectedSymbols
 
         {
             model with
                 SelectedSymbols = selectedSymbols
-                MouseIsDown = false
+                MouseState = MouseIsUp
                 SelectionBox = {
                     model.SelectionBox with
                         Show = false
                 }
         }, 
         Cmd.batch[Cmd.ofMsg (Symbol <| Symbol.EndDragging);Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)]
+
+
     | MouseMove pos ->
         let highlightCommands = highlightPorts model pos
-        let model, draggingCommands = if model.MouseIsDown then
-                                        {
-                                            model with
-                                                SelectionBox = {
-                                                    model.SelectionBox with
-                                                        MovingCorner = pos
-                                                }
-                                        },
-                                        [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, pos))]
-                                        else
-                                            model, [Cmd.none]
+        let model, draggingCommands =
+            match model.MouseState with
+            | FromEmpty ->
+                {
+                    model with
+                        SelectionBox = {
+                            model.SelectionBox with
+                                MovingCorner = pos
+                        }
+                },
+                [Cmd.none]
+            | FromSymbol ->
+                model, [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, pos))]
+            | _ -> model, [Cmd.none]
+
+
         let commands = List.append highlightCommands draggingCommands
         model, Cmd.batch commands
+
+
     | _ -> failwithf "Sheet - message not implemented"
 
 let init() = 
@@ -274,7 +300,7 @@ let init() =
     {
         Wire = model
         SelectedSymbols = []
-        MouseIsDown = false
+        MouseState = MouseIsUp
         SelectionBox = {
             FixedCorner = posOf 0.0 0.0
             MovingCorner = posOf 0.0 0.0
