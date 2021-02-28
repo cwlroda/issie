@@ -259,7 +259,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         { model with Selection = Empty;DragState=NotDragging },
         match model.Selection with
         | SelectionState.Wire wId ->
-            printfn "deleting %A" wId
             Cmd.ofMsg (Wire (BusWire.Delete wId))
         | Symbols sIdLst ->
             Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.DeleteSymbols sIdLst)))
