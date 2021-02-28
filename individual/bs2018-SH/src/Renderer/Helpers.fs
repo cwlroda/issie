@@ -30,9 +30,51 @@ type MouseT = {
     Pos: XYPos
     Op: MouseOp}
 
+type BBox = {
+    XYPos : XYPos
+    Width: float
+    Height: float
+}
+
 //--------------------------------------------------------------------------//
 //-----------------------------Helpers--------------------------------------//
 //--------------------------------------------------------------------------//
+let posOf x y = {X=x;Y=y}
+
+let containsPoint (pos : XYPos) (bb : BBox) : bool =
+    pos.X >= bb.XYPos.X
+    && pos.X <= (bb.XYPos.X + bb.Width)
+    && pos.Y >= bb.XYPos.Y
+    && pos.Y <= (bb.XYPos.Y + bb.Height)
+
+let corners (bb : BBox) : XYPos list =
+    [
+        bb.XYPos
+        posOf (bb.XYPos.X + bb.Width) bb.XYPos.Y
+        posOf (bb.XYPos.X + bb.Width) (bb.XYPos.Y + bb.Height)
+        posOf bb.XYPos.X (bb.XYPos.Y + bb.Height)
+    ]
+
+let overlaps (bb1 : BBox) (bb2 : BBox) : bool =
+    (
+        corners bb1
+        |> List.sumBy (fun corner -> if containsPoint corner bb2 then 1 else 0)
+    ) > 0
+
+let polygonPointsString (point:XYPos) (diagonalPoint:XYPos) =
+    let polygonPoints = [
+        (point.X, point.Y)
+        (point.X, diagonalPoint.Y)
+        (diagonalPoint.X, diagonalPoint.Y)
+        (diagonalPoint.X, point.Y)
+    ]
+    let pointToStr (x, y) =
+        String.concat "" [(x.ToString());",";(y.ToString())]
+
+    polygonPoints
+    |> List.map pointToStr
+    |> String.concat " "
+
 
 /// return a v4 (random) universally unique identifier (UUID)
 let uuid():string = import "v4" "uuid"

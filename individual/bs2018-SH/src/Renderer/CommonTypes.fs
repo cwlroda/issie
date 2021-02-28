@@ -128,6 +128,11 @@ module CommonTypes
     [<Erase>]
     type ComponentId      = | ComponentId of string
     /// SHA hash unique to a connection - common between JS and F#
+        /// 
+    
+    [<Erase>]
+    type PortId      = | PortId of string
+    /// SHA hash unique to a connection - common between JS and F#
 
     [<Erase>]
     type ConnectionId     = | ConnectionId of string

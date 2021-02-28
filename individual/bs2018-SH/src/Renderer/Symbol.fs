@@ -18,12 +18,23 @@ open Helpers
 /// probably not be here, but looked up via some function
 /// from a more compact form, so that comparison of two Symbols to
 /// determine are they the same is fast.
+    /// 
+type Port = {
+    Id : CommonTypes.PortId
+    Type : CommonTypes.PortType
+    RelPos : XYPos
+    Highlighted : bool
+}
+
 type Symbol =
     {
         Pos: XYPos
         LastDragPos : XYPos
         IsDragging : bool
         Id : CommonTypes.ComponentId
+        Component : CommonTypes.Component
+        Selected : bool
+        Ports : Port list
     }
 
 
@@ -39,18 +50,74 @@ type Msg =
     /// Mouse info with coords adjusted form top-level zoom
     | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
-    | StartDragging of sId : CommonTypes.ComponentId * pagePos: XYPos
+    | StartDragging of idLst : CommonTypes.ComponentId list * pagePos: XYPos
     /// coords not adjusted for top-level zoom
-    | Dragging of sId : CommonTypes.ComponentId * pagePos: XYPos
-    | EndDragging of sId : CommonTypes.ComponentId
+    | Dragging of idLst : CommonTypes.ComponentId list * pagePos: XYPos
+    | EndDragging
     | AddCircle of XYPos // used by demo code to add a circle
     | DeleteSymbol of sId:CommonTypes.ComponentId 
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
+    | SetSelected of CommonTypes.ComponentId list
+    | HighlightPort of CommonTypes.PortId
+    | UnhighlightPorts
 
 
 //---------------------------------helper types and functions----------------//
 
+let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Option = 
+    let clickInSym sym =
+        let bb = {
+            XYPos = sym.Pos
+            Height = float sym.Component.H
+            Width = float sym.Component.W
+        }
+        containsPoint pos bb
 
+    match (symModel |> List.tryFind clickInSym) with
+    | None -> None
+    | Some sym -> Some sym.Id
+
+let getAllPortsWithSymbol (symModel : Model) = 
+    let insertSymToPortList (pl : Port list) (sym : Symbol) =
+        pl
+        |> List.map (fun el -> (el, sym))
+
+    symModel
+    |> List.map (fun sym -> (sym, sym.Ports))
+    |> List.collect (fun (sym, pl) -> insertSymToPortList pl sym)
+
+let portPos (symModel : Model) (pId : CommonTypes.PortId) : XYPos =
+    let res = 
+        getAllPortsWithSymbol symModel
+        |> List.find (fun (p,_) -> p.Id = pId)
+    match res with
+    | (p, s) -> posOf (p.RelPos.X+s.Pos.X) (p.RelPos.Y+s.Pos.Y)
+
+let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option = 
+    let posInPort (sym: Symbol) (port : Port) : bool =
+        let bb = {
+            XYPos = posOf (port.RelPos.X + sym.Pos.X - 2.5) (port.RelPos.Y + sym.Pos.Y - 2.5)
+            Height = 10.
+            Width = 10.
+        }
+        containsPoint pos bb
+
+    let res =
+        getAllPortsWithSymbol symModel
+        |> List.tryFind (fun (port, sym) -> posInPort sym port)
+
+    match res with
+    | Some (p,_) -> Some p.Id
+    | None -> None
+
+let getSymbolsInTargetArea (symModel: Model) (bb:BBox) : CommonTypes.ComponentId list =
+    symModel
+    |> List.filter (fun el -> containsPoint el.Pos bb)
+    |> List.map (fun el -> el.Id)
+
+let getAllSymbols (symModel: Model) : CommonTypes.ComponentId list =
+    symModel
+    |> List.map (fun el-> el.Id)
 
 let posDiff a b =
     {X=a.X-b.X; Y=a.Y-b.Y}
@@ -77,7 +144,35 @@ let createNewSymbol (pos:XYPos) =
         LastDragPos = {X=0. ; Y=0.} // initial value can always be this
         IsDragging = false // initial value can always be this
         Id = CommonTypes.ComponentId (Helpers.uuid()) // create a unique id for this symbol
+        Component = {
+            Id = uuid()
+            Type = CommonTypes.And
+            Label = ""
+            InputPorts = []
+            OutputPorts = []
+            X = int pos.X
+            Y = int pos.Y
+            H = 40
+            W = 40
+        }
+        Selected = false
+        Ports = [
+            {
+                Id = CommonTypes.PortId ( uuid() )
+                Type = CommonTypes.Input
+                RelPos = posOf 0.0 20.0
+                Highlighted = false
+            }
+            {
+                Id = CommonTypes.PortId ( uuid() )
+                Type = CommonTypes.Output
+                RelPos = posOf 40.0 20.0
+                Highlighted = false
+            }
+        ]
     }
+
+
 
 
 /// Dummy function for test. The real init would probably have no symbols.
@@ -94,45 +189,73 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         createNewSymbol pos :: model, Cmd.none
     | DeleteSymbol sId -> 
         List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
-    | StartDragging (sId, pagePos) ->
+    | StartDragging (sLst, pagePos) ->
         model
         |> List.map (fun sym ->
-            if sId <> sym.Id then
-                sym
-            else
+            if List.contains sym.Id sLst then
                 { sym with
                     LastDragPos = pagePos
-                    IsDragging = true
+                    //IsDragging = true
                 }
+            else
+                sym
         )
         , Cmd.none
 
-    | Dragging (rank, pagePos) ->
+    | Dragging (sLst, pagePos) ->
         model
         |> List.map (fun sym ->
-            if rank <> sym.Id then
-                sym
-            else
+            if List.contains sym.Id sLst then
                 let diff = posDiff pagePos sym.LastDragPos
                 { sym with
                     Pos = posAdd sym.Pos diff
                     LastDragPos = pagePos
                 }
+            else
+                sym
         )
         , Cmd.none
 
-    | EndDragging sId ->
+    | EndDragging ->
+        model
+        // |> List.map (fun sym ->
+        //     { sym with
+        //         IsDragging = false 
+        //     }
+        // )
+        , Cmd.none
+    | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
+    | SetSelected symlst ->
         model
         |> List.map (fun sym ->
-            if sId <> sym.Id then 
-                sym
+            if List.contains sym.Id symlst then 
+                { sym with
+                    IsDragging = true 
+                }
             else
                 { sym with
                     IsDragging = false 
                 }
         )
         , Cmd.none
-    | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
+    | HighlightPort pId ->
+        model
+        |> List.map (fun sym -> 
+            let ports = sym.Ports
+                            |> List.map (fun port ->
+                                if port.Id = pId then {port with Highlighted = true} else port
+                            )
+            {sym with Ports = ports}
+        ), Cmd.none
+    | UnhighlightPorts ->
+        model
+        |> List.map (fun sym -> 
+            let ports = sym.Ports
+                            |> List.map (fun port ->
+                                {port with Highlighted = false}
+                            )
+            {sym with Ports = ports}
+        ), Cmd.none
     | _ -> failwithf "Not implemented"
 
 //----------------------------View Function for Symbols----------------------------//
@@ -150,14 +273,14 @@ type private RenderCircleProps =
 let private renderCircle =
     FunctionComponent.Of(
         fun (props : RenderCircleProps) ->
-            let handleMouseMove =
-                Hooks.useRef(fun (ev : Types.Event) ->
-                    let ev = ev :?> Types.MouseEvent
-                    // x,y coordinates here do not compensate for transform in Sheet
-                    // and are wrong unless zoom=1.0 MouseMsg coordinates are correctly compensated.
-                    Dragging(props.Circle.Id, posOf ev.pageX ev.pageY)
-                    |> props.Dispatch
-                )
+            // let handleMouseMove =
+            //     Hooks.useRef(fun (ev : Types.Event) ->
+            //         let ev = ev :?> Types.MouseEvent
+            //         // x,y coordinates here do not compensate for transform in Sheet
+            //         // and are wrong unless zoom=1.0 MouseMsg coordinates are correctly compensated.
+            //         Dragging(props.Circle.Id, posOf ev.pageX ev.pageY)
+            //         |> props.Dispatch
+            //     )
 
             let color =
                 if props.Circle.IsDragging then
@@ -165,22 +288,22 @@ let private renderCircle =
                 else
                     "grey"
 
-            circle
+            polygon
                 [ 
-                    OnMouseUp (fun ev -> 
-                        document.removeEventListener("mousemove", handleMouseMove.current)
-                        EndDragging props.Circle.Id
-                        |> props.Dispatch
-                    )
-                    OnMouseDown (fun ev -> 
-                        // See note above re coords wrong if zoom <> 1.0
-                        StartDragging (props.Circle.Id, posOf ev.pageX ev.pageY)
-                        |> props.Dispatch
-                        document.addEventListener("mousemove", handleMouseMove.current)
-                    )
+                    // OnMouseUp (fun ev -> 
+                    //     document.removeEventListener("mousemove", handleMouseMove.current)
+                    //     EndDragging props.Circle.Id
+                    //     |> props.Dispatch
+                    // )
+                    // OnMouseDown (fun ev -> 
+                    //     // See note above re coords wrong if zoom <> 1.0
+                    //     StartDragging (props.Circle.Id, posOf ev.pageX ev.pageY)
+                    //     |> props.Dispatch
+                    //     document.addEventListener("mousemove", handleMouseMove.current)
+                    // )
                     Cx props.Circle.Pos.X
                     Cy props.Circle.Pos.Y
-                    R 20.
+                    SVGAttr.Points (polygonPointsString props.Circle.Pos (posOf (props.Circle.Pos.X + 40.) (props.Circle.Pos.Y + 40.)))
                     SVGAttr.Fill color
                     SVGAttr.Stroke color
                     SVGAttr.StrokeWidth 1
@@ -190,17 +313,33 @@ let private renderCircle =
     , equalsButFunctions
     )
 
+let renderPorts (ports : Port list) (symPos : XYPos) = 
+    ports
+    |> List.map (fun port ->
+        let color = if port.Highlighted then "orange" else "black" 
+        circle [
+            Cx (symPos.X + port.RelPos.X)
+            Cy (symPos.Y + port.RelPos.Y)
+            R 5.
+            SVGAttr.Fill color
+        ] []
+    )
+
 /// View function for symbol layer of SVG
 let view (model : Model) (dispatch : Msg -> unit) = 
     model
-    |> List.map (fun ({Id = CommonTypes.ComponentId id} as circle) ->
-        renderCircle 
+    |> List.map (fun sym ->
+        let sid = match sym.Id with
+                    | CommonTypes.ComponentId id -> id
+        [renderCircle 
             {
-                Circle = circle
+                Circle = sym
                 Dispatch = dispatch
-                key = id
-            }
+                key = sid
+            }]
+        |> List.append (renderPorts sym.Ports sym.Pos)
     )
+    |> List.collect id
     |> ofList
 
 
