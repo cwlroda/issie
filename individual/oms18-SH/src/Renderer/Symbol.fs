@@ -214,6 +214,7 @@ let view (model : Model) (dispatch : Msg -> unit) =
                 key = id
             }
     )
+    |> List.rev
     |> ofList
 
 
