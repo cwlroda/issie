@@ -42,48 +42,41 @@ type Msg =
     | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
     | DeselectAll
-    | Select of sIdLst: CommonTypes.ComponentId list
-    | StartDragging of sId : CommonTypes.ComponentId * pagePos: XYPos
+    | Select of CommonTypes.ComponentId list
+    | StartDragging of CommonTypes.ComponentId list * XYPos
     /// coords not adjusted for top-level zoom
-    | Dragging of pagePos: XYPos
+    | Dragging of CommonTypes.ComponentId list * XYPos
     | EndDragging
     | AddCircle of XYPos // used by demo code to add a circle
-    | DeleteSymbol of sId:CommonTypes.ComponentId 
+    | DeleteSymbols of sId:CommonTypes.ComponentId list
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
 
 
 //---------------------------------helper types and functions----------------//
 
-
-
-let posDiff a b =
-    {X=a.X-b.X; Y=a.Y-b.Y}
-
-let posAdd a b =
-    {X=a.X+b.X; Y=a.Y+b.Y}
-
-let posOf x y = {X=x;Y=y}
-
-
 //-----------------------------Skeleton Model Type for symbols----------------//
 
 //---------------Other interface functions--------------------//
 
-let symbolPos (symModel: Model) (sId: CommonTypes.ComponentId) : XYPos = 
-    List.find (fun sym -> sym.Id = sId) symModel
+let symbolPos (model: Model) (sId: CommonTypes.ComponentId) : XYPos = 
+    List.find (fun sym -> sym.Id = sId) model
     |> (fun sym -> sym.Pos)
 
 let BBoxFromSymbol (sym: Symbol) =
     let pos = posDiff sym.Pos (posOf 20. 20.)
     BBox.toBBox pos.X pos.Y 40. 40.
 
-let getTargetedSymbol (symModel: Model) (p: XYPos) : Symbol option =
-    symModel
+let getAllSymbols (model: Model) : CommonTypes.ComponentId list =
+    model
+    |> List.map (fun sym -> sym.Id)
+
+let getTargetedSymbol (model: Model) (p: XYPos) : Symbol option =
+    model
     |> List.filter (fun sym -> BBoxFromSymbol sym |> containsPoint p)
     |> List.tryHead
 
-let getSymbolsInBBox (symModel: Model) (bb: BBox) : CommonTypes.ComponentId list =
-    symModel
+let getSymbolsInBBox (model: Model) (bb: BBox) : CommonTypes.ComponentId list =
+    model
     |> List.filter (fun sym -> BBoxFromSymbol sym |> overlaps bb)
     |> List.map (fun sym -> sym.Id)
 
@@ -114,8 +107,9 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     | AddCircle pos -> 
         createNewSymbol pos :: model, Cmd.none
-    | DeleteSymbol sId -> 
-        List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
+    | DeleteSymbols sIdLst -> 
+        let sIdSet = Set.ofList sIdLst
+        List.filter (fun sym -> not <| Set.contains sym.Id sIdSet) model, Cmd.none
     | DeselectAll ->
         model
         |> List.map (fun sym ->
@@ -131,26 +125,34 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
             else
                 {sym with IsSelected = false}
         ), Cmd.none
-    | Dragging pagePos ->
+    | StartDragging (sIdLst, pos) ->
+        let sIdSet = Set.ofList sIdLst
+
         model
         |> List.map (fun sym ->
-            if sym.IsSelected then
-                if sym.IsDragging then
-                    let diff = posDiff pagePos sym.LastDragPos
-                    { sym with
-                        Pos = posAdd sym.Pos diff
-                        LastDragPos = pagePos
-                    }
-                else
-                    { sym with
-                        LastDragPos = pagePos
-                        IsDragging = true
-                    }
+            if Set.contains sym.Id sIdSet then
+                { sym with
+                    LastDragPos = pos
+                }
             else
                 sym
         )
         , Cmd.none
+    | Dragging (sIdLst, pos) ->
+        let sIdSet = Set.ofList sIdLst
 
+        model
+        |> List.map (fun sym ->
+            if Set.contains sym.Id sIdSet then
+                let diff = posDiff pos sym.LastDragPos
+                { sym with
+                    Pos = posAdd sym.Pos diff
+                    LastDragPos = pos
+                }
+            else
+                sym
+        )
+        , Cmd.none
     | EndDragging ->
         model
         |> List.map (fun sym ->
@@ -218,26 +220,3 @@ let view (model : Model) (dispatch : Msg -> unit) =
     |> ofList
 
 
-/// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
-let updateSymbolModelWithComponent (symModel: Model) (comp:CommonTypes.Component) =
-    failwithf "Not Implemented"
-
-/// Return the output Buswire width (in bits) if this can be calculated based on known
-/// input wire widths, for the symbol wId. The types used here are possibly wrong, since
-/// this calculation is based on ports, and the skeleton code does not implement ports or
-/// port ids. If This is done the inputs could be expressed in terms of port Ids.
-let calculateOutputWidth 
-        (wId: CommonTypes.ConnectionId) 
-        (outputPortNumber: int) 
-        (inputPortWidths: int option list) : int option =
-    failwithf "Not implemented"
-
-
-//----------------------interface to Issie-----------------------------//
-let extractComponent 
-        (symModel: Model) 
-        (sId:CommonTypes.ComponentId) : CommonTypes.Component= 
-    failwithf "Not implemented"
-
-let extractComponents (symModel: Model) : CommonTypes.Component list = 
-    failwithf "Not implemented"

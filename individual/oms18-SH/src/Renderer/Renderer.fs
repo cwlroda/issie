@@ -23,21 +23,35 @@
     // Use Elmish subscriptions to attach external source of events such as keyboard
     // shortcuts. According to electron documentation, the way to configure keyboard
     // shortcuts is by creating a menu.
-    let editMenu dispatch =
-        let menuSeparator =
-           let sep = createEmpty<MenuItemOptions>
-           sep.``type`` <- MenuItemType.Separator
-           sep
-        let makeRoleItem (role:MenuItemRole) =
-            jsOptions<MenuItemOptions> <| fun item ->
-                item.role <- role
-        let makeKeyItem (label:string) (accelerator : string) (action : unit -> unit) =
-            jsOptions<MenuItemOptions> <| fun item ->
-                item.label <- label
-                item.accelerator <- accelerator
-                item.click <- fun _ _ _ -> action()
-
+    let menuSeparator =
+       let sep = createEmpty<MenuItemOptions>
+       sep.``type`` <- MenuItemType.Separator
+       sep
+    let makeRoleItem (role:MenuItemRole) =
+        jsOptions<MenuItemOptions> <| fun item ->
+            item.role <- role
+    let makeKeyItem (label:string) (accelerator : string) (action : unit -> unit) =
+        jsOptions<MenuItemOptions> <| fun item ->
+            item.label <- label
+            item.accelerator <- accelerator
+            item.click <- fun _ _ _ -> action()
     
+    let keyInputMenu dispatch =
+        let makeKeyInput (accelerator: string) (action: unit->unit) =
+            makeKeyItem accelerator accelerator action
+
+        jsOptions<MenuItemOptions> <| fun invisibleMenu ->
+            invisibleMenu.``type`` <- MenuItemType.SubMenu
+            invisibleMenu.label <- ""
+            // this option isn't working
+            invisibleMenu.visible <- false // false if you want keys but no "Edit" menu
+            invisibleMenu.submenu <-
+                [| makeKeyInput "Space" (fun () -> dispatch KeyboardMsg.Space)
+                   makeKeyInput "Escape" (fun () -> dispatch KeyboardMsg.Escape)
+                   makeKeyInput "Alt+A" (fun () -> dispatch KeyboardMsg.AltA) |]
+                |> U2.Case1
+
+    let editMenu dispatch =
         jsOptions<MenuItemOptions> <| fun invisibleMenu ->
             invisibleMenu.``type`` <- MenuItemType.SubMenu
             invisibleMenu.label <- "Edit"
@@ -60,7 +74,8 @@
     let attachMenusAndKeyShortcuts dispatch =
         let sub dispatch =
             let menu = 
-                [| editMenu dispatch |]          
+                [| editMenu dispatch
+                   keyInputMenu dispatch |]          
                 |> Array.map U2.Case1
                 |> electron.remote.Menu.buildFromTemplate   
             menu.items.[0].visible <- Some true
@@ -72,7 +87,6 @@
     let view'  = recordExecutionTimeStats "View" Sheet.view
     let printMsg (msg:Msg) =
         match msg with
-        | Wire (BusWire.Msg.MouseMsg busWireMouseMsg) -> sprintf "BusWireMsg:%A" busWireMouseMsg.Op
         | KeyPress key -> sprintf "%A" key
         | Wire (BusWire.Msg.Symbol (Symbol.Msg.MouseMsg symMouseMsg)) -> sprintf "SymbolMsg:%A"  symMouseMsg.Op
         | x -> sprintf "Other:%A" x

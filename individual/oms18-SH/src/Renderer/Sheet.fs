@@ -9,11 +9,21 @@ open Elmish.React
 open Helpers
 open BBox
 
+type DragState =
+    | Wire of CommonTypes.ConnectionId
+    | Symbol
+    | AreaSelect of XYPos * XYPos * bool
+    | NotDragging
+
+type SelectionState =
+    | Wire of CommonTypes.ConnectionId
+    | Symbols of CommonTypes.ComponentId list
+    | Empty
+
 type Model = {
     Wire: BusWire.Model
-    SelectedSymbols: CommonTypes.ComponentId list
-    AreaSelectStart: (XYPos * XYPos) option
-    AdditiveSelect: bool
+    DragState: DragState
+    Selection: SelectionState
 }
 
 type KeyboardMsg =
@@ -23,6 +33,9 @@ type KeyboardMsg =
     | AltZ
     | AltShiftZ
     | DEL
+    | Space
+    | Escape
+    | AltA
 
 type Modifier =
     | Control
@@ -47,13 +60,12 @@ let displaySvgWithZoom (model: Model) (zoom: float) (svgReact: ReactElement) (di
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
     let mouseOp op (ev: Types.MouseEvent) =
-        // TODO: pageX is offset by the border....
         dispatch
         <| MouseMsg(
             { Op = op
               Pos =
-                  { X = ev.clientX / zoom
-                    Y = ev.clientY / zoom } },
+                  { X = (-3. + ev.clientX) / zoom
+                    Y = (-3. + ev.clientY) / zoom } },
             if ev.ctrlKey then
                 Control
             else
@@ -71,11 +83,11 @@ let displaySvgWithZoom (model: Model) (zoom: float) (svgReact: ReactElement) (di
                       Height sizeInPixels
                       Width sizeInPixels ] ] [
             g [ Style [ Transform(sprintf "scale(%f)" zoom) ] ] [  // top-level transform style attribute for zoom
-                match model.AreaSelectStart with
-                | Some (p1, p2) ->
+                match model.DragState with
+                | AreaSelect (p1, p2, additive) ->
                     let area = pointsToBBox p1 p2
                     let color =
-                        if model.AdditiveSelect then
+                        if additive then
                             "Green"
                         else
                             "Blue"
@@ -91,7 +103,7 @@ let displaySvgWithZoom (model: Model) (zoom: float) (svgReact: ReactElement) (di
                         SVGAttr.StrokeWidth "1px"
                         SVGAttr.FillOpacity 0.3
                     ] []
-                | None -> svgReact
+                | _ -> svgReact
             ]
         ] // top-level transform style attribute for zoom
     ] // top-level transform style attribute for zoom
@@ -107,57 +119,99 @@ let view (model: Model) (dispatch: Msg -> unit) =
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     match msg with
+    | Wire wMsg ->
+        let wModel, wCmd = BusWire.update wMsg model.Wire
+        { model with Wire = wModel }, Cmd.map Wire wCmd
     | MouseMsg (mT, modifier) ->
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, m) ->
+            let selectedWire = BusWire.getTargetedWire model.Wire p
             let selectedSymbol =
                 Symbol.getTargetedSymbol model.Wire.Symbol p
 
-            match (selectedSymbol, m) with
-            | (Some sym, m) ->
+            match (selectedSymbol, selectedWire, m) with
+            | (Some sym, _, m) ->
                 let isSelected =
-                    model.SelectedSymbols
-                    |> Set.ofList
-                    |> Set.contains sym.Id
+                    match model.Selection with
+                    | Symbols sIdLst ->
+                        sIdLst
+                        |> Set.ofList
+                        |> Set.contains sym.Id
+                    | _ -> false
 
                 let selectedSymbols =
                     if isSelected then
-                        model.SelectedSymbols
-                    else
-                        if m = Control then
-                            model.SelectedSymbols
+                        match model.Selection with
+                        | Symbols sIdLst -> sIdLst
+                        | _ -> [sym.Id]
+                    else if m = Control then
+                        match model.Selection with
+                        | Symbols sIdLst ->
+                            sIdLst
                             |> Set.ofList
                             |> Set.add sym.Id
                             |> Set.toList
-                        else
-                            [sym.Id]
+                        | _ -> [sym.Id]
+                    else
+                        [sym.Id]
 
-                { model with SelectedSymbols = selectedSymbols}
-                , Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.Select selectedSymbols)))
-            | (None, Control) ->
                 { model with
-                    AreaSelectStart=Some (p, p)
-                    AdditiveSelect=true
-                }, Cmd.none
-            | (None, NoModifier) ->
+                    Selection = Symbols selectedSymbols
+                    DragState=DragState.Symbol
+                }
+                , Cmd.batch [
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.StartDragging (selectedSymbols, p))))
+                    Cmd.ofMsg (Wire (BusWire.UnselectAll))
+                ]
+            | (_, Some wId, _) ->
                 { model with
-                    SelectedSymbols=[]
-                    AreaSelectStart=Some (p, p)
-                    AdditiveSelect=false
-                }, Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.Select [])))
+                    Selection = SelectionState.Wire wId
+                    DragState = DragState.Wire wId
+                }
+                , Cmd.batch [
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
+                    Cmd.ofMsg (Wire (BusWire.Select wId))
+                    Cmd.ofMsg (Wire (BusWire.StartDrag (wId, p)))
+                ]
+            | (None, None, Control) ->
+                { model with
+                    DragState=AreaSelect (p, p, true)
+                }, Cmd.ofMsg (Wire (BusWire.UnselectAll))
+            | (None, None, NoModifier) ->
+                { model with
+                    Selection = Empty
+                    DragState = AreaSelect (p, p, false)
+                }, Cmd.batch [
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
+                    Cmd.ofMsg (Wire (BusWire.UnselectAll))
+                ]
         | (Drag, p, _) ->
-            match model.AreaSelectStart with
-            | Some (start, _) ->
-                { model with AreaSelectStart=Some(start, p)}
+            // TODO: Send StartDrag
+            match model.DragState with
+            | AreaSelect (start, _, additive) ->
+                { model with DragState=AreaSelect (start, p, additive)}
                 , Cmd.none
-            | None -> model, Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.Dragging p)))
+            | DragState.Symbol ->
+                let selectedSymbols = match model.Selection with
+                                      | Symbols s -> s
+                                      | _ -> failwithf "We only drag if there is a selection"
+                model,
+                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Dragging (selectedSymbols, p))))
+            | DragState.Wire wId ->
+                model,
+                Cmd.ofMsg (Wire (BusWire.Dragging (wId, p)))
+            | NotDragging -> model, Cmd.none
         | (Up, _, _) ->
-            match model.AreaSelectStart with
-            | Some (p1, p2) ->
+            match model.DragState with
+            | AreaSelect (p1, p2, additive) ->
                 let area = pointsToBBox p1 p2
                 let selectedSymbols =
-                    if model.AdditiveSelect then
-                        model.SelectedSymbols
+                    if additive then
+                        let selectedSymbols = match model.Selection with
+                                              | Symbols s -> s
+                                              | _ -> []
+                        selectedSymbols
                         |> Set.ofList
                         |> Set.union (
                             Set.ofList (
@@ -169,39 +223,63 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         Symbol.getSymbolsInBBox model.Wire.Symbol area
 
                 {model with
-                    AreaSelectStart=None
-                    SelectedSymbols=selectedSymbols
+                    DragState = NotDragging
+                    Selection = Symbols selectedSymbols
                 }
                 , Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
                 ]
-            | None ->
-                {model with AreaSelectStart=None}
-                , Cmd.ofMsg (Wire(BusWire.Symbol(Symbol.EndDragging)))
+            | DragState.Wire _ ->
+                model, Cmd.ofMsg (Wire (BusWire.EndDrag))
+            | DragState.Symbol ->
+                model, Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
+            | _ -> model, Cmd.none
         | _ -> model, Cmd.none
-    | Wire wMsg ->
-        let wModel, wCmd = BusWire.update wMsg model.Wire
-        { model with Wire = wModel }, Cmd.map Wire wCmd
+    | KeyPress AltA ->
+        let selectedSymbols = Symbol.getAllSymbols model.Wire.Symbol
+
+        { model with Selection = Symbols selectedSymbols }
+        , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
+    | KeyPress Escape ->
+        match model.DragState with
+        | NotDragging ->
+            { model with Selection = Empty }
+            , Cmd.batch [
+                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
+                Cmd.ofMsg (Wire (BusWire.UnselectAll))
+            ]
+        | _ ->
+            {model with DragState=NotDragging}
+            , Cmd.none
     | KeyPress AltShiftZ ->
         printStats () // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
+    | KeyPress DEL ->
+        { model with Selection = Empty;DragState=NotDragging },
+        match model.Selection with
+        | SelectionState.Wire wId ->
+            Cmd.ofMsg (Wire (BusWire.Delete wId))
+        | Symbols sIdLst ->
+            Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.DeleteSymbols sIdLst)))
+        | Empty -> Cmd.none
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with
             | AltC -> CommonTypes.Blue
             | AltV -> CommonTypes.Green
             | AltZ -> CommonTypes.Red
+            //| Space -> CommonTypes.Green
             | _ -> CommonTypes.Grey
 
-        printfn "Key:%A" c
-        model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
+        printfn "Color:%A" c
+        printfn "Key:%A" s
+        model, Cmd.none
 
 let init () =
-    let model, cmds = (BusWire.init 400) ()
+    let model, cmds = (BusWire.init 500) ()
     {
         Wire = model
-        SelectedSymbols = []
-        AreaSelectStart=None
-        AdditiveSelect=false
+        Selection = Empty
+        DragState = NotDragging
     }, Cmd.map Wire cmds

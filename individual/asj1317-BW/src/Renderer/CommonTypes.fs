@@ -10,6 +10,7 @@ module CommonTypes
 
     // Specify the position and type of a port in a JSComponent.
     type PortType = Input | Output
+    type PortId = string
 
     /// A component I/O.
     /// Id (like any other Id) is a string generated with 32 random hex charactes,
