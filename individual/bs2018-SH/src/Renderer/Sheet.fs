@@ -21,7 +21,7 @@ type Grid = {
 
 type MouseDown =
     | MouseIsUp
-    | FromPort of CommonTypes.PortId
+    | FromPort of CommonTypes.PortId * XYPos
     | FromSymbol
     | FromEmpty
 
@@ -111,18 +111,20 @@ let view (model:Model) (dispatch : Msg -> unit) =
 
     let bodyLst =
         match model.MouseState with
-        | FromPort pId ->
+        | FromPort (pId, mousePos) ->
             bodyLst
             |> List.append [
-                // line [
-                //         X1 ((float i)*grid.Size)
-                //         X2 ((float i)*grid.Size)
-                //         Y1 0.
-                //         Y2 size
-                //         SVGAttr.Stroke "grey"
-                //         SVGAttr.StrokeWidth 1
-                //         SVGAttr.StrokeOpacity 0.3
-                //     ] []
+                let portPos = Symbol.portPos model.Wire.Symbol pId
+                line [
+                        X1 portPos.X
+                        X2 mousePos.X
+                        Y1 portPos.Y
+                        Y2 mousePos.Y
+                        SVGAttr.Stroke "green"
+                        SVGAttr.StrokeWidth 2
+                        SVGAttr.StrokeOpacity 1
+                        SVGAttr.StrokeDasharray "5, 3"
+                    ] []
             ]
         | _ -> bodyLst
 
@@ -223,7 +225,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let mouseState, selectedSymbols, showSelection =
             let targetedPort = Symbol.getTargetedPort model.Wire.Symbol pos
             match targetedPort with
-            | Some portId -> FromPort portId, model.SelectedSymbols, false
+            | Some portId -> FromPort (portId, pos), model.SelectedSymbols, false
             | None ->
                 let targetedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol pos
                 match targetedSymbol with
@@ -298,6 +300,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 [Cmd.none]
             | FromSymbol ->
                 model, [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, pos))]
+            | FromPort (pId,_) ->
+                {
+                    model with
+                        MouseState = FromPort (pId, pos)
+                }, [Cmd.none]
             | _ -> model, [Cmd.none]
 
 
