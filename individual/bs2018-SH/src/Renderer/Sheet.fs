@@ -132,10 +132,10 @@ let view (model:Model) (dispatch : Msg -> unit) =
     /// the screen mouse coordinates are compensated for the zoom transform
     div [ Style 
             [ 
-                Height "100vh" 
-                MaxWidth "100vw"
-                CSSProp.OverflowX OverflowOptions.Auto 
-                CSSProp.OverflowY OverflowOptions.Auto
+                // Height "100vh" 
+                // MaxWidth "100vw"
+                // CSSProp.OverflowX OverflowOptions.Auto 
+                // CSSProp.OverflowY OverflowOptions.Auto
             ] 
           OnMouseDown (fun ev -> 
             MouseDown((posOf ev.pageX ev.pageY), ev.shiftKey)
