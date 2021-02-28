@@ -42,13 +42,13 @@ type Msg =
     | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
     | DeselectAll
-    | Select of sIdLst: CommonTypes.ComponentId list
+    | Select of CommonTypes.ComponentId list
     | StartDragging of CommonTypes.ComponentId list * XYPos
     /// coords not adjusted for top-level zoom
     | Dragging of CommonTypes.ComponentId list * XYPos
     | EndDragging
     | AddCircle of XYPos // used by demo code to add a circle
-    | DeleteSymbol of sId:CommonTypes.ComponentId 
+    | DeleteSymbols of sId:CommonTypes.ComponentId list
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
 
 
@@ -107,8 +107,9 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     | AddCircle pos -> 
         createNewSymbol pos :: model, Cmd.none
-    | DeleteSymbol sId -> 
-        List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
+    | DeleteSymbols sIdLst -> 
+        let sIdSet = Set.ofList sIdLst
+        List.filter (fun sym -> not <| Set.contains sym.Id sIdSet) model, Cmd.none
     | DeselectAll ->
         model
         |> List.map (fun sym ->

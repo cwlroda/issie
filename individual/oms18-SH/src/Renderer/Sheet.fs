@@ -15,10 +15,15 @@ type DragState =
     | AreaSelect of XYPos * XYPos * bool
     | NotDragging
 
+type SelectionState =
+    | Wire of CommonTypes.ConnectionId
+    | Symbols of CommonTypes.ComponentId list
+    | Empty
+
 type Model = {
     Wire: BusWire.Model
-    SelectedSymbols: CommonTypes.ComponentId list
     DragState: DragState
+    Selection: SelectionState
 }
 
 type KeyboardMsg =
@@ -127,23 +132,31 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             match (selectedSymbol, selectedWire, m) with
             | (Some sym, _, m) ->
                 let isSelected =
-                    model.SelectedSymbols
-                    |> Set.ofList
-                    |> Set.contains sym.Id
+                    match model.Selection with
+                    | Symbols sIdLst ->
+                        sIdLst
+                        |> Set.ofList
+                        |> Set.contains sym.Id
+                    | _ -> false
 
                 let selectedSymbols =
                     if isSelected then
-                        model.SelectedSymbols
+                        match model.Selection with
+                        | Symbols sIdLst -> sIdLst
+                        | _ -> [sym.Id]
                     else if m = Control then
-                        model.SelectedSymbols
-                        |> Set.ofList
-                        |> Set.add sym.Id
-                        |> Set.toList
+                        match model.Selection with
+                        | Symbols sIdLst ->
+                            sIdLst
+                            |> Set.ofList
+                            |> Set.add sym.Id
+                            |> Set.toList
+                        | _ -> [sym.Id]
                     else
                         [sym.Id]
 
                 { model with
-                    SelectedSymbols = selectedSymbols
+                    Selection = Symbols selectedSymbols
                     DragState=DragState.Symbol
                 }
                 , Cmd.batch [
@@ -153,13 +166,13 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 ]
             | (_, Some wId, _) ->
                 { model with
-                    SelectedSymbols=[]
-                    DragState=DragState.Wire wId
+                    Selection = SelectionState.Wire wId
+                    DragState = DragState.Wire wId
                 }
                 , Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
-                    Cmd.ofMsg (Wire (BusWire.StartDrag (wId, p)))
                     Cmd.ofMsg (Wire (BusWire.Select wId))
+                    Cmd.ofMsg (Wire (BusWire.StartDrag (wId, p)))
                 ]
             | (None, None, Control) ->
                 { model with
@@ -167,8 +180,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 }, Cmd.ofMsg (Wire (BusWire.UnselectAll))
             | (None, None, NoModifier) ->
                 { model with
-                    SelectedSymbols=[]
-                    DragState=AreaSelect (p, p, false)
+                    Selection = Empty
+                    DragState = AreaSelect (p, p, false)
                 }, Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
                     Cmd.ofMsg (Wire (BusWire.UnselectAll))
@@ -180,8 +193,11 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 { model with DragState=AreaSelect (start, p, additive)}
                 , Cmd.none
             | DragState.Symbol ->
+                let selectedSymbols = match model.Selection with
+                                      | Symbols s -> s
+                                      | _ -> failwithf "We only drag if there is a selection"
                 model,
-                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Dragging (model.SelectedSymbols, p))))
+                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Dragging (selectedSymbols, p))))
             | DragState.Wire wId ->
                 model,
                 Cmd.ofMsg (Wire (BusWire.Dragging (wId, p)))
@@ -192,7 +208,10 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let area = pointsToBBox p1 p2
                 let selectedSymbols =
                     if additive then
-                        model.SelectedSymbols
+                        let selectedSymbols = match model.Selection with
+                                              | Symbols s -> s
+                                              | _ -> []
+                        selectedSymbols
                         |> Set.ofList
                         |> Set.union (
                             Set.ofList (
@@ -204,8 +223,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         Symbol.getSymbolsInBBox model.Wire.Symbol area
 
                 {model with
-                    DragState=NotDragging
-                    SelectedSymbols=selectedSymbols
+                    DragState = NotDragging
+                    Selection = Symbols selectedSymbols
                 }
                 , Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
@@ -220,12 +239,12 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     | KeyPress AltA ->
         let selectedSymbols = Symbol.getAllSymbols model.Wire.Symbol
 
-        { model with SelectedSymbols=selectedSymbols }
+        { model with Selection = Symbols selectedSymbols }
         , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
     | KeyPress Escape ->
         match model.DragState with
         | NotDragging ->
-            { model with SelectedSymbols=[] }
+            { model with Selection = Empty }
             , Cmd.batch [
                 Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
@@ -236,6 +255,15 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     | KeyPress AltShiftZ ->
         printStats () // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
+    | KeyPress DEL ->
+        { model with Selection = Empty;DragState=NotDragging },
+        match model.Selection with
+        | SelectionState.Wire wId ->
+            printfn "deleting %A" wId
+            Cmd.ofMsg (Wire (BusWire.Delete wId))
+        | Symbols sIdLst ->
+            Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.DeleteSymbols sIdLst)))
+        | Empty -> Cmd.none
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with
@@ -250,9 +278,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         model, Cmd.none
 
 let init () =
-    let model, cmds = (BusWire.init 5) ()
+    let model, cmds = (BusWire.init 500) ()
     {
         Wire = model
-        SelectedSymbols = []
-        DragState=NotDragging
+        Selection = Empty
+        DragState = NotDragging
     }, Cmd.map Wire cmds

@@ -44,6 +44,7 @@ type Model = {
 type Msg =
     | Symbol of Symbol.Msg
     | AddWire of (CommonTypes.ConnectionId * CommonTypes.ConnectionId)
+    | Delete of CommonTypes.ConnectionId
     | Select of CommonTypes.ConnectionId
     | UnselectAll
     | StartDrag of CommonTypes.ConnectionId * XYPos
@@ -167,9 +168,26 @@ let init n () =
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
     | Symbol sMsg -> 
+        let wires = match sMsg with
+                    | Symbol.DeleteSymbols sIdLst ->
+                        let sIdSet = Set.ofList sIdLst
+                        model.WX
+                        |> List.filter (fun w ->
+                            not (
+                                Set.contains w.SrcSymbol sIdSet
+                                || Set.contains w.TargetSymbol sIdSet
+                            )
+                        )
+                    | _ -> model.WX
         let sm,sCmd = Symbol.update sMsg model.Symbol
-        {model with Symbol=sm}, Cmd.map Symbol sCmd
+        {model with Symbol=sm;WX=wires}, Cmd.map Symbol sCmd
     | AddWire _ -> failwithf "Not implemented"
+    | Delete wId ->
+        let wires = model.WX
+                    |> List.filter (fun w -> w.Id <> wId)
+
+        { model with WX=wires }
+        , Cmd.none
     | StartDrag (wId, p) ->
         let wires =
             model.WX
@@ -202,7 +220,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
 
         {model with WX=wires}, Cmd.none
     | Select wId ->
-        printfn "Selecting wire %A" wId
         let wires =
             model.WX
             |> List.map (fun w -> 
