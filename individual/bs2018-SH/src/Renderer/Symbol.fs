@@ -77,6 +77,22 @@ let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Op
     | None -> None
     | Some sym -> Some sym.Id
 
+let getAllPortsWithSymbol (symModel : Model) = 
+    let insertSymToPortList (pl : Port list) (sym : Symbol) =
+        pl
+        |> List.map (fun el -> (el, sym))
+
+    symModel
+    |> List.map (fun sym -> (sym, sym.Ports))
+    |> List.collect (fun (sym, pl) -> insertSymToPortList pl sym)
+
+let portPos (symModel : Model) (pId : CommonTypes.PortId) : XYPos =
+    let res = 
+        getAllPortsWithSymbol symModel
+        |> List.find (fun (p,_) -> p.Id = pId)
+    match res with
+    | (p, s) -> posOf (p.RelPos.X+s.Pos.X) (p.RelPos.Y+s.Pos.Y)
+
 let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option = 
     let posInPort (sym: Symbol) (port : Port) : bool =
         let bb = {
@@ -86,14 +102,8 @@ let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option
         }
         containsPoint pos bb
 
-    let insertSymToPortList (pl : Port list) (sym : Symbol) =
-        pl
-        |> List.map (fun el -> (el, sym))
-
     let res =
-        symModel
-        |> List.map (fun sym -> (sym, sym.Ports))
-        |> List.collect (fun (sym, pl) -> insertSymToPortList pl sym)
+        getAllPortsWithSymbol symModel
         |> List.tryFind (fun (port, sym) -> posInPort sym port)
 
     match res with
