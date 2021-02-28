@@ -23,8 +23,8 @@ open Helpers
 /// component coordinates are held in some other way, is up to groups.
 type Wire = {
     Id: CommonTypes.ConnectionId 
-    SrcSymbol: CommonTypes.ComponentId
-    TargetSymbol: CommonTypes.ComponentId
+    SrcPort: CommonTypes.PortId
+    TargetPort: CommonTypes.PortId
     }
 
 type Model = {
@@ -83,8 +83,8 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
             let props = {
                 key = w.Id
                 WireP = w
-                SrcP = Symbol.symbolPos model.Symbol w.SrcSymbol 
-                TgtP = Symbol. symbolPos model.Symbol w.TargetSymbol 
+                SrcP = Symbol.portPos model.Symbol w.SrcPort
+                TgtP = Symbol.portPos model.Symbol w.TargetPort
                 ColorP = model.Color.Text()
                 StrokeWidthP = "2px" }
             singleWireView props)
@@ -96,30 +96,21 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
 /// this initialisation depends on details of Symbol.Model type.
 let init n () =
     let symbols, cmd = Symbol.init()
-    let symIds = List.map (fun (sym:Symbol.Symbol) -> sym.Id) symbols
-    let rng = System.Random 0
-    let makeRandomWire() =
-        let n = symIds.Length
-        let s1,s2 =
-            match rng.Next(0,n-1), rng.Next(0,n-2) with
-            | r1,r2 when r1 = r2 -> 
-                symbols.[r1],symbols.[n-1] // prevents wire target and source being same
-            | r1,r2 -> 
-                symbols.[r1],symbols.[r2]
-        {
-            Id=CommonTypes.ConnectionId (uuid())
-            SrcSymbol = s1.Id
-            TargetSymbol = s2.Id
-        }
-    List.map (fun i -> makeRandomWire()) [1..n]
-    |> (fun wires -> {WX=wires;Symbol=symbols; Color=CommonTypes.Red},Cmd.none)
-
+    {WX=[];Symbol=symbols; Color=CommonTypes.Red},Cmd.none
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
     | Symbol sMsg -> 
         let sm,sCmd = Symbol.update sMsg model.Symbol
         {model with Symbol=sm}, Cmd.map Symbol sCmd
-    | AddWire _ -> failwithf "Not implemented"
+    | AddWire (sPid, tPid) ->
+        let wires =
+            model.WX
+            |> List.append [{
+                Id = CommonTypes.ConnectionId ( uuid() )
+                SrcPort = sPid
+                TargetPort = tPid
+            }]
+        {model with WX=wires},Cmd.none
     | SetColor c -> {model with Color = c}, Cmd.none
     | MouseMsg mMsg -> model, Cmd.ofMsg (Symbol (Symbol.MouseMsg mMsg))
 
@@ -141,10 +132,4 @@ let extractWires (wModel: Model) : CommonTypes.Component list =
 /// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
 let updateSymbolModelWithComponent (symModel: Model) (comp:CommonTypes.Component) =
     failwithf "Not Implemented"
-
-
-
     
-
-
-
