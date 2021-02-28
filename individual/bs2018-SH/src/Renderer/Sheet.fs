@@ -273,6 +273,23 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | FromEmpty -> processSelectionBox
             | _ -> model.SelectedSymbols
 
+        let addWireCommands =
+            match model.MouseState with
+            | FromPort (fromPid, toPos) ->
+                match Symbol.getTargetedPort model.Wire.Symbol toPos with
+                | Some toPid ->
+                    let fromPortType = Symbol.portType model.Wire.Symbol fromPid
+                    let toPortType = Symbol.portType model.Wire.Symbol toPid
+                    if fromPortType <> toPortType then
+                        [Cmd.ofMsg (Wire <| BusWire.AddWire (fromPid, toPid))]
+                    else []
+                | None -> []
+            | _ -> []
+
+        let cmds = 
+            [Cmd.ofMsg (Symbol <| Symbol.EndDragging);Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)]
+            |> List.append addWireCommands
+
         {
             model with
                 SelectedSymbols = selectedSymbols
@@ -282,7 +299,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                         Show = false
                 }
         }, 
-        Cmd.batch[Cmd.ofMsg (Symbol <| Symbol.EndDragging);Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)]
+        Cmd.batch cmds
 
 
     | MouseMove pos ->

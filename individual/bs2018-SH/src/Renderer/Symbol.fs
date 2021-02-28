@@ -93,6 +93,14 @@ let portPos (symModel : Model) (pId : CommonTypes.PortId) : XYPos =
     match res with
     | (p, s) -> posOf (p.RelPos.X+s.Pos.X) (p.RelPos.Y+s.Pos.Y)
 
+let portType (symModel : Model) (pId : CommonTypes.PortId) : CommonTypes.PortType =
+    (
+        getAllPortsWithSymbol symModel
+        |> List.map fst
+        |> List.find (fun p -> p.Id = pId)
+    ).Type
+    
+
 let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option = 
     let posInPort (sym: Symbol) (port : Port) : bool =
         let bb = {
