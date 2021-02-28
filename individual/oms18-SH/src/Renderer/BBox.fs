@@ -2,17 +2,6 @@ module BBox
 
 open Helpers
 
-let posOf x y = { X = x; Y = y }
-
-let posDiff a b = { X = a.X - b.X; Y = a.Y - b.Y }
-
-let posAdd a b = { X = a.X + b.X; Y = a.Y + b.Y }
-
-let posDist a b =
-    let diff = posDiff a b
-
-    sqrt <| diff.X * diff.X + diff.Y * diff.Y
-
 type Bounds = { Width: float; Height: float }
 
 let boundsOf w h = { Width = w; Height = h }

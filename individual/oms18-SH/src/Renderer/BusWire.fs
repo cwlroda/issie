@@ -25,12 +25,13 @@ type Wire = {
     Id: CommonTypes.ConnectionId 
     SrcSymbol: CommonTypes.ComponentId
     TargetSymbol: CommonTypes.ComponentId
+    Color: CommonTypes.HighLightColor
+    DragPositions: (XYPos * XYPos) option
     }
 
 type Model = {
     Symbol: Symbol.Model
     WX: Wire list
-    Color: CommonTypes.HighLightColor
     }
 
 //----------------------------Message Type-----------------------------------//
@@ -43,11 +44,11 @@ type Model = {
 type Msg =
     | Symbol of Symbol.Msg
     | AddWire of (CommonTypes.ConnectionId * CommonTypes.ConnectionId)
-    | SetColor of CommonTypes.HighLightColor
-    | MouseMsg of MouseT
-
-
-
+    | Select of CommonTypes.ConnectionId
+    | UnselectAll
+    | StartDrag of CommonTypes.ConnectionId * XYPos
+    | Dragging of CommonTypes.ConnectionId * XYPos
+    | EndDrag
 
 /// look up wire in WireModel
 let wire (wModel: Model) (wId: CommonTypes.ConnectionId): Wire =
@@ -59,7 +60,47 @@ type WireRenderProps = {
     SrcP: XYPos 
     TgtP: XYPos
     ColorP: string
+    DragPositions: (XYPos * XYPos) option
     StrokeWidthP: string }
+
+// Interface functions
+
+let getTargetedWire (model: Model) (pos: XYPos) : CommonTypes.ConnectionId option =
+    let closestWire = model.WX
+                      |> List.map (fun w ->
+                          let distFrom c =
+                              let a = Symbol.symbolPos model.Symbol w.SrcSymbol
+                              let b = Symbol.symbolPos model.Symbol w.TargetSymbol
+
+                              let normalize p =
+                                  let length = posLength p
+                                  posOf (p.X / length) (p.Y / length)
+
+                              let ac = posDiff c a
+                              let ab = posDiff b a
+                              let bc = posDiff c b
+
+                              let dot p1 p2 =
+                                  let normP1 = normalize p1
+                                  let normP2 = normalize p2
+                                  normP1.X * normP2.X + normP1.Y * normP2.Y
+
+                              if dot ab ac < 0. then
+                                  posLength <| posDiff a c
+                              else if dot ab bc > 0. then
+                                  posLength <| posDiff b c
+                              else 
+                                  abs(ab.X * ac.Y - ab.Y * ac.X) / posLength ab
+
+                          let dist = distFrom pos
+                          (w, dist)
+                      )
+                      |> List.sortBy snd
+                      |> List.tryHead
+
+    match closestWire with
+    | Some (w, d) when d < 10. -> Some w.Id
+    | _ -> None
 
 /// react virtual DOM SVG for one wire
 /// In general one wire will be multiple (right-angled) segments.
@@ -67,11 +108,16 @@ type WireRenderProps = {
 let singleWireView = 
     FunctionComponent.Of(
         fun (props: WireRenderProps) ->
+            let (offsetX, offsetY) =
+                match props.DragPositions with
+                | Some (dStart, dEnd) -> (dEnd.X - dStart.X, dEnd.Y - dStart.Y)
+                | None -> (0., 0.)
+
             line [
-                X1 props.SrcP.X
-                Y1 props.SrcP.Y
-                X2 props.TgtP.X
-                Y2 props.TgtP.Y
+                X1 (props.SrcP.X + offsetX)
+                Y1 (props.SrcP.Y + offsetY)
+                X2 (props.TgtP.X + offsetX)
+                Y2 (props.TgtP.Y + offsetY)
                 // Qualify these props to avoid name collision with CSSProp
                 SVGAttr.Stroke props.ColorP
                 SVGAttr.StrokeWidth props.StrokeWidthP ] [])
@@ -85,8 +131,9 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
                 key = w.Id
                 WireP = w
                 SrcP = Symbol.symbolPos model.Symbol w.SrcSymbol 
-                TgtP = Symbol. symbolPos model.Symbol w.TargetSymbol 
-                ColorP = model.Color.Text()
+                TgtP = Symbol.symbolPos model.Symbol w.TargetSymbol 
+                ColorP = w.Color.Text()
+                DragPositions = w.DragPositions
                 StrokeWidthP = "2px" }
             singleWireView props)
     let symbols = Symbol.view model.Symbol (fun sMsg -> dispatch (Symbol sMsg))
@@ -111,9 +158,11 @@ let init n () =
             Id=CommonTypes.ConnectionId (uuid())
             SrcSymbol = s1.Id
             TargetSymbol = s2.Id
+            Color = CommonTypes.Red
+            DragPositions=None
         }
     List.map (fun i -> makeRandomWire()) [1..n]
-    |> (fun wires -> {WX=wires;Symbol=symbols; Color=CommonTypes.Red},Cmd.none)
+    |> (fun wires -> {WX=wires;Symbol=symbols},Cmd.none)
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
@@ -121,8 +170,57 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let sm,sCmd = Symbol.update sMsg model.Symbol
         {model with Symbol=sm}, Cmd.map Symbol sCmd
     | AddWire _ -> failwithf "Not implemented"
-    | SetColor c -> {model with Color = c}, Cmd.none
-    | MouseMsg mMsg -> model, Cmd.ofMsg (Symbol (Symbol.MouseMsg mMsg))
+    | StartDrag (wId, p) ->
+        let wires =
+            model.WX
+            |> List.map (fun w -> 
+                if w.Id = wId then
+                    {w with DragPositions=Some (p, p)}
+                else
+                    w
+            )
+
+        {model with WX=wires}, Cmd.none
+    | Dragging (wId, p) ->
+        let wires =
+            model.WX
+            |> List.map (fun w -> 
+                if w.Id = wId then
+                    let start = match w.DragPositions with
+                                | Some (start, _) -> start
+                                | None -> failwithf "Called Dragging before StartDrag!"
+                    {w with DragPositions=Some (start, p)}
+                else
+                    w
+            )
+
+        {model with WX=wires}, Cmd.none
+    | EndDrag ->
+        let wires =
+            model.WX
+            |> List.map (fun w -> {w with DragPositions=None})
+
+        {model with WX=wires}, Cmd.none
+    | Select wId ->
+        printfn "Selecting wire %A" wId
+        let wires =
+            model.WX
+            |> List.map (fun w -> 
+                if w.Id = wId then
+                    {w with Color=CommonTypes.Blue}
+                else
+                    {w with Color=CommonTypes.Red}
+            )
+
+        {model with WX=wires}, Cmd.none
+    | UnselectAll ->
+        let wires =
+            model.WX
+            |> List.map (fun w -> {w with Color=CommonTypes.Red})
+
+        {model with WX=wires}, Cmd.none
+
+
 
 //---------------Other interface functions--------------------//
 
