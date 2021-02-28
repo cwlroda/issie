@@ -80,6 +80,7 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (selectionBox: Sele
                         Y2 ((float i)*grid.Size)
                         SVGAttr.Stroke "grey"
                         SVGAttr.StrokeWidth 1
+                        SVGAttr.StrokeOpacity 0.3
                     ] []
 
                     line [
@@ -89,6 +90,7 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (selectionBox: Sele
                         Y2 size
                         SVGAttr.Stroke "grey"
                         SVGAttr.StrokeWidth 1
+                        SVGAttr.StrokeOpacity 0.3
                     ] []
                 
                 ]

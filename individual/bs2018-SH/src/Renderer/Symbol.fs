@@ -18,6 +18,13 @@ open Helpers
 /// probably not be here, but looked up via some function
 /// from a more compact form, so that comparison of two Symbols to
 /// determine are they the same is fast.
+    /// 
+type Port = {
+    Id : CommonTypes.PortId
+    Type : CommonTypes.PortType
+    RelPos : XYPos
+}
+
 type Symbol =
     {
         Pos: XYPos
@@ -26,6 +33,7 @@ type Symbol =
         Id : CommonTypes.ComponentId
         Component : CommonTypes.Component
         Selected : bool
+        Ports : Port list
     }
 
 
@@ -112,6 +120,18 @@ let createNewSymbol (pos:XYPos) =
             W = 40
         }
         Selected = false
+        Ports = [
+            {
+                Id = CommonTypes.PortId ( uuid() )
+                Type = CommonTypes.Input
+                RelPos = posOf 0.0 20.0
+            }
+            {
+                Id = CommonTypes.PortId ( uuid() )
+                Type = CommonTypes.Output
+                RelPos = posOf 40.0 20.0
+            }
+        ]
     }
 
 
@@ -237,17 +257,32 @@ let private renderCircle =
     , equalsButFunctions
     )
 
+let renderPorts (ports : Port list) (symPos : XYPos) = 
+    ports
+    |> List.map (fun port -> 
+        circle [
+            Cx (symPos.X + port.RelPos.X)
+            Cy (symPos.Y + port.RelPos.Y)
+            R 3.
+            SVGAttr.Fill "black"
+        ] []
+    )
+
 /// View function for symbol layer of SVG
 let view (model : Model) (dispatch : Msg -> unit) = 
     model
-    |> List.map (fun ({Id = CommonTypes.ComponentId id} as circle) ->
-        renderCircle 
+    |> List.map (fun sym ->
+        let sid = match sym.Id with
+                    | CommonTypes.ComponentId id -> id
+        [renderCircle 
             {
-                Circle = circle
+                Circle = sym
                 Dispatch = dispatch
-                key = id
-            }
+                key = sid
+            }]
+        |> List.append (renderPorts sym.Ports sym.Pos)
     )
+    |> List.collect id
     |> ofList
 
 
