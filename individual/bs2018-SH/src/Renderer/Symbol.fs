@@ -62,6 +62,7 @@ type Msg =
     | UnhighlightPorts
 
 
+
 //---------------------------------helper types and functions----------------//
 
 let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Option = 
@@ -76,6 +77,12 @@ let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Op
     match (symModel |> List.tryFind clickInSym) with
     | None -> None
     | Some sym -> Some sym.Id
+
+let getPortsOfSymbol (symModel : Model) (symId : CommonTypes.ComponentId) : CommonTypes.PortId List = 
+    (
+        List.find (fun sym -> sym.Id = symId) symModel
+    ).Ports
+    |> List.map (fun p -> p.Id)
 
 let getAllPortsWithSymbol (symModel : Model) = 
     let insertSymToPortList (pl : Port list) (sym : Symbol) =

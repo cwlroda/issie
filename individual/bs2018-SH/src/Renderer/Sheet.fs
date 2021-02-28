@@ -202,9 +202,27 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         {model with SelectedSymbols = idLst},
         Cmd.ofMsg (Symbol <| Symbol.SetSelected idLst)
     | KeyPress DEL ->
-        match model.SelectedWire with
-        | None -> model, Cmd.none
-        | Some wId -> {model with SelectedWire = None}, Cmd.ofMsg (Wire <| BusWire.DeleteWire wId)
+        let model, wireCommands = 
+            match model.SelectedWire with
+            | None -> model, [Cmd.none]
+            | Some wId -> {model with SelectedWire = None}, [Cmd.ofMsg (Wire <| BusWire.DeleteWire wId)]
+
+        let symbolCommands =
+            model.SelectedSymbols
+            |> List.map (fun id -> 
+                let deleteWireCommands = 
+                    Symbol.getPortsOfSymbol model.Wire.Symbol id
+                    |> List.map (fun pId -> (Symbol.portPos model.Wire.Symbol pId))
+                    |> List.map (fun pos -> (BusWire.getTargetedWire model.Wire pos))
+                    |> List.filter (fun el -> el <> None)
+                    |> List.map (fun (Some cId) -> Cmd.ofMsg (Wire <| BusWire.DeleteWire cId))
+                
+                List.append deleteWireCommands [Cmd.ofMsg (Symbol <| Symbol.DeleteSymbol id)]
+            )
+            |> List.collect id
+        
+        model, Cmd.batch (List.append wireCommands symbolCommands)
+
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with
