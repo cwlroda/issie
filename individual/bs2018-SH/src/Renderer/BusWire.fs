@@ -47,6 +47,32 @@ type Msg =
     | MouseMsg of MouseT
 
 
+let getTargetedWire (wModel : Model) (pos : XYPos) : CommonTypes.ConnectionId Option = 
+    let pointOnWire (wire : Wire) (point : XYPos) : bool =
+        let src = Symbol.portPos wModel.Symbol wire.SrcPort
+        let dst = Symbol.portPos wModel.Symbol wire.TargetPort
+        // y = mx + c
+        let m = (dst.Y - src.Y)/(dst.X - src.X)
+        let c  = dst.Y - m*dst.X
+
+        point.Y = m*point.X + c
+
+    let res = 
+        wModel.WX
+        |> List.tryFind (
+            fun wire ->
+                (
+                    [-3..3]
+                    |> List.map (fun i -> List.map (fun j -> ((float i)+pos.X, (float j)+pos.Y)) [-3..3])
+                    |> List.collect id
+                    |> List.map (fun (x, y) -> posOf x y)
+                    |> List.sumBy (fun pos -> if pointOnWire wire pos then 1 else 0)
+                ) > 0
+        )
+    printf $"{res}"
+    match res with
+    | Some wire -> Some wire.Id
+    | None -> None
 
 /// look up wire in WireModel
 let wire (wModel: Model) (wId: CommonTypes.ConnectionId): Wire =
@@ -132,4 +158,3 @@ let extractWires (wModel: Model) : CommonTypes.Component list =
 /// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
 let updateSymbolModelWithComponent (symModel: Model) (comp:CommonTypes.Component) =
     failwithf "Not Implemented"
-    
