@@ -147,6 +147,14 @@ let closestPosOnGrid (grid : Grid) (pos : XYPos) : XYPos =
     posOf x y
 
 
+let highlightPorts (model : Model) (pos : XYPos) = 
+    
+    match Symbol.getTargetedPort model.Wire.Symbol pos with
+    | Some portId -> [Cmd.ofMsg (Symbol <| Symbol.HighlightPort portId)]
+    | None -> []
+    |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
+    
+
 /// for the demo code
 let view (model:Model) (dispatch : Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
@@ -245,17 +253,20 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         }, 
         Cmd.batch[Cmd.ofMsg (Symbol <| Symbol.EndDragging);Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)]
     | MouseMove pos ->
-        if model.MouseIsDown then
-            {
-                model with
-                    SelectionBox = {
-                        model.SelectionBox with
-                            MovingCorner = pos
-                    }
-            },
-            Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, pos))
-        else
-            model, Cmd.none
+        let highlightCommands = highlightPorts model pos
+        let model, draggingCommands = if model.MouseIsDown then
+                                        {
+                                            model with
+                                                SelectionBox = {
+                                                    model.SelectionBox with
+                                                        MovingCorner = pos
+                                                }
+                                        },
+                                        [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, pos))]
+                                        else
+                                            model, [Cmd.none]
+        let commands = List.append highlightCommands draggingCommands
+        model, Cmd.batch commands
     | _ -> failwithf "Sheet - message not implemented"
 
 let init() = 

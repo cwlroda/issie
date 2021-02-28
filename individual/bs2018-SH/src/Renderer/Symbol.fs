@@ -23,6 +23,7 @@ type Port = {
     Id : CommonTypes.PortId
     Type : CommonTypes.PortType
     RelPos : XYPos
+    Highlighted : bool
 }
 
 type Symbol =
@@ -57,6 +58,8 @@ type Msg =
     | DeleteSymbol of sId:CommonTypes.ComponentId 
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
     | SetSelected of CommonTypes.ComponentId list
+    | HighlightPort of CommonTypes.PortId
+    | UnhighlightPorts
 
 
 //---------------------------------helper types and functions----------------//
@@ -77,7 +80,7 @@ let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Op
 let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option = 
     let posInPort (sym: Symbol) (port : Port) : bool =
         let bb = {
-            XYPos = posOf (port.RelPos.X + sym.Pos.X - 5.) (port.RelPos.Y + sym.Pos.Y - 5.)
+            XYPos = posOf (port.RelPos.X + sym.Pos.X - 2.5) (port.RelPos.Y + sym.Pos.Y - 2.5)
             Height = 10.
             Width = 10.
         }
@@ -96,7 +99,7 @@ let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option
     match res with
     | Some (p,_) -> Some p.Id
     | None -> None
-    
+
 let getSymbolsInTargetArea (symModel: Model) (bb:BBox) : CommonTypes.ComponentId list =
     symModel
     |> List.filter (fun el -> containsPoint el.Pos bb)
@@ -148,11 +151,13 @@ let createNewSymbol (pos:XYPos) =
                 Id = CommonTypes.PortId ( uuid() )
                 Type = CommonTypes.Input
                 RelPos = posOf 0.0 20.0
+                Highlighted = false
             }
             {
                 Id = CommonTypes.PortId ( uuid() )
                 Type = CommonTypes.Output
                 RelPos = posOf 40.0 20.0
+                Highlighted = false
             }
         ]
     }
@@ -223,6 +228,24 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 }
         )
         , Cmd.none
+    | HighlightPort pId ->
+        model
+        |> List.map (fun sym -> 
+            let ports = sym.Ports
+                            |> List.map (fun port ->
+                                if port.Id = pId then {port with Highlighted = true} else port
+                            )
+            {sym with Ports = ports}
+        ), Cmd.none
+    | UnhighlightPorts ->
+        model
+        |> List.map (fun sym -> 
+            let ports = sym.Ports
+                            |> List.map (fun port ->
+                                {port with Highlighted = false}
+                            )
+            {sym with Ports = ports}
+        ), Cmd.none
     | _ -> failwithf "Not implemented"
 
 //----------------------------View Function for Symbols----------------------------//
@@ -282,12 +305,13 @@ let private renderCircle =
 
 let renderPorts (ports : Port list) (symPos : XYPos) = 
     ports
-    |> List.map (fun port -> 
+    |> List.map (fun port ->
+        let color = if port.Highlighted then "orange" else "black" 
         circle [
             Cx (symPos.X + port.RelPos.X)
             Cy (symPos.Y + port.RelPos.Y)
             R 5.
-            SVGAttr.Fill "black"
+            SVGAttr.Fill color
         ] []
     )
 
