@@ -74,6 +74,29 @@ let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Op
     | None -> None
     | Some sym -> Some sym.Id
 
+let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option = 
+    let posInPort (sym: Symbol) (port : Port) : bool =
+        let bb = {
+            XYPos = posOf (port.RelPos.X + sym.Pos.X - 5.) (port.RelPos.Y + sym.Pos.Y - 5.)
+            Height = 10.
+            Width = 10.
+        }
+        containsPoint pos bb
+
+    let insertSymToPortList (pl : Port list) (sym : Symbol) =
+        pl
+        |> List.map (fun el -> (el, sym))
+
+    let res =
+        symModel
+        |> List.map (fun sym -> (sym, sym.Ports))
+        |> List.collect (fun (sym, pl) -> insertSymToPortList pl sym)
+        |> List.tryFind (fun (port, sym) -> posInPort sym port)
+
+    match res with
+    | Some (p,_) -> Some p.Id
+    | None -> None
+    
 let getSymbolsInTargetArea (symModel: Model) (bb:BBox) : CommonTypes.ComponentId list =
     symModel
     |> List.filter (fun el -> containsPoint el.Pos bb)
@@ -263,7 +286,7 @@ let renderPorts (ports : Port list) (symPos : XYPos) =
         circle [
             Cx (symPos.X + port.RelPos.X)
             Cy (symPos.Y + port.RelPos.Y)
-            R 3.
+            R 5.
             SVGAttr.Fill "black"
         ] []
     )
