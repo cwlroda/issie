@@ -48,6 +48,7 @@
                    makeKeyItem "Green" "Alt+V" (fun () -> dispatch KeyboardMsg.AltV)
                    makeKeyItem "Default"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
                    makeKeyItem "Red" "Alt+Z" (fun () -> dispatch KeyboardMsg.AltZ)
+                   makeKeyItem "Select all" "Alt+A" (fun () -> dispatch KeyboardMsg.CtrlA)
                    menuSeparator
                    makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch KeyboardMsg.AltShiftZ)
                    makeRoleItem MenuItemRole.ForceReload
@@ -82,7 +83,7 @@
     Program.mkProgram Sheet.init update' view'
     |> Program.withReactBatched "app"
     |> Program.withSubscription attachMenusAndKeyShortcuts
-    |> Program.withTrace traceFn
+    //|> Program.withTrace traceFn
     //|> Program.withConsoleTrace
     |> Program.run
 
