@@ -72,11 +72,8 @@ let posOf x y = {X=x;Y=y}
 
 
 let ptInBB (pt: XYPos) (bb: BBox): bool =
-    printf $"Pos: {pt}"
-    printf $"BBox.pos {bb.Pos}, bbox.W {bb.W}, bbox.h {bb.H}"
     let diffX =  pt.X - bb.Pos.X
     let diffY =  bb.Pos.Y - pt.Y
-    printf $"DiffX: {diffX} Diff {diffY}"
 
     match diffX, diffY with
     | x, _ when (x > (float bb.W)) ->
@@ -128,7 +125,7 @@ let createNewSymbol (pos:XYPos)  (label: string)  (nInP, nOutP)  =
         IsDragging = false
         Id =sId
         Ports = portLst
-        W = 10*(lenLabel+2)
+        W = 60
         H = 10*(nrPorts + 2)   
     }
 
@@ -136,7 +133,7 @@ let createNewSymbol (pos:XYPos)  (label: string)  (nInP, nOutP)  =
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
     List.allPairs [1..2] [1..2]
-    |> List.map (fun (x,y) -> ({X = float (x*64+30); Y=float (y*64+30)}, x,y))
+    |> List.map (fun (x,y) -> ({X = float (x*100+30); Y=float (y*100+30)}, x,y))
     |> List.mapi (fun i (pos, x, y) ->  (createNewSymbol  pos $"Test {i}"  (x,y)))
     , Cmd.none
     
@@ -168,10 +165,12 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 sym
             else
                 let diff = posDiff pagePos sym.LastDragPos
+                printf $"symPorts: {sym.Ports}"
                 { sym with
                     Pos = posAdd sym.Pos diff
                     LastDragPos = pagePos
                 }
+                
         )
         , Cmd.none
 
@@ -199,54 +198,27 @@ type private RenderSymbolProps =
         Dispatch : Dispatch<Msg>
         key: string // special field used by react to detect whether lists have changed, set to symbol Id
     }
+let singleBox sym =
+    let color =
+        if sym.IsDragging then
+            "lightblue"
+        else
+            "grey"
+    polygon
+        [ 
+            SVGAttr.Points (boxDef sym.Pos sym.W sym.H)
+            SVGAttr.StrokeWidth "1px"
+            SVGAttr.Stroke "Black"
+            SVGAttr.FillOpacity 0.5
+            SVGAttr.Fill "Grey"
+            
+        ][]
 
 /// View for one symbol with caching for efficient execution when input does not change
 let private renderSymbol =
     FunctionComponent.Of(
         fun (props : RenderSymbolProps) ->
-            let handleMouseMove =
-                Hooks.useRef(fun (ev : Types.Event) ->
-                    let ev = ev :?> Types.MouseEvent
-                    // x,y coordinates here do not compensate for transform in Sheet
-                    // and are wrong unless zoom=1.0 MouseMsg coordinates are correctly compensated.
-                    Dragging(props.sym.Id, posOf ev.pageX ev.pageY)
-                    |> props.Dispatch
-                )
-
-            let color =
-                if props.sym.IsDragging then
-                    "lightblue"
-                else
-                    "grey"
-
-            
-            polygon
-                [
-                    OnMouseUp (fun ev -> 
-                        document.removeEventListener("mousemove", handleMouseMove.current)
-                        EndDragging props.sym.Id
-                        |> props.Dispatch
-                    )
-                    OnMouseDown (fun ev -> 
-                        // See note above re coords wrong if zoom <> 1.0
-                        StartDragging (props.sym.Id, posOf ev.pageX ev.pageY)
-                        |> props.Dispatch
-                        document.addEventListener("mousemove", handleMouseMove.current)
-                    )
-
-                    
-                    SVGAttr.Points (boxDef props.sym.Pos props.sym.W props.sym.H)
-                    SVGAttr.StrokeWidth "1px"
-                    SVGAttr.Stroke "Black"
-                    SVGAttr.FillOpacity 0.5
-                    SVGAttr.Fill "Grey"
-                    
-                ]
-                [ ]
-               
-    , "Symbols"
-    , equalsButFunctions
-    )
+            singleBox props.sym) 
 
 /// View function for symbol layer of SVG
 let view (model : Model) (dispatch : Msg -> unit) = 
@@ -268,12 +240,16 @@ let symbolPos (symModel: Model) (sId: CommonTypes.ComponentId) : XYPos =
     List.find (fun sym -> sym.Id = sId) symModel
     |> (fun sym -> sym.Pos)
 
-let getTargetedSymbol (symModel: Model) (pos: XYPos) =
-    
+let getTargetedBBoxSymbol (symModel: Model) (pos: XYPos) =  
     let sym = List.tryFind (fun sym ->  ptInBB pos (createBBox sym)) symModel
     match sym with  
     | Some sym -> Some {Pos = sym.Pos; W = sym.W; H = sym.H}
     | None -> None
+
+let getTargetedSymbol (symModel: Model) (pos: XYPos) =
+    List.tryFind (fun sym ->  ptInBB pos (createBBox sym)) symModel
+    
+
 
 /// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
 let updateSymbolModelWithComponent (symModel: Model) (comp:CommonTypes.Component) =
@@ -288,22 +264,35 @@ let calculateOutputWidth
         (outputPortNumber: int) 
         (inputPortWidths: int option list) : int option =
     failwithf "Not implemented"
-
-let portPos (model: Model) (portID: string) : XYPos =
-    let inPortLst (pLst: CommonTypes.Port list) =
-        List.tryFind (fun (p:CommonTypes.Port) -> p.Id = portID) pLst
+    
         
     
-    let portOpt = List.tryPick (fun s -> inPortLst s.Ports) model
-    let (sym, port) = 
-        match portOpt with
-        | Some port -> ((List.find (fun s -> s.Id.ToString() = port.HostId) model), port)
-        | None -> failwithf "Invalid port id sent"
+let portOpt (pId: CommonTypes.PortId) (pLst: CommonTypes.Port list) = 
+    List.tryFind (fun (p:CommonTypes.Port) -> p.Id = pId) pLst  
+
+let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos = 
+    let getPos (pType) (symId) (pNr) =
+        let sym = List.find (fun sym -> sym.Id.ToString() = symId) model
+        match pNr with
+        | Some nr when pType = CommonTypes.PortType.Input -> posAdd sym.Pos (posOf 0.0 (-10.*float (nr+2)))
+        | Some nr -> posAdd sym.Pos (posOf (float sym.W) (-10.*float (nr+2)))
+        | None -> failwithf "Has no possition"
+
+    match List.tryPick (fun sym -> (portOpt pId) sym.Ports) model with
+    | Some p -> getPos p.PortType p.HostId p.PortNumber
+    | None -> failwithf "Invalid Id"
     
-    match port.PortNumber with
-    | Some nr when port.PortType = CommonTypes.PortType.Input -> posOf (sym.Pos.X) (sym.Pos.Y - 10.*(float nr+1.))
-    | Some nr -> posOf (sym.Pos.X + (float sym.W)) (sym.Pos.Y - 10.* (float nr+1.))
-    | None -> failwithf "The port does not exist"
+    
+    
+let portType (model: Model) (portId: CommonTypes.PortId) : CommonTypes.PortType =
+    match List.tryPick (fun sym -> (portOpt portId) sym.Ports) model with
+    | Some p -> p.PortType
+    | None -> failwithf "Invalid id"
+
+let portWidth (model: Model) (portId: CommonTypes.PortId) : int Option =
+    match List.tryPick (fun sym -> (portOpt portId) sym.Ports) model with
+    | Some p -> p.PortNumber
+    | None -> failwithf "Invalid id"
     
 //----------------------interface to Issie-----------------------------//
 let extractComponent 
