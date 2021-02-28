@@ -33,22 +33,33 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
     let mouseOp op (ev:Types.MouseEvent) =
-
-        
         match op with
         | Down ->  
             match BusWire.getTargetedWire model.Wire {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some w -> dispatch <| Wire (BusWire.SetSelected w) 
             | None -> ()
-        | Drag -> 
+            match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+            | Some s ->  dispatch <| Wire (BusWire.Symbol (Symbol.StartDragging (s.Id, {X =  ev.clientX / zoom; Y = ev.clientY / zoom})))
+            | None -> ()
             
-            let targetedWire = 
-                match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
-                | Some v -> BusWire.getWiresInTargetBBox model.Wire v   
-                | None -> []
+        | Drag ->
+            match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+            | Some s ->  dispatch <| Wire (BusWire.Symbol ( Symbol.Dragging (s.Id, {X =  ev.clientX / zoom; Y = ev.clientY / zoom})))
+            | None -> ()
+
             dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.clientX / zoom ; Y = ev.clientY / zoom}})
-            dispatch <| Wire (BusWire.StartDragging  (targetedWire, { X = ev.clientX / zoom ; Y = ev.clientY / zoom}))
-        | _ -> ()
+        | Move -> ()  
+        | Up ->
+            let targetedWire = 
+                match Symbol.getTargetedBBoxSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+                | Some v -> BusWire.getWiresInTargetBBox model.Wire v   
+                | None -> [] 
+            dispatch <| Wire (BusWire.Dragging (targetedWire, { X = ev.clientX / zoom ; Y = ev.clientY / zoom}))
+            match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+            | Some s ->  dispatch <| Wire (BusWire.Symbol ( Symbol.EndDragging s.Id))
+            | None -> ()
+
+
         
         
     div [ Style 
@@ -87,12 +98,12 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
 
                     svgReact // the application code
 
-                    polygon [ // a demo svg polygon triangle written on top of the application
+                    (* polygon [ // a demo svg polygon triangle written on top of the application
                         SVGAttr.Points "10,10 900,900 10,900"
                         SVGAttr.StrokeWidth "5px"
                         SVGAttr.Stroke "Black"
                         SVGAttr.FillOpacity 0.1
-                        SVGAttr.Fill "Blue"] []
+                        SVGAttr.Fill "Blue"] [] *)
                 ]
             ]
         ]
@@ -117,11 +128,15 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | KeyPress CtrlS ->
         let wModel, wCmd = BusWire.update BusWire.UnselectAll model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
+    | KeyPress AltV -> 
+        let wModel, wCmd = BusWire.update BusWire.EndDragging model.Wire    
+        {model with Wire = wModel}, Cmd.map Wire wCmd
+        
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with
             | AltC -> CommonTypes.Blue
-            | AltV -> CommonTypes.Green
+            //| AltV -> CommonTypes.Green
             | AltZ -> CommonTypes.Red
             | _ -> CommonTypes.Grey
         printfn "Key:%A" c

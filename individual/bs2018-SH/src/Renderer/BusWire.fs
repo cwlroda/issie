@@ -23,8 +23,9 @@ open Helpers
 /// component coordinates are held in some other way, is up to groups.
 type Wire = {
     Id: CommonTypes.ConnectionId 
-    SrcSymbol: CommonTypes.ComponentId
-    TargetSymbol: CommonTypes.ComponentId
+    SrcPort: CommonTypes.PortId
+    TargetPort: CommonTypes.PortId
+    Selected: bool
     }
 
 type Model = {
@@ -42,12 +43,38 @@ type Model = {
 /// for highlighting, width inference, etc
 type Msg =
     | Symbol of Symbol.Msg
-    | AddWire of (CommonTypes.ConnectionId * CommonTypes.ConnectionId)
+    | AddWire of (CommonTypes.PortId * CommonTypes.PortId)
     | SetColor of CommonTypes.HighLightColor
     | MouseMsg of MouseT
+    | SetSelected of CommonTypes.ConnectionId
+    | UnselectAll
 
 
+let getTargetedWire (wModel : Model) (pos : XYPos) : CommonTypes.ConnectionId Option = 
+    let pointOnWire (wire : Wire) (point : XYPos) : bool =
+        let src = Symbol.portPos wModel.Symbol wire.SrcPort
+        let dst = Symbol.portPos wModel.Symbol wire.TargetPort
+        // y = mx + c
+        let m = (dst.Y - src.Y)/(dst.X - src.X)
+        let c  = dst.Y - m*dst.X
 
+        point.Y = m*point.X + c
+
+    let res = 
+        wModel.WX
+        |> List.tryFind (
+            fun wire ->
+                (
+                    [-5..5]
+                    |> List.map (fun i -> List.map (fun j -> ((float i)+pos.X, (float j)+pos.Y)) [-5..5])
+                    |> List.collect id
+                    |> List.map (fun (x, y) -> posOf x y)
+                    |> List.sumBy (fun pos -> if pointOnWire wire pos then 1 else 0)
+                ) > 0
+        )
+    match res with
+    | Some wire -> Some wire.Id
+    | None -> None
 
 /// look up wire in WireModel
 let wire (wModel: Model) (wId: CommonTypes.ConnectionId): Wire =
@@ -84,9 +111,9 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
             let props = {
                 key = w.Id
                 WireP = w
-                SrcP = Symbol.symbolPos model.Symbol w.SrcSymbol 
-                TgtP = Symbol. symbolPos model.Symbol w.TargetSymbol 
-                ColorP = model.Color.Text()
+                SrcP = Symbol.portPos model.Symbol w.SrcPort
+                TgtP = Symbol.portPos model.Symbol w.TargetPort
+                ColorP = if w.Selected then "blue" else "teal"
                 StrokeWidthP = "2px" }
             singleWireView props)
     let symbols = Symbol.view model.Symbol (fun sMsg -> dispatch (Symbol sMsg))
@@ -97,33 +124,45 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
 /// this initialisation depends on details of Symbol.Model type.
 let init n () =
     let symbols, cmd = Symbol.init()
-    let symIds = List.map (fun (sym:Symbol.Symbol) -> sym.Id) symbols
-    let rng = System.Random 0
-    let makeRandomWire() =
-        let n = symIds.Length
-        let s1,s2 =
-            match rng.Next(0,n-1), rng.Next(0,n-2) with
-            | r1,r2 when r1 = r2 -> 
-                symbols.[r1],symbols.[n-1] // prevents wire target and source being same
-            | r1,r2 -> 
-                symbols.[r1],symbols.[r2]
-        {
-            Id=CommonTypes.ConnectionId (uuid())
-            SrcSymbol = s1.Id
-            TargetSymbol = s2.Id
-        }
-    List.map (fun i -> makeRandomWire()) [1..n]
-    |> (fun wires -> {WX=wires;Symbol=symbols; Color=CommonTypes.Red},Cmd.none)
-
+    {WX=[];Symbol=symbols; Color=CommonTypes.Red},Cmd.none
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
     | Symbol sMsg -> 
         let sm,sCmd = Symbol.update sMsg model.Symbol
         {model with Symbol=sm}, Cmd.map Symbol sCmd
-    | AddWire _ -> failwithf "Not implemented"
+    | AddWire (sPid, tPid) ->
+        let wires =
+            model.WX
+            |> List.append [{
+                Id = CommonTypes.ConnectionId ( uuid() )
+                SrcPort = sPid
+                TargetPort = tPid
+                Selected = false
+            }]
+        {model with WX=wires},Cmd.none
     | SetColor c -> {model with Color = c}, Cmd.none
     | MouseMsg mMsg -> model, Cmd.ofMsg (Symbol (Symbol.MouseMsg mMsg))
+    | SetSelected wId ->
+        printf $"setting {wId} as selected"
+        let newWx =
+            model.WX
+            |> List.map (fun w ->
+                if w.Id = wId then
+                    {w with Selected = true}
+                else
+                    w
+            )
 
+        {model with WX = newWx}, Cmd.none
+    | UnselectAll ->
+        printf $"deselcting all wires"
+        let newWx =
+            model.WX
+            |> List.map (fun w ->
+                {w with Selected = false}
+            )
+
+        {model with WX = newWx}, Cmd.none
 //---------------Other interface functions--------------------//
 
 /// Given a point on the canvas, returns the wire ID of a wire within a few pixels
@@ -142,10 +181,3 @@ let extractWires (wModel: Model) : CommonTypes.Component list =
 /// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
 let updateSymbolModelWithComponent (symModel: Model) (comp:CommonTypes.Component) =
     failwithf "Not Implemented"
-
-
-
-    
-
-
-

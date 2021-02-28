@@ -29,6 +29,7 @@ type MouseDown =
 type Model = {
     Wire: BusWire.Model
     SelectedSymbols: CommonTypes.ComponentId list
+    SelectedWire: CommonTypes.ConnectionId Option
     MouseState: MouseDown
     SelectionBox: SelectionBox
     Grid: Grid
@@ -132,10 +133,10 @@ let view (model:Model) (dispatch : Msg -> unit) =
     /// the screen mouse coordinates are compensated for the zoom transform
     div [ Style 
             [ 
-                Height "100vh" 
-                MaxWidth "100vw"
-                CSSProp.OverflowX OverflowOptions.Auto 
-                CSSProp.OverflowY OverflowOptions.Auto
+                // Height "100vh" 
+                // MaxWidth "100vw"
+                // CSSProp.OverflowX OverflowOptions.Auto 
+                // CSSProp.OverflowY OverflowOptions.Auto
             ] 
           OnMouseDown (fun ev -> 
             MouseDown((posOf ev.pageX ev.pageY), ev.shiftKey)
@@ -273,16 +274,47 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | FromEmpty -> processSelectionBox
             | _ -> model.SelectedSymbols
 
+        let selectWireCommands, selectedWire =
+            if selectedSymbols = model.SelectedSymbols then
+                match BusWire.getTargetedWire model.Wire pos with
+                | None -> [], None
+                | Some wId -> [Cmd.ofMsg (Wire <| BusWire.SetSelected wId)], Some wId
+            else
+                [], None
+
+        let selectWireCommands = 
+            selectWireCommands
+            |> List.append [Cmd.ofMsg (Wire <| BusWire.UnselectAll)]
+
+        let addWireCommands =
+            match model.MouseState with
+            | FromPort (fromPid, toPos) ->
+                match Symbol.getTargetedPort model.Wire.Symbol toPos with
+                | Some toPid ->
+                    let fromPortType = Symbol.portType model.Wire.Symbol fromPid
+                    let toPortType = Symbol.portType model.Wire.Symbol toPid
+                    if fromPortType <> toPortType then
+                        [Cmd.ofMsg (Wire <| BusWire.AddWire (fromPid, toPid))]
+                    else []
+                | None -> []
+            | _ -> []
+
+        let cmds = 
+            [Cmd.ofMsg (Symbol <| Symbol.EndDragging);Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)]
+            |> List.append addWireCommands
+            |> List.append selectWireCommands
+
         {
             model with
                 SelectedSymbols = selectedSymbols
+                SelectedWire = selectedWire
                 MouseState = MouseIsUp
                 SelectionBox = {
                     model.SelectionBox with
                         Show = false
                 }
         }, 
-        Cmd.batch[Cmd.ofMsg (Symbol <| Symbol.EndDragging);Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)]
+        Cmd.batch cmds
 
 
     | MouseMove pos ->
@@ -319,6 +351,7 @@ let init() =
     {
         Wire = model
         SelectedSymbols = []
+        SelectedWire = None
         MouseState = MouseIsUp
         SelectionBox = {
             FixedCorner = posOf 0.0 0.0
