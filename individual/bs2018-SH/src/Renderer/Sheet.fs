@@ -54,14 +54,18 @@ let zoom = 1.0
 /// This function zooms an SVG canvas by transforming its content and altering its size.
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
 /// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
-let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (selectionBox: SelectionBox) (grid : Grid) (dispatch: Dispatch<Msg>)=
+let view (model:Model) (dispatch : Msg -> unit) =
+    let wDispatch wMsg = dispatch (Wire wMsg)
+    let wireSvg = BusWire.view model.Wire wDispatch
+    let selectionBox = model.SelectionBox
+    let grid = model.Grid
     let size = 1000.0
     let sizeInPixels = sprintf "%.2fpx" ((size * zoom))
     /// Is the mouse button currently down?
     let mDown (ev:Types.MouseEvent) = 
         if ev.buttons <> 0. then true else false
 
-    let bodyLst = [svgReact]
+    let bodyLst = [wireSvg]
 
     let bodyLst = if selectionBox.Show then
                     List.append bodyLst [ 
@@ -104,6 +108,23 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (selectionBox: Sele
             |> List.append bodyLst
         else
             bodyLst
+
+    let bodyLst =
+        match model.MouseState with
+        | FromPort pId ->
+            bodyLst
+            |> List.append [
+                // line [
+                //         X1 ((float i)*grid.Size)
+                //         X2 ((float i)*grid.Size)
+                //         Y1 0.
+                //         Y2 size
+                //         SVGAttr.Stroke "grey"
+                //         SVGAttr.StrokeWidth 1
+                //         SVGAttr.StrokeOpacity 0.3
+                //     ] []
+            ]
+        | _ -> bodyLst
 
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
@@ -160,15 +181,6 @@ let highlightPorts (model : Model) (pos : XYPos) =
     | None -> []
     |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
     
-
-/// for the demo code
-let view (model:Model) (dispatch : Msg -> unit) =
-    let wDispatch wMsg = dispatch (Wire wMsg)
-    let wireSvg = BusWire.view model.Wire wDispatch
-    let selectionBox = model.SelectionBox
-    let grid = model.Grid
-    displaySvgWithZoom zoom wireSvg selectionBox grid dispatch
-       
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
