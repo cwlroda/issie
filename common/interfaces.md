@@ -2,10 +2,18 @@
 
 ## New types
 * BBox
+	```
+	type BBox = {
+		Pos : XYPos
+		Width: float
+		Height: float
+	}
+	```
 	- containsPoint: BBox -> XYPos -> bool
 	- distanceFromPoint: BBox -> XYPos -> float
 	- overlaps: BBox -> BBox -> bool
-* PortId
+	- makeBBox: (pos : XYPos) (width : float) (height : float)
+* PortId of string
 
 ### Symbol
 
@@ -14,30 +22,34 @@
 * getTargetedSymbol: Model -> XYPos -> ComponentId Option
 * getSymbolsInTargetArea: Model -> BBox -> ComponentId List
 * getTargetedPort: Model -> XYPos -> PortId Option
-* portPos: symModel -> PortId -> XYPos
+* getPortsOfSymbol: Model -> ComponentId -> PortId list
+* portPos: Model -> PortId -> XYPos
 * portType: Model -> PortId -> PortType
 * portWidth: Model -> PortId -> PortWidth
+* symbolBBox: Model -> ComponentId -> BBox
+* portsInRange: Model -> XYPos -> (range : float) -> PortId list
 
 ##### Messages
 
-* AddSymbol of (comp: CommonTypes.ComponentType, pos: XYPos) 
-* StartDraging of (sIdLst: CommonTypes.ComponentId list) (pagePos: XYPos)
-* Dragging of (sIdLst: CommonTypes.ComponentId list) (pagePos: XYPos)
+* AddSymbol of ComponentType * XYPos 
+* DeleteSymbols of ComponentId list
+* StartDraging of ComponentId list * XYPos
+* Dragging of ComponentId list * XYPos
 * EndDragging 
-* SetSelected of (sIdLst: CommonTypes.ComponentId list)
-* HighlightPort of (pId: PortId)
+* SetSelected of ComponentId list
+* HighlightPorts of PortId list
 * UnhighlightPorts
 
 ### BusWire
 
 ##### Interfaces
-* getTargetedWire: Model -> XYPos -> CommonTypes.ConnectionId Option	
+* getTargetedWire: Model -> XYPos -> ConnectionId Option	
 
 ##### Messages
-* AddWire of (portA: PortId) * (portB: PortId)
-* DeleteWire of (wireId: CommonTypes.ConnectionId)
-* SetSelected of (wireId: CommonTypes.ConnectionId)
+* AddWire of PortId * PortId
+* DeleteWire of ConnectionId
+* SetSelected of ConnectionId
 * UnselectAll
-* StartDrag of (wireId: CommonTypes.ConnectionId) (pos: XYPos)
-* Dragging of (wireId: CommonTypes.ConnectionId) (pos: XYPos)
+* StartDrag of ConnectionId * XYPos
+* Dragging of ConnectionId * XYPos
 * EndDrag
