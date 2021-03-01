@@ -204,7 +204,9 @@ let createNewSymbol (pos:XYPos) =
 
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
-    []
+    List.allPairs [1..14] [1..14]
+    |> List.map (fun (x,y) -> {X = float (x*64+30); Y=float (y*64+30)})
+    |> List.map createNewSymbol
     , Cmd.none
 
 /// update function which displays symbols

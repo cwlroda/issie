@@ -215,7 +215,7 @@ let highlightPorts (model : Model) (pos : XYPos) (fromPid : CommonTypes.PortId) 
 let alignSymbolsToGrid (model : Model) =
     Symbol.getAllSymbols model.Wire.Symbol
     |> List.map (fun el -> (Symbol.symbolBBox model.Wire.Symbol el), el)
-    |> List.map (fun (bb,id) -> posToGridIfEnabled model.Grid bb.Pos, bb.Pos, id)
+    |> List.map (fun (bb,id) -> posToGridIfEnabled {model.Grid with SnapToGrid = true} bb.Pos, bb.Pos, id)
     |> List.map (fun (dst,src, id) -> (posDiff dst src), id)
     |> List.map (fun (movement, id) ->
         [
@@ -266,7 +266,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | KeyPress CtrlG ->
         {model with
             Grid = {model.Grid with SnapToGrid = (not model.Grid.SnapToGrid)}
-        }, Cmd.none
+        }, if model.Grid.SnapToGrid then Cmd.none else alignSymbolsToGrid model
 
     | KeyPress CtrlEquals ->
         {model with Zoom = model.Zoom + 0.1},Cmd.none
