@@ -32,12 +32,13 @@ type Model = {
     SelectedSymbols: CommonTypes.ComponentId list
     SelectedWire: CommonTypes.ConnectionId Option
     MouseState: MouseDown
+    LastMousePos: XYPos
     SelectionBox: SelectionBox
     Grid: Grid
 }
 
 type KeyboardMsg =
-    | CtrlS | AltC | AltV | AltZ | AltShiftZ | DEL | CtrlA
+    | AltShiftZ | DEL | CtrlA | CtrlN
 
 type Msg =
     | Wire of BusWire.Msg
@@ -224,16 +225,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         
         model, Cmd.batch (List.append wireCommands symbolCommands)
 
-    | KeyPress s -> // all other keys are turned into SetColor commands
-        let c =
-            match s with
-            | AltC -> CommonTypes.Blue
-            | AltV -> CommonTypes.Green
-            | AltZ -> CommonTypes.Red
-            | _ -> CommonTypes.Grey
-        printfn "Key:%A" c
-        model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
-
+    | KeyPress CtrlN ->
+        model, Cmd.ofMsg (Symbol <| Symbol.AddSymbol (CommonTypes.Not, model.LastMousePos))
 
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =
@@ -273,6 +266,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                     MovingCorner = pos
                     Show = showSelection
             }
+            LastMousePos = pos
         },
         Cmd.batch(
             [
@@ -391,4 +385,5 @@ let init() =
             SnapToGrid = true
             Show = true
         }
+        LastMousePos = posOf 0. 0.
     }, Cmd.map Wire cmds
