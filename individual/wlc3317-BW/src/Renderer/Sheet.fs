@@ -12,7 +12,7 @@ type Model = {
     }
 
 type KeyboardMsg =
-    | CtrlS | AltC | AltV | AltZ | AltShiftZ | DEL
+    | CtrlS | AltC | AltV | AltZ | AltD | AltShiftZ | INS | DEL | CtrlShiftA
 
 type Msg =
     | Wire of BusWire.Msg
@@ -96,22 +96,26 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress AltShiftZ -> 
         printStats() // print and reset the performance statistics in dev tools window
-        model, Cmd.none // do nothing else and return model unchanged
+        model, Cmd.none
+    | KeyPress INS ->
+        model, Cmd.ofMsg (Wire <| BusWire.AddWire)
     | KeyPress DEL ->
         model, Cmd.ofMsg (Wire <| BusWire.DeleteWires)
+    | KeyPress CtrlShiftA ->
+        model, Cmd.ofMsg (Wire <| BusWire.SelectAll)
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with
-            | AltC -> CommonTypes.Blue
+            | AltC -> CommonTypes.Pink
             | AltV -> CommonTypes.Green
-            | AltZ -> CommonTypes.Red
+            | AltZ -> CommonTypes.Orange
             | _ -> CommonTypes.Grey
         printfn "Key:%A" c
         model, Cmd.ofMsg (Wire <| BusWire.SetWireColor c)
 
 
 let init() = 
-    let model,cmds = (BusWire.init 4)()
+    let model,cmds = (BusWire.init 1)()
     {
         Wire = model
     }, Cmd.map Wire cmds

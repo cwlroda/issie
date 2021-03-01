@@ -32,8 +32,8 @@ type MouseT = {
 
 type BBox =
     { Pos: XYPos //Top left corner of box
-      W: int
-      H: int }
+      W: float
+      H: float }
 
 //--------------------------------------------------------------------------//
 //-----------------------------Helpers--------------------------------------//
@@ -41,6 +41,9 @@ type BBox =
 
 /// return a v4 (random) universally unique identifier (UUID)
 let uuid():string = import "v4" "uuid"
+
+let makeBBox (pos: XYPos) (width: float) (height: float) =
+    {Pos = pos; W =  width; H = height}
 
 
 //-----------------Code to record and print execution time statistics-------//

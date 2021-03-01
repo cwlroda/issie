@@ -169,7 +169,7 @@ module CommonTypes
     /// lots of colors can be added, see https://www.w3schools.com/colors/colors_names.asp
     /// The Text() method converts it to the correct HTML string
     /// Where speed matters the color must be added as a case in the match statement
-    type HighLightColor = Red | Blue | Yellow | Green | Orange | Grey
+    type HighLightColor = Red | Blue | Yellow | Green | Orange | Grey | Purple | Pink
     with 
         member this.Text() = // the match statement is used for performance
             match this with
@@ -177,7 +177,10 @@ module CommonTypes
             | Blue -> "Blue"
             | Yellow -> "Yellow"
             | Green -> "Green"
+            | Orange -> "Orange"
             | Grey -> "Grey"
+            | Purple -> "Purple"
+            | Pink -> "Pink"
             | c -> sprintf "%A" c
             
             
