@@ -48,6 +48,9 @@
                    makeKeyItem "Delete selected"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
                    makeKeyItem "Select all" "Alt+A" (fun () -> dispatch KeyboardMsg.CtrlA)
                    menuSeparator
+                   makeKeyItem "Copy" "Alt+C" (fun () -> dispatch KeyboardMsg.CtrlC)
+                   makeKeyItem "Paste" "Alt+V" (fun () -> dispatch KeyboardMsg.CtrlV)
+                   menuSeparator
                    makeKeyItem "Decrease grid size" "CmdOrCtrl+Q" (fun () -> dispatch KeyboardMsg.CtrlQ)
                    makeKeyItem "Increase grid size" "CmdOrCtrl+W" (fun () -> dispatch KeyboardMsg.CtrlW)
                    makeKeyItem "Toggle show grid" "CmdOrCtrl+F" (fun () -> dispatch KeyboardMsg.CtrlF)

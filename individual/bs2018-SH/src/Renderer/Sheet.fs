@@ -37,6 +37,7 @@ type Model = {
     Grid: Grid
     ScrollOffset: XYPos
     Zoom: float
+    Clipboard: CommonTypes.ComponentId list
 }
 
 type KeyboardMsg =
@@ -50,6 +51,8 @@ type KeyboardMsg =
     | CtrlQ
     | CtrlW
     | CtrlF
+    | CtrlC
+    | CtrlV
 
 type Msg =
     | Wire of BusWire.Msg
@@ -59,6 +62,7 @@ type Msg =
     | MouseUp of XYPos * bool
     | Symbol of Symbol.Msg
     | Scroll of float * float
+    | SnapToGridMsg
 
 
 /// This function zooms an SVG canvas by transforming its content and altering its size.
@@ -304,7 +308,23 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 }
         },
         Cmd.none
-            
+
+    | KeyPress CtrlC -> {model with Clipboard = model.SelectedSymbols}, Cmd.none
+
+    | KeyPress CtrlV ->
+        model,
+        [Cmd.ofMsg SnapToGridMsg]
+        |> List.append (
+            model.Clipboard
+            |> List.map (Symbol.symbolBBox model.Wire.Symbol)
+            |> List.map (fun bb -> Cmd.ofMsg(Symbol <| Symbol.AddSymbol (CommonTypes.Not, (posAdd bb.Pos (posOf 20. 20.)))))
+        )
+        |> Cmd.batch
+
+    | SnapToGridMsg ->
+        model,
+        if model.Grid.SnapToGrid then alignSymbolsToGrid model else Cmd.none
+
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =
             if List.contains targetedId model.SelectedSymbols then
@@ -465,4 +485,5 @@ let init() =
         LastMousePos = posOf 0. 0.
         ScrollOffset = posOf 0. 0.
         Zoom = 1.
+        Clipboard = []
     }, Cmd.map Wire cmds
