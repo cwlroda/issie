@@ -97,6 +97,10 @@ let distanceFromPoint (bb : BBox) (pos : XYPos) : float =
         | false, false, false, true -> bb.XYPos.X - pos.X   //w
         | _ -> failwithf "This should never happen."
 
+let posDiff a b =
+    {X=a.X-b.X; Y=a.Y-b.Y}
+let posAdd a b =
+    {X=a.X+b.X; Y=a.Y+b.Y}
 
 let corners (bb : BBox) : XYPos list =
     [

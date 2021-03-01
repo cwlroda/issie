@@ -47,6 +47,7 @@
                    makeKeyItem "Delete selected"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
                    makeKeyItem "New symbol" "CmdOrCtrl+N" (fun () -> dispatch KeyboardMsg.CtrlN)
                    makeKeyItem "Select all" "Alt+A" (fun () -> dispatch KeyboardMsg.CtrlA)
+                   makeKeyItem "Toggle snap-to-grid" "CmdOrCtrl+G" (fun () -> dispatch KeyboardMsg.CtrlG)
                    menuSeparator
                    makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch KeyboardMsg.AltShiftZ)
                    makeRoleItem MenuItemRole.ForceReload

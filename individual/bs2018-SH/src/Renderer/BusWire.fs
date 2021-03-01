@@ -26,6 +26,8 @@ type Wire = {
     SrcPort: CommonTypes.PortId
     TargetPort: CommonTypes.PortId
     Selected: bool
+    LastDragPos: XYPos
+    DragOffset: XYPos
     }
 
 type Model = {
@@ -95,6 +97,7 @@ type WireRenderProps = {
     WireP: Wire
     SrcP: XYPos 
     TgtP: XYPos
+    Offset: XYPos
     ColorP: string
     StrokeWidthP: string }
 
@@ -105,10 +108,10 @@ let singleWireView =
     FunctionComponent.Of(
         fun (props: WireRenderProps) ->
             line [
-                X1 props.SrcP.X
-                Y1 props.SrcP.Y
-                X2 props.TgtP.X
-                Y2 props.TgtP.Y
+                X1 (props.SrcP.X + props.Offset.X)
+                Y1 (props.SrcP.Y + props.Offset.Y)
+                X2 (props.TgtP.X + props.Offset.X)
+                Y2 (props.TgtP.Y + props.Offset.Y)
                 // Qualify these props to avoid name collision with CSSProp
                 SVGAttr.Stroke props.ColorP
                 SVGAttr.StrokeWidth props.StrokeWidthP ] [])
@@ -123,6 +126,7 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
                 WireP = w
                 SrcP = Symbol.portPos model.Symbol w.SrcPort
                 TgtP = Symbol.portPos model.Symbol w.TargetPort
+                Offset = w.DragOffset
                 ColorP = if w.Selected then "blue" else "teal"
                 StrokeWidthP = if w.Selected then "2.5px" else "2px" }
             singleWireView props)
@@ -148,6 +152,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 SrcPort = sPid
                 TargetPort = tPid
                 Selected = false
+                DragOffset = posOf 0. 0.
+                LastDragPos = posOf 0. 0.
             }]
         {model with WX=wires},Cmd.none
     | SetColor c -> {model with Color = c}, Cmd.none
@@ -176,9 +182,38 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let newWx = List.collect (fun el -> if el.Id = wId then [] else [el]) model.WX
         {model with WX = newWx}, Cmd.none
 
-    | StartDrag (wId, pos) -> printf $"Start dragging wire {wId} at {pos}"; model, Cmd.none
-    | Dragging (wId, pos) -> printf $"Dragging wire {wId} at {pos}"; model, Cmd.none
-    | EndDrag -> printf "Ending dragging wires."; model, Cmd.none
+    | StartDrag (wId, pos) ->
+        let newWx =
+            model.WX
+            |> List.map (fun w ->
+                if w.Id = wId then
+                    {w with
+                        LastDragPos = pos}
+                else
+                    w    
+            )
+        {model with WX = newWx}, Cmd.none
+    | Dragging (wId, pos) ->
+        let newWx =
+            model.WX
+            |> List.map (fun w ->
+                if w.Id = wId then
+                    let diff = posDiff pos w.LastDragPos
+                    {w with
+                        DragOffset = posAdd w.DragOffset diff
+                        LastDragPos = pos}
+                else
+                    w    
+            )
+        {model with WX = newWx}, Cmd.none
+    | EndDrag ->
+        let newWx =
+            model.WX
+            |> List.map (fun w ->
+                {w with
+                    DragOffset = posOf 0. 0.}
+            )
+        {model with WX = newWx}, Cmd.none
 
 //---------------Other interface functions--------------------//
 
