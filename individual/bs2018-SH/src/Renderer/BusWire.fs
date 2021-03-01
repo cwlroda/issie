@@ -49,6 +49,9 @@ type Msg =
     | SetSelected of CommonTypes.ConnectionId
     | UnselectAll
     | DeleteWire of CommonTypes.ConnectionId
+    | StartDrag of CommonTypes.ConnectionId * XYPos
+    | Dragging of CommonTypes.ConnectionId * XYPos
+    | EndDrag
 
 
 let getTargetedWire (wModel : Model) (pos : XYPos) : CommonTypes.ConnectionId Option = 
@@ -65,7 +68,7 @@ let getTargetedWire (wModel : Model) (pos : XYPos) : CommonTypes.ConnectionId Op
             let m = (dst.Y - src.Y)/(dst.X - src.X)
             let c  = dst.Y - m*dst.X
 
-            if c > 1000. || c < -1000. then
+            if c > 3000. || c < -3000. then
                 true
             else
                 let err = (point.Y - m*point.X - c)
@@ -172,6 +175,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | DeleteWire wId ->
         let newWx = List.collect (fun el -> if el.Id = wId then [] else [el]) model.WX
         {model with WX = newWx}, Cmd.none
+
+    | StartDrag (wId, pos) -> printf $"Start dragging wire {wId} at {pos}"; model, Cmd.none
+    | Dragging (wId, pos) -> printf $"Dragging wire {wId} at {pos}"; model, Cmd.none
+    | EndDrag -> printf "Ending dragging wires."; model, Cmd.none
+
 //---------------Other interface functions--------------------//
 
 /// Given a point on the canvas, returns the wire ID of a wire within a few pixels

@@ -24,6 +24,7 @@ type MouseDown =
     | FromPort of CommonTypes.PortId * XYPos
     | FromSymbol
     | FromEmpty
+    | FromWire of CommonTypes.ConnectionId
 
 
 type Model = {
@@ -250,12 +251,18 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             match targetedPort with
             | Some portId -> FromPort (portId, pos), model.SelectedSymbols, false
             | None ->
-                let targetedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol pos
-                match targetedSymbol with
-                | Some symbolId -> FromSymbol, processSelectedSymbols symbolId, false
-                | None -> FromEmpty, [], true
+                match BusWire.getTargetedWire model.Wire pos with
+                | Some wId -> FromWire wId, model.SelectedSymbols, false
+                | None -> 
+                    let targetedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol pos
+                    match targetedSymbol with
+                    | Some symbolId -> FromSymbol, processSelectedSymbols symbolId, false
+                    | None -> FromEmpty, [], true
 
-        
+        let wireDragCommands =
+            match mouseState with
+            | FromWire wId -> [Cmd.ofMsg (Wire <| BusWire.StartDrag (wId, pos))]
+            | _ -> []        
         
         {model with
             MouseState = mouseState;
@@ -267,10 +274,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                     Show = showSelection
             }
         },
-        Cmd.batch[
-            Cmd.ofMsg (Symbol <| Symbol.StartDragging (selectedSymbols, pos));
-            Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols);
-        ]
+        Cmd.batch(
+            [
+                Cmd.ofMsg (Symbol <| Symbol.StartDragging (selectedSymbols, pos));
+                Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols);
+            ]
+            |> List.append wireDragCommands
+        )
         
     | MouseUp (pos, isShift) ->
         let processSelectionBox =
@@ -313,7 +323,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | _ -> []
 
         let cmds = 
-            [Cmd.ofMsg (Symbol <| Symbol.EndDragging);Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)]
+            [
+                Cmd.ofMsg (Symbol <| Symbol.EndDragging)
+                Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)
+                Cmd.ofMsg (Wire <| BusWire.EndDrag)
+            ]
             |> List.append addWireCommands
             |> List.append selectWireCommands
 
@@ -350,6 +364,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                     model with
                         MouseState = FromPort (pId, pos)
                 }, [Cmd.none]
+            | FromWire wId -> model, [Cmd.ofMsg (Wire <| BusWire.Dragging (wId, pos))]
             | _ -> model, [Cmd.none]
 
 
