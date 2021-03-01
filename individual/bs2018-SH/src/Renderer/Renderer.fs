@@ -44,17 +44,19 @@
             invisibleMenu.visible <- true // false if you want keys but no "Edit" menu
             invisibleMenu.submenu <-
                 [|
-                   makeKeyItem "Delete selected"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
                    makeKeyItem "New symbol" "CmdOrCtrl+N" (fun () -> dispatch KeyboardMsg.CtrlN)
+                   makeKeyItem "Delete selected"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
                    makeKeyItem "Select all" "Alt+A" (fun () -> dispatch KeyboardMsg.CtrlA)
                    makeKeyItem "Toggle snap-to-grid" "CmdOrCtrl+G" (fun () -> dispatch KeyboardMsg.CtrlG)
+                   menuSeparator
+                   makeKeyItem "Zoom in" "CmdOrCtrl+=" (fun () -> dispatch KeyboardMsg.CtrlEquals)
+                   makeKeyItem "Zoom out" "CmdOrCtrl+-" (fun () -> dispatch KeyboardMsg.CtrlMinus)
                    menuSeparator
                    makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch KeyboardMsg.AltShiftZ)
                    makeRoleItem MenuItemRole.ForceReload
                    makeRoleItem MenuItemRole.Reload
                    makeRoleItem MenuItemRole.ToggleDevTools
-                   makeRoleItem MenuItemRole.ZoomIn
-                   makeRoleItem MenuItemRole.ZoomOut|]
+                   |]
                 |> U2.Case1
     
     let attachMenusAndKeyShortcuts dispatch =
