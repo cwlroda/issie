@@ -84,6 +84,13 @@ let getPortsOfSymbol (symModel : Model) (symId : CommonTypes.ComponentId) : Comm
     ).Ports
     |> List.map (fun p -> p.Id)
 
+let symbolBBox (symModel : Model) (cId : CommonTypes.ComponentId) : BBox =
+    {
+        Pos = (List.find (fun el -> el.Id = cId) symModel).Pos
+        Height = 40.
+        Width = 40.
+    }
+
 let getAllPortsWithSymbol (symModel : Model) = 
     let insertSymToPortList (pl : Port list) (sym : Symbol) =
         pl
