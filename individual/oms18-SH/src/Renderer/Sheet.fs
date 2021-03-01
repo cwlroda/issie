@@ -55,7 +55,7 @@ type Msg =
     | KeyPress of KeyboardMsg
     | MouseMsg of MouseT * Modifier
 
-let gridSize = 5.
+let gridSize = 10.
 
 /// This function zooms an SVG canvas by transforming its content and altering its size.
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
@@ -152,6 +152,9 @@ let view (model: Model) (dispatch: Msg -> unit) =
 
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
+    let snapToGrid p =
+        posOf (gridSize * (floor (p.X / gridSize))) (gridSize * (floor (p.Y / gridSize)))
+
     match msg with
     | Wire wMsg ->
         let wModel, wCmd = BusWire.update wMsg model.Wire
@@ -206,7 +209,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     }
                     , Cmd.batch [
                         Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
-                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.StartDragging (selectedSymbols, p))))
+                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.StartDragging (selectedSymbols, snapToGrid p))))
                         Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     ]
                 | (_, _, Some wId, _) ->
@@ -217,7 +220,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     , Cmd.batch [
                         Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
                         Cmd.ofMsg (Wire (BusWire.Select wId))
-                        Cmd.ofMsg (Wire (BusWire.StartDrag (wId, p)))
+                        Cmd.ofMsg (Wire (BusWire.StartDrag (wId, snapToGrid p)))
                     ]
                 | (_, None, None, Control) ->
                     { model with
@@ -239,7 +242,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
                     Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     Cmd.ofMsg (Wire (BusWire.EndDrag))
-                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, p))))
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid p))))
                 ]
             | MouseButton.Middle ->
                 { model with
@@ -274,10 +277,10 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     | Symbols s -> s
                     | _ -> failwithf "We only drag if there is a selection"
                 model,
-                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Dragging (selectedSymbols, p))))
+                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Dragging (selectedSymbols, snapToGrid p))))
             | DragState.Wire wId ->
                 model,
-                Cmd.ofMsg (Wire (BusWire.Dragging (wId, p)))
+                Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
             | WireCreation (pId, _) ->
                 { model with
                     DragState=WireCreation (pId, p)
