@@ -58,7 +58,7 @@ type Msg =
     | DeleteSymbol of sId:CommonTypes.ComponentId 
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
     | SetSelected of CommonTypes.ComponentId list
-    | HighlightPort of CommonTypes.PortId
+    | HighlightPort of CommonTypes.PortId list
     | UnhighlightPorts
 
 
@@ -251,12 +251,12 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 }
         )
         , Cmd.none
-    | HighlightPort pId ->
+    | HighlightPort ports ->
         model
         |> List.map (fun sym -> 
             let ports = sym.Ports
                             |> List.map (fun port ->
-                                if port.Id = pId then {port with Highlighted = true} else port
+                                if List.contains port.Id ports then {port with Highlighted = true} else port
                             )
             {sym with Ports = ports}
         ), Cmd.none
