@@ -49,6 +49,7 @@ type KeyboardMsg =
     | CtrlMinus
     | CtrlQ
     | CtrlW
+    | CtrlF
 
 type Msg =
     | Wire of BusWire.Msg
@@ -284,15 +285,25 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 model with
                     Grid = {model.Grid with Size = newGridSize}
             }
-        newModel, alignSymbolsToGrid newModel
+        newModel, if model.Grid.SnapToGrid then alignSymbolsToGrid newModel else Cmd.none
 
-     | KeyPress CtrlW ->
+    | KeyPress CtrlW ->
         let newModel =
             {
                 model with
                     Grid = {model.Grid with Size = model.Grid.Size + 2.}
             }
-        newModel, alignSymbolsToGrid newModel
+        newModel, if model.Grid.SnapToGrid then alignSymbolsToGrid newModel else Cmd.none
+
+    | KeyPress CtrlF ->
+        {
+            model with
+                Grid = {
+                    model.Grid with
+                        Show = not(model.Grid.Show)
+                }
+        },
+        Cmd.none
             
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =
@@ -453,5 +464,5 @@ let init() =
         }
         LastMousePos = posOf 0. 0.
         ScrollOffset = posOf 0. 0.
-        Zoom = 1.5
+        Zoom = 1.
     }, Cmd.map Wire cmds
