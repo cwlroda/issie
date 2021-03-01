@@ -36,28 +36,34 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
         match op with
         | Down ->  
             match BusWire.getTargetedWire model.Wire {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
-            | Some w -> dispatch <| Wire (BusWire.SetSelected w) 
+            | Some w -> 
+                dispatch <| Wire (BusWire.SetSelected w) 
+                dispatch <| Wire (BusWire.StartDragging (w,  {X =  ev.clientX / zoom; Y = ev.clientY / zoom}))
             | None -> ()
             match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some s ->  dispatch <| Wire (BusWire.Symbol (Symbol.StartDragging (s.Id, {X =  ev.clientX / zoom; Y = ev.clientY / zoom})))
             | None -> ()
             
         | Drag ->
-            match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+            (* match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some s ->  dispatch <| Wire (BusWire.Symbol ( Symbol.Dragging (s.Id, {X =  ev.clientX / zoom; Y = ev.clientY / zoom})))
-            | None -> ()
+            | None -> () *)
 
-            dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.clientX / zoom ; Y = ev.clientY / zoom}})
+            match BusWire.getTargetedWire model.Wire {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+            | Some w -> 
+                dispatch <| Wire (BusWire.Dragging (w,  {X =  ev.clientX / zoom; Y = ev.clientY / zoom}))
+            | None -> ()
+            //dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.clientX / zoom ; Y = ev.clientY / zoom}})
         | Move -> ()  
         | Up ->
             let targetedWire = 
                 match Symbol.getTargetedBBoxSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
                 | Some v -> BusWire.getWiresInTargetBBox model.Wire v   
                 | None -> [] 
-            dispatch <| Wire (BusWire.Dragging (targetedWire, { X = ev.clientX / zoom ; Y = ev.clientY / zoom}))
-            match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+            dispatch <| Wire (BusWire.EndDragging)
+            (* match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some s ->  dispatch <| Wire (BusWire.Symbol ( Symbol.EndDragging s.Id))
-            | None -> ()
+            | None -> () *)
 
 
         
@@ -84,17 +90,7 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
             [ g // group list of elements with list of attributes
                 [ Style [Transform (sprintf "scale(%f)" zoom)]] // top-level transform style attribute for zoom
                 [ 
-                    text [ // a demo text svg element
-                        X 500; 
-                        Y 50; 
-                        Style [
-                            TextAnchor "middle" // horizontal algnment vs (X,Y)
-                            DominantBaseline "middle" // vertical alignment vs (X,Y)
-                            FontSize "40px"
-                            FontWeight "Bold"
-                            Fill "Green" // font color
-                        ]
-                    ] [str "sample text"]
+                   
 
                     svgReact // the application code
 
