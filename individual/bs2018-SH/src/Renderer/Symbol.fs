@@ -58,7 +58,7 @@ type Msg =
     | DeleteSymbol of sId:CommonTypes.ComponentId 
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
     | SetSelected of CommonTypes.ComponentId list
-    | HighlightPort of CommonTypes.PortId
+    | HighlightPort of CommonTypes.PortId list
     | UnhighlightPorts
 
 
@@ -68,7 +68,7 @@ type Msg =
 let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Option = 
     let clickInSym sym =
         let bb = {
-            XYPos = sym.Pos
+            Pos = sym.Pos
             Height = float sym.Component.H
             Width = float sym.Component.W
         }
@@ -111,7 +111,7 @@ let portType (symModel : Model) (pId : CommonTypes.PortId) : CommonTypes.PortTyp
 let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option = 
     let posInPort (sym: Symbol) (port : Port) : bool =
         let bb = {
-            XYPos = posOf (port.RelPos.X + sym.Pos.X - 2.5) (port.RelPos.Y + sym.Pos.Y - 2.5)
+            Pos = posOf (port.RelPos.X + sym.Pos.X - 2.5) (port.RelPos.Y + sym.Pos.Y - 2.5)
             Height = 10.
             Width = 10.
         }
@@ -251,12 +251,12 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 }
         )
         , Cmd.none
-    | HighlightPort pId ->
+    | HighlightPort ports ->
         model
         |> List.map (fun sym -> 
             let ports = sym.Ports
                             |> List.map (fun port ->
-                                if port.Id = pId then {port with Highlighted = true} else port
+                                if List.contains port.Id ports then {port with Highlighted = true} else port
                             )
             {sym with Ports = ports}
         ), Cmd.none

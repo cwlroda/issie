@@ -117,7 +117,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     
 
 let init() = 
-    let model,cmds = (BusWire.init 10)()
+    let model,cmds = (BusWire.init 0)()
     {
         Wire = model
     }, Cmd.map Wire cmds

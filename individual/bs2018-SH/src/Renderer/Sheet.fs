@@ -184,7 +184,7 @@ let posToGridIfEnabled (grid : Grid) (pos : XYPos) : XYPos =
 let highlightPorts (model : Model) (pos : XYPos) = 
     
     match Symbol.getTargetedPort model.Wire.Symbol pos with
-    | Some portId -> [Cmd.ofMsg (Symbol <| Symbol.HighlightPort portId)]
+    | Some portId -> [Cmd.ofMsg (Symbol <| Symbol.HighlightPort [portId])]
     | None -> []
     |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
     
