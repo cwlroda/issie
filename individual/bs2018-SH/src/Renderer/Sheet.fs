@@ -40,7 +40,15 @@ type Model = {
 }
 
 type KeyboardMsg =
-    | AltShiftZ | DEL | CtrlA | CtrlN | CtrlG | CtrlEquals | CtrlMinus
+    | AltShiftZ
+    | DEL
+    | CtrlA
+    | CtrlN
+    | CtrlG
+    | CtrlEquals
+    | CtrlMinus
+    | CtrlQ
+    | CtrlW
 
 type Msg =
     | Wire of BusWire.Msg
@@ -210,19 +218,24 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | Scroll (x, y) ->
         {model with ScrollOffset = posOf x y}
         , Cmd.none
+
     | Wire wMsg -> 
         let wModel, wCmd = BusWire.update wMsg model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
+
     | Symbol sMsg ->
         let wModel, wCmd = BusWire.update (BusWire.Symbol sMsg) model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
+
     | KeyPress AltShiftZ -> 
         printStats() // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
+
     | KeyPress CtrlA ->
         let idLst = Symbol.getAllSymbols model.Wire.Symbol
         {model with SelectedSymbols = idLst},
         Cmd.ofMsg (Symbol <| Symbol.SetSelected idLst)
+
     | KeyPress DEL ->
         let model, wireCommands = 
             match model.SelectedWire with
@@ -230,12 +243,10 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | Some wId -> {model with SelectedWire = None}, [Cmd.ofMsg (Wire <| BusWire.DeleteWire wId)]
 
         let symbolCommands = [Cmd.ofMsg (Symbol <| Symbol.DeleteSymbols model.SelectedSymbols)]
-   
         model, Cmd.batch (List.append wireCommands symbolCommands)
 
     | KeyPress CtrlN ->
         let posOnGrid = posToGridIfEnabled model.Grid model.LastMousePos
-            
         model, Cmd.ofMsg (Symbol <| Symbol.AddSymbol (CommonTypes.Not, posOnGrid))
     
     | KeyPress CtrlG ->
@@ -251,6 +262,21 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             {model with Zoom = model.Zoom - 0.1},Cmd.none
         else
             model,Cmd.none
+
+    | KeyPress CtrlQ ->
+        let newGridSize = if model.Grid.Size > 2. then model.Grid.Size - 2. else model.Grid.Size
+        {
+            model with
+                Grid = {model.Grid with Size = newGridSize}
+        },
+        Cmd.none
+
+     | KeyPress CtrlW ->
+        {
+            model with
+                Grid = {model.Grid with Size = model.Grid.Size + 2.}
+        },
+        Cmd.none
             
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =

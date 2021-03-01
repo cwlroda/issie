@@ -49,6 +49,9 @@
                    makeKeyItem "Select all" "Alt+A" (fun () -> dispatch KeyboardMsg.CtrlA)
                    makeKeyItem "Toggle snap-to-grid" "CmdOrCtrl+G" (fun () -> dispatch KeyboardMsg.CtrlG)
                    menuSeparator
+                   makeKeyItem "Decrease grid size" "CmdOrCtrl+Q" (fun () -> dispatch KeyboardMsg.CtrlQ)
+                   makeKeyItem "Increase grid size" "CmdOrCtrl+W" (fun () -> dispatch KeyboardMsg.CtrlW)
+                   menuSeparator
                    makeKeyItem "Zoom in" "CmdOrCtrl+=" (fun () -> dispatch KeyboardMsg.CtrlEquals)
                    makeKeyItem "Zoom out" "CmdOrCtrl+-" (fun () -> dispatch KeyboardMsg.CtrlMinus)
                    menuSeparator
