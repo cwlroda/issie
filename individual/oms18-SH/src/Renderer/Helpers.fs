@@ -39,6 +39,8 @@ type MouseOp =
     | Move 
     /// Move with button Down
     | Drag
+    /// When mouse leaves program area
+    | Leave
 
 type MouseButton =
     | Left
