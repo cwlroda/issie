@@ -65,6 +65,39 @@ let containsPoint (pos : XYPos) (bb : BBox) : bool =
     && pos.Y >= bb.XYPos.Y
     && pos.Y <= (bb.XYPos.Y + bb.Height)
 
+let distanceBetweenPoints (p1 : XYPos) (p2 : XYPos) : float =
+    sqrt ((p1.X - p2.X)**2. + (p1.Y - p2.Y)**2.)
+
+let distanceFromPoint (bb : BBox) (pos : XYPos) : float =
+//         |       |
+//     nw  |   n   |   ne
+//         |       |
+// ---------------------------
+//         |       |
+//     w   |   in  |   e
+//         |       |
+// ---------------------------
+//         |       |
+//     sw  |   s   |   se
+//         |       |
+    if containsPoint pos bb then 0. //in
+    else
+        let n = pos.Y < bb.XYPos.Y
+        let e = pos.X > (bb.XYPos.X + bb.Width)
+        let s = pos.Y > (bb.XYPos.Y + bb.Height)
+        let w = pos.X < bb.XYPos.X
+        match n,e,s,w with
+        | true,false,_,false -> bb.XYPos.Y - pos.Y      //n
+        | true, true, _, _ -> distanceBetweenPoints pos (posOf (bb.XYPos.X+bb.Width) bb.XYPos.Y)     //ne
+        | true, _, _, _ -> distanceBetweenPoints pos bb.XYPos   //nw
+        | _, true, false, _ ->  pos.X - (bb.XYPos.X + bb.Width) //e
+        | _, true, true, _ -> distanceBetweenPoints pos (posOf (bb.XYPos.X+bb.Width) (bb.XYPos.Y+bb.Height))   //se
+        | _, _, true, false -> pos.Y - (bb.XYPos.Y + bb.Height) // s
+        | _, _, true, true -> distanceBetweenPoints pos (posOf bb.XYPos.X (bb.XYPos.Y+bb.Height)) // sw
+        | false, false, false, true -> bb.XYPos.X - pos.X   //w
+        | _ -> failwithf "This should never happen."
+
+
 let corners (bb : BBox) : XYPos list =
     [
         bb.XYPos
