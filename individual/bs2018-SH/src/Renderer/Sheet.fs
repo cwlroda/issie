@@ -37,10 +37,22 @@ type Model = {
     Grid: Grid
     ScrollOffset: XYPos
     Zoom: float
+    Clipboard: CommonTypes.ComponentId list
 }
 
 type KeyboardMsg =
-    | AltShiftZ | DEL | CtrlA | CtrlN | CtrlG | CtrlEquals | CtrlMinus
+    | AltShiftZ
+    | DEL
+    | CtrlA
+    | CtrlN
+    | CtrlG
+    | CtrlEquals
+    | CtrlMinus
+    | CtrlQ
+    | CtrlW
+    | CtrlF
+    | CtrlC
+    | CtrlV
 
 type Msg =
     | Wire of BusWire.Msg
@@ -50,6 +62,7 @@ type Msg =
     | MouseUp of XYPos * bool
     | Symbol of Symbol.Msg
     | Scroll of float * float
+    | SnapToGridMsg
 
 
 /// This function zooms an SVG canvas by transforming its content and altering its size.
@@ -203,26 +216,45 @@ let highlightPorts (model : Model) (pos : XYPos) (fromPid : CommonTypes.PortId) 
 
     [Cmd.ofMsg (Symbol <| Symbol.HighlightPort ports)]
     |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
-    
+
+let alignSymbolsToGrid (model : Model) =
+    Symbol.getAllSymbols model.Wire.Symbol
+    |> List.map (fun el -> (Symbol.symbolBBox model.Wire.Symbol el), el)
+    |> List.map (fun (bb,id) -> posToGridIfEnabled {model.Grid with SnapToGrid = true} bb.Pos, bb.Pos, id)
+    |> List.map (fun (dst,src, id) -> (posDiff dst src), id)
+    |> List.map (fun (movement, id) ->
+        [
+            Cmd.ofMsg (Symbol <| Symbol.StartDragging ([id], posOf 0. 0.))
+            Cmd.ofMsg (Symbol <| Symbol.Dragging ([id], movement))
+        ]
+    )
+    |> List.collect id
+    |> Cmd.batch
+
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
     | Scroll (x, y) ->
         {model with ScrollOffset = posOf x y}
         , Cmd.none
+
     | Wire wMsg -> 
         let wModel, wCmd = BusWire.update wMsg model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
+
     | Symbol sMsg ->
         let wModel, wCmd = BusWire.update (BusWire.Symbol sMsg) model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
+
     | KeyPress AltShiftZ -> 
         printStats() // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
+
     | KeyPress CtrlA ->
         let idLst = Symbol.getAllSymbols model.Wire.Symbol
         {model with SelectedSymbols = idLst},
         Cmd.ofMsg (Symbol <| Symbol.SetSelected idLst)
+
     | KeyPress DEL ->
         let model, wireCommands = 
             match model.SelectedWire with
@@ -230,18 +262,16 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | Some wId -> {model with SelectedWire = None}, [Cmd.ofMsg (Wire <| BusWire.DeleteWire wId)]
 
         let symbolCommands = [Cmd.ofMsg (Symbol <| Symbol.DeleteSymbols model.SelectedSymbols)]
-   
         model, Cmd.batch (List.append wireCommands symbolCommands)
 
     | KeyPress CtrlN ->
         let posOnGrid = posToGridIfEnabled model.Grid model.LastMousePos
-            
         model, Cmd.ofMsg (Symbol <| Symbol.AddSymbol (CommonTypes.Not, posOnGrid))
     
     | KeyPress CtrlG ->
         {model with
             Grid = {model.Grid with SnapToGrid = (not model.Grid.SnapToGrid)}
-        }, Cmd.none
+        }, if model.Grid.SnapToGrid then Cmd.none else alignSymbolsToGrid model
 
     | KeyPress CtrlEquals ->
         {model with Zoom = model.Zoom + 0.1},Cmd.none
@@ -251,7 +281,50 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             {model with Zoom = model.Zoom - 0.1},Cmd.none
         else
             model,Cmd.none
-            
+
+    | KeyPress CtrlQ ->
+        let newGridSize = if model.Grid.Size > 2. then model.Grid.Size - 2. else model.Grid.Size
+        let newModel =
+            {
+                model with
+                    Grid = {model.Grid with Size = newGridSize}
+            }
+        newModel, if model.Grid.SnapToGrid then alignSymbolsToGrid newModel else Cmd.none
+
+    | KeyPress CtrlW ->
+        let newModel =
+            {
+                model with
+                    Grid = {model.Grid with Size = model.Grid.Size + 2.}
+            }
+        newModel, if model.Grid.SnapToGrid then alignSymbolsToGrid newModel else Cmd.none
+
+    | KeyPress CtrlF ->
+        {
+            model with
+                Grid = {
+                    model.Grid with
+                        Show = not(model.Grid.Show)
+                }
+        },
+        Cmd.none
+
+    | KeyPress CtrlC -> {model with Clipboard = model.SelectedSymbols}, Cmd.none
+
+    | KeyPress CtrlV ->
+        model,
+        [Cmd.ofMsg SnapToGridMsg]
+        |> List.append (
+            model.Clipboard
+            |> List.map (Symbol.symbolBBox model.Wire.Symbol)
+            |> List.map (fun bb -> Cmd.ofMsg(Symbol <| Symbol.AddSymbol (CommonTypes.Not, (posAdd bb.Pos (posOf 20. 20.)))))
+        )
+        |> Cmd.batch
+
+    | SnapToGridMsg ->
+        model,
+        if model.Grid.SnapToGrid then alignSymbolsToGrid model else Cmd.none
+
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =
             if List.contains targetedId model.SelectedSymbols then
@@ -411,5 +484,6 @@ let init() =
         }
         LastMousePos = posOf 0. 0.
         ScrollOffset = posOf 0. 0.
-        Zoom = 1.5
+        Zoom = 1.
+        Clipboard = []
     }, Cmd.map Wire cmds

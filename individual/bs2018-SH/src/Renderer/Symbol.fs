@@ -84,6 +84,13 @@ let getPortsOfSymbol (symModel : Model) (symId : CommonTypes.ComponentId) : Comm
     ).Ports
     |> List.map (fun p -> p.Id)
 
+let symbolBBox (symModel : Model) (cId : CommonTypes.ComponentId) : BBox =
+    {
+        Pos = (List.find (fun el -> el.Id = cId) symModel).Pos
+        Height = 40.
+        Width = 40.
+    }
+
 let getAllPortsWithSymbol (symModel : Model) = 
     let insertSymToPortList (pl : Port list) (sym : Symbol) =
         pl
@@ -197,7 +204,9 @@ let createNewSymbol (pos:XYPos) =
 
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
-    []
+    List.allPairs [1..14] [1..14]
+    |> List.map (fun (x,y) -> {X = float (x*60+20); Y=float (y*60+20)})
+    |> List.map createNewSymbol
     , Cmd.none
 
 /// update function which displays symbols
