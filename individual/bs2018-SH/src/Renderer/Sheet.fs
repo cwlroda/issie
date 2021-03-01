@@ -211,7 +211,21 @@ let highlightPorts (model : Model) (pos : XYPos) (fromPid : CommonTypes.PortId) 
 
     [Cmd.ofMsg (Symbol <| Symbol.HighlightPort ports)]
     |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
-    
+
+let alignSymbolsToGrid (model : Model) =
+    Symbol.getAllSymbols model.Wire.Symbol
+    |> List.map (fun el -> (Symbol.symbolBBox model.Wire.Symbol el), el)
+    |> List.map (fun (bb,id) -> posToGridIfEnabled model.Grid bb.Pos, bb.Pos, id)
+    |> List.map (fun (dst,src, id) -> (posDiff dst src), id)
+    |> List.map (fun (movement, id) ->
+        [
+            Cmd.ofMsg (Symbol <| Symbol.StartDragging ([id], posOf 0. 0.))
+            Cmd.ofMsg (Symbol <| Symbol.Dragging ([id], movement))
+        ]
+    )
+    |> List.collect id
+    |> Cmd.batch
+
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
@@ -265,18 +279,20 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
 
     | KeyPress CtrlQ ->
         let newGridSize = if model.Grid.Size > 2. then model.Grid.Size - 2. else model.Grid.Size
-        {
-            model with
-                Grid = {model.Grid with Size = newGridSize}
-        },
-        Cmd.none
+        let newModel =
+            {
+                model with
+                    Grid = {model.Grid with Size = newGridSize}
+            }
+        newModel, alignSymbolsToGrid newModel
 
      | KeyPress CtrlW ->
-        {
-            model with
-                Grid = {model.Grid with Size = model.Grid.Size + 2.}
-        },
-        Cmd.none
+        let newModel =
+            {
+                model with
+                    Grid = {model.Grid with Size = model.Grid.Size + 2.}
+            }
+        newModel, alignSymbolsToGrid newModel
             
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =
