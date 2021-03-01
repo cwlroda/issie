@@ -214,20 +214,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | None -> model, [Cmd.none]
             | Some wId -> {model with SelectedWire = None}, [Cmd.ofMsg (Wire <| BusWire.DeleteWire wId)]
 
-        let symbolCommands =
-            model.SelectedSymbols
-            |> List.map (fun id -> 
-                let deleteWireCommands = 
-                    Symbol.getPortsOfSymbol model.Wire.Symbol id
-                    |> List.map (fun pId -> (Symbol.portPos model.Wire.Symbol pId))
-                    |> List.map (fun pos -> (BusWire.getTargetedWire model.Wire pos))
-                    |> List.filter (fun el -> el <> None)
-                    |> List.map (fun (Some cId) -> Cmd.ofMsg (Wire <| BusWire.DeleteWire cId))
-                
-                List.append deleteWireCommands [Cmd.ofMsg (Symbol <| Symbol.DeleteSymbol id)]
-            )
-            |> List.collect id
-        
+        let symbolCommands = [Cmd.ofMsg (Symbol <| Symbol.DeleteSymbols model.SelectedSymbols)]
+   
         model, Cmd.batch (List.append wireCommands symbolCommands)
 
     | KeyPress CtrlN ->

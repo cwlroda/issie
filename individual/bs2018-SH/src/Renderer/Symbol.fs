@@ -55,7 +55,7 @@ type Msg =
     | Dragging of idLst : CommonTypes.ComponentId list * pagePos: XYPos
     | EndDragging
     | AddSymbol of CommonTypes.ComponentType * XYPos
-    | DeleteSymbol of sId:CommonTypes.ComponentId 
+    | DeleteSymbols of sId:CommonTypes.ComponentId list
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
     | SetSelected of CommonTypes.ComponentId list
     | HighlightPort of CommonTypes.PortId list
@@ -205,15 +205,15 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     | AddSymbol (_, pos) -> 
         createNewSymbol pos :: model, Cmd.none
-    | DeleteSymbol sId -> 
-        List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
+    | DeleteSymbols sIds -> 
+        printf $"Deleting symbols {sIds}"
+        List.filter (fun sym -> not (List.contains sym.Id sIds)) model, Cmd.none
     | StartDragging (sLst, pagePos) ->
         model
         |> List.map (fun sym ->
             if List.contains sym.Id sLst then
                 { sym with
                     LastDragPos = pagePos
-                    //IsDragging = true
                 }
             else
                 sym
