@@ -1,7 +1,7 @@
-#Symbol Demonstration by Marcus Neo
+# Symbol Demonstration by Marcus Neo
 
 
-##Components
+## Components
 - Not, And, Or, Xor, Nand, Nor, Xnor
 - DFF, DFFE
 - MUX, DEMUX, Decode4
@@ -13,7 +13,7 @@
 - MergeWires, SplitWire
 - BusSelection
 
-##Interfaces
+## Interfaces
 
     withinSelectedBoundary: 
         compTopLeft:XYPos -> compBotRight:XYPos -> boundTopLeft:XYPos -> boundTopRight:XYPos -> bool
@@ -60,7 +60,7 @@
     getSymbolFromSymbolId:
         Model -> ComponentId -> Symbol
 
-##Messages
+## Messages
     StartDragging(Dummy)
     Dragging(Dummy)
     EndDragging(Dummy)
