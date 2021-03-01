@@ -93,6 +93,11 @@ let getAllPortsWithSymbol (symModel : Model) =
     |> List.map (fun sym -> (sym, sym.Ports))
     |> List.collect (fun (sym, pl) -> insertSymToPortList pl sym)
 
+let portsInRange (symModel : Model) (pos : XYPos) (range : float) : CommonTypes.PortId list =
+    getAllPortsWithSymbol symModel
+    |> List.filter (fun (p,sym) -> (distanceBetweenPoints (posAdd p.RelPos sym.Pos) pos) <= range)
+    |> List.map (fun (p,_) -> p.Id)
+
 let portPos (symModel : Model) (pId : CommonTypes.PortId) : XYPos =
     let res = 
         getAllPortsWithSymbol symModel

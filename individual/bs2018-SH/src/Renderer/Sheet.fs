@@ -181,11 +181,14 @@ let posToGridIfEnabled (grid : Grid) (pos : XYPos) : XYPos =
         pos
 
 
-let highlightPorts (model : Model) (pos : XYPos) = 
-    
-    match Symbol.getTargetedPort model.Wire.Symbol pos with
-    | Some portId -> [Cmd.ofMsg (Symbol <| Symbol.HighlightPort [portId])]
-    | None -> []
+let highlightPorts (model : Model) (pos : XYPos) (fromPid : CommonTypes.PortId) = 
+    let fromPortType = Symbol.portType model.Wire.Symbol fromPid    
+    let portsInRange =
+        Symbol.portsInRange model.Wire.Symbol pos 100.
+        |> List.filter (fun pId -> (Symbol.portType model.Wire.Symbol pId) <> fromPortType) //ensure port types are opposite
+    let ports = List.append portsInRange [fromPid]
+
+    [Cmd.ofMsg (Symbol <| Symbol.HighlightPort ports)]
     |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
     
 
@@ -330,6 +333,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 Cmd.ofMsg (Symbol <| Symbol.EndDragging)
                 Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)
                 Cmd.ofMsg (Wire <| BusWire.EndDrag)
+                Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)
             ]
             |> List.append addWireCommands
             |> List.append selectWireCommands
@@ -348,7 +352,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
 
 
     | MouseMove pos ->
-        let highlightCommands = highlightPorts model pos
         let model, draggingCommands =
             match model.MouseState with
             | FromEmpty ->
@@ -366,13 +369,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 {
                     model with
                         MouseState = FromPort (pId, pos)
-                }, [Cmd.none]
+                },
+                highlightPorts model pos pId
             | FromWire wId -> model, [Cmd.ofMsg (Wire <| BusWire.Dragging (wId, pos))]
             | _ -> model, [Cmd.none]
 
 
-        let commands = List.append highlightCommands draggingCommands
-        model, Cmd.batch commands
+        model, Cmd.batch draggingCommands
 
 
     | _ -> failwithf "Sheet - message not implemented"
