@@ -35,10 +35,12 @@ type Model = {
     LastMousePos: XYPos
     SelectionBox: SelectionBox
     Grid: Grid
+    ScrollOffset: XYPos
+    Zoom: float
 }
 
 type KeyboardMsg =
-    | AltShiftZ | DEL | CtrlA | CtrlN | CtrlG
+    | AltShiftZ | DEL | CtrlA | CtrlN | CtrlG | CtrlEquals | CtrlMinus
 
 type Msg =
     | Wire of BusWire.Msg
@@ -47,11 +49,7 @@ type Msg =
     | MouseMove of XYPos
     | MouseUp of XYPos * bool
     | Symbol of Symbol.Msg
-
-/// Determines top-level zoom, > 1 => magnify.
-/// This should be moved into the model as state
-let zoom = 1.0    
-
+    | Scroll of float * float
 
 
 /// This function zooms an SVG canvas by transforming its content and altering its size.
@@ -63,7 +61,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
     let selectionBox = model.SelectionBox
     let grid = model.Grid
     let size = 1000.0
-    let sizeInPixels = sprintf "%.2fpx" ((size * zoom))
+    let sizeInPixels = sprintf "%.2fpx" ((size * model.Zoom))
     /// Is the mouse button currently down?
     let mDown (ev:Types.MouseEvent) = 
         if ev.buttons <> 0. then true else false
@@ -133,25 +131,40 @@ let view (model:Model) (dispatch : Msg -> unit) =
 
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
+    let mousePos x y =
+        posOf ((x+model.ScrollOffset.X)/model.Zoom) ((y+model.ScrollOffset.Y)/model.Zoom)
     div [ Style 
             [ 
-                // Height "100vh" 
-                // MaxWidth "100vw"
-                // CSSProp.OverflowX OverflowOptions.Auto 
-                // CSSProp.OverflowY OverflowOptions.Auto
-            ] 
+                Height "100vh" 
+                MaxWidth "90%"
+                CSSProp.OverflowX OverflowOptions.Auto 
+                CSSProp.OverflowY OverflowOptions.Auto
+            ]
+          Id "sheetDiv"
+
+          OnScroll (fun _ ->
+            let sDiv = document.getElementById "sheetDiv"
+            Scroll (sDiv.scrollLeft, sDiv.scrollTop)
+            |> dispatch
+          )
+
           OnMouseDown (fun ev -> 
-            MouseDown((posOf ev.pageX ev.pageY), ev.shiftKey)
+            MouseDown(mousePos ev.pageX ev.pageY, ev.shiftKey)
             |> dispatch
           )
 
           OnMouseMove (fun ev -> 
-            MouseMove(posOf ev.pageX ev.pageY)
+            MouseMove(mousePos ev.pageX ev.pageY)
             |> dispatch
           )
           
           OnMouseUp (fun ev -> 
-            MouseUp((posOf ev.pageX ev.pageY), ev.shiftKey)
+            MouseUp(mousePos ev.pageX ev.pageY, ev.shiftKey)
+            |> dispatch
+          )
+
+          OnMouseLeave (fun ev ->
+            MouseUp(mousePos ev.pageX ev.pageY, ev.shiftKey)
             |> dispatch
           )
         ]
@@ -164,7 +177,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
                 ]
             ]
             [ g // group list of elements with list of attributes
-                [ Style [Transform (sprintf "scale(%f)" zoom)]] // top-level transform style attribute for zoom
+                [ Style [Transform (sprintf "scale(%f)" model.Zoom)]] // top-level transform style attribute for zoom
                 bodyLst
             ]
         ]
@@ -181,23 +194,28 @@ let posToGridIfEnabled (grid : Grid) (pos : XYPos) : XYPos =
         pos
 
 
-let highlightPorts (model : Model) (pos : XYPos) = 
-    
-    match Symbol.getTargetedPort model.Wire.Symbol pos with
-    | Some portId -> [Cmd.ofMsg (Symbol <| Symbol.HighlightPort portId)]
-    | None -> []
+let highlightPorts (model : Model) (pos : XYPos) (fromPid : CommonTypes.PortId) = 
+    let fromPortType = Symbol.portType model.Wire.Symbol fromPid    
+    let portsInRange =
+        Symbol.portsInRange model.Wire.Symbol pos 100.
+        |> List.filter (fun pId -> (Symbol.portType model.Wire.Symbol pId) <> fromPortType) //ensure port types are opposite
+    let ports = List.append portsInRange [fromPid]
+
+    [Cmd.ofMsg (Symbol <| Symbol.HighlightPort ports)]
     |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
     
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
+    | Scroll (x, y) ->
+        {model with ScrollOffset = posOf x y}
+        , Cmd.none
     | Wire wMsg -> 
         let wModel, wCmd = BusWire.update wMsg model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
     | Symbol sMsg ->
-        let sModel, sCmd = Symbol.update sMsg model.Wire.Symbol
-        let wModel = {model.Wire with Symbol = sModel}
-        {model with Wire = wModel}, Cmd.map Symbol sCmd
+        let wModel, wCmd = BusWire.update (BusWire.Symbol sMsg) model.Wire
+        {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress AltShiftZ -> 
         printStats() // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
@@ -211,20 +229,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | None -> model, [Cmd.none]
             | Some wId -> {model with SelectedWire = None}, [Cmd.ofMsg (Wire <| BusWire.DeleteWire wId)]
 
-        let symbolCommands =
-            model.SelectedSymbols
-            |> List.map (fun id -> 
-                let deleteWireCommands = 
-                    Symbol.getPortsOfSymbol model.Wire.Symbol id
-                    |> List.map (fun pId -> (Symbol.portPos model.Wire.Symbol pId))
-                    |> List.map (fun pos -> (BusWire.getTargetedWire model.Wire pos))
-                    |> List.filter (fun el -> el <> None)
-                    |> List.map (fun (Some cId) -> Cmd.ofMsg (Wire <| BusWire.DeleteWire cId))
-                
-                List.append deleteWireCommands [Cmd.ofMsg (Symbol <| Symbol.DeleteSymbol id)]
-            )
-            |> List.collect id
-        
+        let symbolCommands = [Cmd.ofMsg (Symbol <| Symbol.DeleteSymbols model.SelectedSymbols)]
+   
         model, Cmd.batch (List.append wireCommands symbolCommands)
 
     | KeyPress CtrlN ->
@@ -237,6 +243,15 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             Grid = {model.Grid with SnapToGrid = (not model.Grid.SnapToGrid)}
         }, Cmd.none
 
+    | KeyPress CtrlEquals ->
+        {model with Zoom = model.Zoom + 0.1},Cmd.none
+
+    | KeyPress CtrlMinus ->
+        if model.Zoom > 0.1 then
+            {model with Zoom = model.Zoom - 0.1},Cmd.none
+        else
+            model,Cmd.none
+            
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =
             if List.contains targetedId model.SelectedSymbols then
@@ -330,6 +345,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 Cmd.ofMsg (Symbol <| Symbol.EndDragging)
                 Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)
                 Cmd.ofMsg (Wire <| BusWire.EndDrag)
+                Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)
             ]
             |> List.append addWireCommands
             |> List.append selectWireCommands
@@ -348,7 +364,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
 
 
     | MouseMove pos ->
-        let highlightCommands = highlightPorts model pos
         let model, draggingCommands =
             match model.MouseState with
             | FromEmpty ->
@@ -366,13 +381,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 {
                     model with
                         MouseState = FromPort (pId, pos)
-                }, [Cmd.none]
+                },
+                highlightPorts model pos pId
             | FromWire wId -> model, [Cmd.ofMsg (Wire <| BusWire.Dragging (wId, pos))]
             | _ -> model, [Cmd.none]
 
 
-        let commands = List.append highlightCommands draggingCommands
-        model, Cmd.batch commands
+        model, Cmd.batch draggingCommands
 
 
     | _ -> failwithf "Sheet - message not implemented"
@@ -395,4 +410,6 @@ let init() =
             Show = true
         }
         LastMousePos = posOf 0. 0.
+        ScrollOffset = posOf 0. 0.
+        Zoom = 1.5
     }, Cmd.map Wire cmds

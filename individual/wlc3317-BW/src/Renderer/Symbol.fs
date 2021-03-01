@@ -29,7 +29,6 @@ type Symbol =
         Selected : bool
     }
 
-
 type Model = Symbol list
 
 //----------------------------Message Type-----------------------------------//
@@ -54,6 +53,8 @@ type Msg =
     | SetSelected of topLeft:XYPos * bottomRight:XYPos // 
     | MouseOverPort of port : Port
     | MouseOutPort of port : Port
+    | InitWire of mousePos : XYPos
+    | GenerateWire of mousePos : XYPos
 
 
 //---------------------------------helper types and functions----------------//
@@ -116,19 +117,19 @@ let getTargetedSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId Li
     |> List.map
         (fun (sym:Symbol) -> sym.Id)
 
-let getTargetedPort (symModel:Model) (pos:XYPos) : PortId Option =
+let getTargetedPort (symModel:Model) (pos:XYPos) : Port Option =
     let nearbyPorts = 
         allPortsInModel symModel
         |>List.filter
             (fun (port:Port) ->
-                sqrt ((port.PortPos.X - pos.X) ** 2. + (port.PortPos.Y - pos.Y) ** 2.) <= 3.
+                sqrt ((port.PortPos.X - pos.X) ** 2. + (port.PortPos.Y - pos.Y) ** 2.) <= 1.
             )
         |>List.sortBy
             (fun (port:Port) ->
                 sqrt ((port.PortPos.X - pos.X) ** 2. + (port.PortPos.Y - pos.Y) ** 2.)
             )
     match nearbyPorts with
-    | nearestPort::_ -> Some nearestPort.PortId
+    | nearestPort::_ -> Some nearestPort
     | [] -> None
     
     
@@ -137,7 +138,7 @@ let symbolPos (symModel: Model) (sId: ComponentId) : XYPos =
     List.find (fun sym -> sym.Id = sId) symModel
     |> (fun sym -> {X=sym.Component.X;Y=sym.Component.Y})
 
-  
+
 let portPos (symModel: Model) (portId: PortId) : XYPos = 
 
     let foundPort =
@@ -151,7 +152,16 @@ let portPos (symModel: Model) (portId: PortId) : XYPos =
         X = foundPort.PortPos.X + foundSymbol.Component.X
         Y = foundPort.PortPos.Y + foundSymbol.Component.Y
     }
+
+let portWidth (symModel: Model) (portId: PortId) : PortWidth =
+    let foundPort =
+        allPortsInModel symModel
+        |> List.find(
+            fun (port:Port) -> port.PortId = portId
+        )
     
+    foundPort.Width
+
 let isSelected (symModel: Model) : Symbol list =
     symModel
     |> List.filter (fun sym -> sym.Selected)
@@ -569,6 +579,35 @@ let updateSymbolModelWithComponent (symModel: Model) (comp:Component) :Model =
             |_ -> sym
         )
 
+// let generateWire (model: Model) (port: Port) : Model =
+//     let portType = port.PortType
+
+//     match portType with
+//     | PortType.Input ->
+//         let portList =
+//             model
+//             |> List.fold (fun acc sym ->
+//                 acc @ [
+//                     sym.Component.InputPorts
+//                     |> List.filter (fun p -> p.IsGeneratingWire)
+//                 ]
+//                 ) []
+
+//         BusWire.addWire
+//     | _ ->
+//         model
+//         |> List.map (fun sym ->
+//             {sym with
+//                 Component = 
+//                     {sym.Component with 
+//                         OutputPorts =
+//                             sym.Component.OutputPorts
+//                             |> List.map (fun checkPort ->
+//                                 {checkPort with IsGeneratingWire = false}
+//                             )       
+//                     }
+//             }
+//         )
 
 /// update function which displays symbols
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
@@ -853,7 +892,7 @@ let private renderSymbol (model:Model) =
                                     UserSelect UserSelectOptions.None
                                 ]
                             ] viewBoxStaticComponent ) 
-                         [str <| "CLK"]
+                            [str <| "CLK"]
                     ]
                 
 

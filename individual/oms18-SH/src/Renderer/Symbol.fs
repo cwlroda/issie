@@ -156,7 +156,7 @@ let createNewSymbol (pos:XYPos) =
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
     List.allPairs [1..14] [1..14]
-    |> List.map ((fun (x,y) -> {X = float (x*64+30); Y=float (y*64+30)}) >> createNewSymbol)
+    |> List.map ((fun (x,y) -> {X = float (x*60+30); Y=float (y*60+30)}) >> createNewSymbol)
     , Cmd.none
 
 /// update function which displays symbols
@@ -283,8 +283,8 @@ let private renderCircle =
                         Y bb.Pos.Y
                         SVGAttr.Width bb.Width
                         SVGAttr.Height bb.Height
-                        SVGAttr.StrokeWidth "1px"
-                        SVGAttr.Stroke "Red"
+                        SVGAttr.StrokeWidth "2px"
+                        SVGAttr.Stroke "grey"
                         SVGAttr.Fill color] []
                 rect [ // Bus decoder square
                         X inputBB.Pos.X

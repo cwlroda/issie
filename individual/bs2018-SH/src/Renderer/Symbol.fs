@@ -55,10 +55,10 @@ type Msg =
     | Dragging of idLst : CommonTypes.ComponentId list * pagePos: XYPos
     | EndDragging
     | AddSymbol of CommonTypes.ComponentType * XYPos
-    | DeleteSymbol of sId:CommonTypes.ComponentId 
+    | DeleteSymbols of sId:CommonTypes.ComponentId list
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
     | SetSelected of CommonTypes.ComponentId list
-    | HighlightPort of CommonTypes.PortId
+    | HighlightPort of CommonTypes.PortId list
     | UnhighlightPorts
 
 
@@ -68,7 +68,7 @@ type Msg =
 let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Option = 
     let clickInSym sym =
         let bb = {
-            XYPos = sym.Pos
+            Pos = sym.Pos
             Height = float sym.Component.H
             Width = float sym.Component.W
         }
@@ -93,6 +93,11 @@ let getAllPortsWithSymbol (symModel : Model) =
     |> List.map (fun sym -> (sym, sym.Ports))
     |> List.collect (fun (sym, pl) -> insertSymToPortList pl sym)
 
+let portsInRange (symModel : Model) (pos : XYPos) (range : float) : CommonTypes.PortId list =
+    getAllPortsWithSymbol symModel
+    |> List.filter (fun (p,sym) -> (distanceBetweenPoints (posAdd p.RelPos sym.Pos) pos) <= range)
+    |> List.map (fun (p,_) -> p.Id)
+
 let portPos (symModel : Model) (pId : CommonTypes.PortId) : XYPos =
     let res = 
         getAllPortsWithSymbol symModel
@@ -111,7 +116,7 @@ let portType (symModel : Model) (pId : CommonTypes.PortId) : CommonTypes.PortTyp
 let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option = 
     let posInPort (sym: Symbol) (port : Port) : bool =
         let bb = {
-            XYPos = posOf (port.RelPos.X + sym.Pos.X - 2.5) (port.RelPos.Y + sym.Pos.Y - 2.5)
+            Pos = posOf (port.RelPos.X + sym.Pos.X - 2.5) (port.RelPos.Y + sym.Pos.Y - 2.5)
             Height = 10.
             Width = 10.
         }
@@ -200,15 +205,14 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     | AddSymbol (_, pos) -> 
         createNewSymbol pos :: model, Cmd.none
-    | DeleteSymbol sId -> 
-        List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
+    | DeleteSymbols sIds -> 
+        List.filter (fun sym -> not (List.contains sym.Id sIds)) model, Cmd.none
     | StartDragging (sLst, pagePos) ->
         model
         |> List.map (fun sym ->
             if List.contains sym.Id sLst then
                 { sym with
                     LastDragPos = pagePos
-                    //IsDragging = true
                 }
             else
                 sym
@@ -251,12 +255,12 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 }
         )
         , Cmd.none
-    | HighlightPort pId ->
+    | HighlightPort ports ->
         model
         |> List.map (fun sym -> 
             let ports = sym.Ports
                             |> List.map (fun port ->
-                                if port.Id = pId then {port with Highlighted = true} else port
+                                if List.contains port.Id ports then {port with Highlighted = true} else port
                             )
             {sym with Ports = ports}
         ), Cmd.none
