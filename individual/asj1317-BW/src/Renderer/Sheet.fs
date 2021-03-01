@@ -112,6 +112,31 @@ let view (model:Model) (dispatch : Msg -> unit) =
     let wireSvg = BusWire.view model.Wire wDispatch
     displaySvgWithZoom model zoom wireSvg dispatch
        
+let makeRandomPortConnection (symbols)=
+    let symIds =
+        List.map (fun (sym: Symbol.Symbol) -> sym.Id) symbols
+
+    let rng = System.Random 0
+    let n = symIds.Length
+
+    let s1, s2 =
+        match rng.Next(0, n - 1), rng.Next(0, n - 2) with
+        | r1, r2 when r1 = r2 -> symbols.[r1], symbols.[n - 1]
+
+        | r1, r2 -> symbols.[r1], symbols.[r2]
+    let port1N = s1.Ports.Length
+    let port2N = s1.Ports.Length
+    let (p1, p2) =
+        let p1 =
+            s1.Ports.[rng.Next(0,port1N-1)]
+            
+
+        let p2 =
+            s2.Ports.[rng.Next(0,port2N-1)]
+        (p1.Id, p2.Id)
+
+    (p1, p2)
+
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
@@ -127,11 +152,22 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | KeyPress AltV -> 
         let wModel, wCmd = BusWire.update BusWire.EndDragging model.Wire    
         {model with Wire = wModel}, Cmd.map Wire wCmd
-        
+    | KeyPress AltC ->
+        let wId = 
+            Map.toList model.Wire.WX 
+            |> List.head
+            |> fst
+        let wModel, wCmd = BusWire.update (BusWire.DeleteWire wId) model.Wire
+        {model with Wire = wModel}, Cmd.map Wire wCmd
+    | KeyPress AltZ -> 
+        let pIdPair = makeRandomPortConnection model.Wire.Symbol
+        printf $"{pIdPair}"
+        let wModel, wCmd = BusWire.update (BusWire.AddWire pIdPair) model.Wire
+        {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with
-            | AltC -> CommonTypes.Blue
+            //| AltC -> CommonTypes.Blue
             //| AltV -> CommonTypes.Green
             | AltZ -> CommonTypes.Red
             | _ -> CommonTypes.Grey

@@ -57,8 +57,8 @@ type Msg =
 let createBBox (sym: Symbol) =
     {
         Pos = sym.Pos
-        W = sym.W
-        H = sym.H
+        W = float sym.W
+        H = float sym.H
     }
 
 let posDiff a b =
@@ -129,7 +129,31 @@ let createNewSymbol (pos:XYPos)  (label: string)  (nInP, nOutP)  =
         H = 10*(nrPorts + 2)   
     }
 
+let portOpt (pId: CommonTypes.PortId) (pLst: CommonTypes.Port list) = 
+    List.tryFind (fun (p:CommonTypes.Port) -> p.Id = pId) pLst  
 
+let portType (model: Model) (portId: CommonTypes.PortId) : CommonTypes.PortType =
+    match List.tryPick (fun sym -> (portOpt portId) sym.Ports) model with
+    | Some p -> p.PortType
+    | None -> failwithf "Invalid id"
+
+let portWidth (model: Model) (portId: CommonTypes.PortId) : int Option =
+    match List.tryPick (fun sym -> (portOpt portId) sym.Ports) model with
+    | Some p -> Some 5
+    | None -> failwithf "Invalid id"
+
+let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos = 
+    let getPos (pType) (symId) (pNr) =
+        let sym = List.find (fun sym -> sym.Id.ToString() = symId) model
+        match pNr with
+        | Some nr when pType = CommonTypes.PortType.Input -> posAdd sym.Pos (posOf 0.0 (-10.*float (nr+2)))
+        | Some nr -> posAdd sym.Pos (posOf (float sym.W) (-10.*float (nr+2)))
+        | None -> failwithf "Has no possition"
+
+    match List.tryPick (fun sym -> (portOpt pId) sym.Ports) model with
+    | Some p -> getPos p.PortType p.HostId p.PortNumber
+    | None -> failwithf "Invalid Id"
+    
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
     List.allPairs [1..2] [1..2]
@@ -198,6 +222,11 @@ type private RenderSymbolProps =
         Dispatch : Dispatch<Msg>
         key: string // special field used by react to detect whether lists have changed, set to symbol Id
     }
+type private RenderPortProps = 
+    {
+        Key: string
+        Pos: XYPos
+    }
 let singleBox sym =
     let color =
         if sym.IsDragging then
@@ -220,19 +249,48 @@ let private renderSymbol =
         fun (props : RenderSymbolProps) ->
             singleBox props.sym) 
 
+let private renderPort =
+    FunctionComponent.Of (
+            fun (props: RenderPortProps) -> 
+            circle [
+                    Cx props.Pos.X
+                    Cy props.Pos.Y
+                    R 2.
+                    SVGAttr.Fill "Black"
+                    SVGAttr.Stroke "Black"
+                    SVGAttr.StrokeWidth 1
+                
+            ] []
+    )
+
 /// View function for symbol layer of SVG
 let view (model : Model) (dispatch : Msg -> unit) = 
-    model
-    |> List.map (fun ({Id = CommonTypes.ComponentId id} as s) ->
-        renderSymbol 
-            {
-                sym = s
-                Dispatch = dispatch
-                key = id
-            }
-    )
-    |> ofList
+    let sym = 
+        model
+        |> List.map (fun ({Id = CommonTypes.ComponentId id} as s) ->
+            renderSymbol 
+                {
+                    sym = s
+                    Dispatch = dispatch
+                    key = id
+                }
+        )
+        |> ofList
+    let ports = 
+        List.fold (fun lst sym -> sym.Ports@lst) [] model
+        |> List.map (fun port -> 
+            let props =  
+                {
+                    Key = port.Id
+                    Pos = (portPos model port.Id)
+                }
+            renderPort props
+        )
 
+    g [] [
+        (g [] ports)
+        sym
+    ]
 
 //---------------Other interface functions--------------------//
 
@@ -243,7 +301,7 @@ let symbolPos (symModel: Model) (sId: CommonTypes.ComponentId) : XYPos =
 let getTargetedBBoxSymbol (symModel: Model) (pos: XYPos) =  
     let sym = List.tryFind (fun sym ->  ptInBB pos (createBBox sym)) symModel
     match sym with  
-    | Some sym -> Some {Pos = sym.Pos; W = sym.W; H = sym.H}
+    | Some sym -> Some (makeBBox sym.Pos (float sym.W)  (float sym.H))
     | None -> None
 
 let getTargetedSymbol (symModel: Model) (pos: XYPos) =
@@ -267,32 +325,7 @@ let calculateOutputWidth
     
         
     
-let portOpt (pId: CommonTypes.PortId) (pLst: CommonTypes.Port list) = 
-    List.tryFind (fun (p:CommonTypes.Port) -> p.Id = pId) pLst  
 
-let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos = 
-    let getPos (pType) (symId) (pNr) =
-        let sym = List.find (fun sym -> sym.Id.ToString() = symId) model
-        match pNr with
-        | Some nr when pType = CommonTypes.PortType.Input -> posAdd sym.Pos (posOf 0.0 (-10.*float (nr+2)))
-        | Some nr -> posAdd sym.Pos (posOf (float sym.W) (-10.*float (nr+2)))
-        | None -> failwithf "Has no possition"
-
-    match List.tryPick (fun sym -> (portOpt pId) sym.Ports) model with
-    | Some p -> getPos p.PortType p.HostId p.PortNumber
-    | None -> failwithf "Invalid Id"
-    
-    
-    
-let portType (model: Model) (portId: CommonTypes.PortId) : CommonTypes.PortType =
-    match List.tryPick (fun sym -> (portOpt portId) sym.Ports) model with
-    | Some p -> p.PortType
-    | None -> failwithf "Invalid id"
-
-let portWidth (model: Model) (portId: CommonTypes.PortId) : int Option =
-    match List.tryPick (fun sym -> (portOpt portId) sym.Ports) model with
-    | Some p -> p.PortNumber
-    | None -> failwithf "Invalid id"
     
 //----------------------interface to Issie-----------------------------//
 let extractComponent 
