@@ -1,5 +1,6 @@
 module CommonTypes
     open Fable.Core
+    open Helpers
 
     let draw2dCanvasWidth = 3000
     let draw2dCanvasHeight = 2000
@@ -17,6 +18,9 @@ module CommonTypes
     type ConnectionId     = | ConnectionId of string
     /// Human-readable name of component as displayed on sheet.
     /// For I/O/labelIO components a width indication eg (7:0) is also displayed, but NOT included here
+            
+    [<Erase>]
+    type WireSegId     =    | WireSegId of string
 
     [<Erase>]
     type ComponentLabel   = | ComponentLabel of string
@@ -39,7 +43,7 @@ module CommonTypes
     /// Inputs and Outputs are both numberd from 0 up.
 
     [<Erase>]
-    type PortId           =  PortId of string
+    type PortId           = | PortId of string
     
     [<Erase>]
     type PortNumber  = | PortNumber of int
@@ -49,13 +53,20 @@ module CommonTypes
     [<Erase>]
     type PortHover  = | PortHover of bool
 
+    [<Erase>]
+    type PortWidth = | PortWidth of int
+
 // Specify the position and type of a port in a JSComponent.
 
     //==========================================//
     // Canvas state mapped to f# data structure //
     //==========================================//
 
-    
+    type BBox = {
+        Corner: XYPos
+        W: float
+        H: float
+    }
 
     /// Name identified the LoadedComponent used.
     /// The labels define legends on symbol.
@@ -98,10 +109,12 @@ module CommonTypes
         // If the port is used in a Connection record as Source or Target, the Number is None. 
         PortNumber : PortNumber option
         PortType : PortType
+        PortPos : Helpers.XYPos
         HostId : ComponentId
         Hover : PortHover
-        
+        Width : PortWidth
     }
+    
     // Types instantiating objects in the Digital extension.
     type ComponentType =
         | Input of BusWidth: int | Output of BusWidth: int | IOLabel 
