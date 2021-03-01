@@ -33,6 +33,7 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
     let mouseOp op (ev:Types.MouseEvent) =
+        dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.clientX / zoom ; Y = ev.clientY / zoom}})
         match op with
         | Down ->  
             match BusWire.getTargetedWire model.Wire {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
@@ -45,26 +46,21 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
             | None -> ()
             
         | Drag ->
-            (* match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
-            | Some s ->  dispatch <| Wire (BusWire.Symbol ( Symbol.Dragging (s.Id, {X =  ev.clientX / zoom; Y = ev.clientY / zoom})))
-            | None -> () *)
-
             match BusWire.getTargetedWire model.Wire {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some w -> 
                 dispatch <| Wire (BusWire.Dragging (w,  {X =  ev.clientX / zoom; Y = ev.clientY / zoom}))
-            | None -> ()
-            //dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.clientX / zoom ; Y = ev.clientY / zoom}})
+            | None -> 
+                match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+                | Some s ->  dispatch <| Wire (BusWire.Symbol ( Symbol.Dragging (s.Id, {X =  ev.clientX / zoom; Y = ev.clientY / zoom})))
+                | None -> ()
+
         | Move -> ()  
         | Up ->
-            let targetedWire = 
-                match Symbol.getTargetedBBoxSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
-                | Some v -> BusWire.getWiresInTargetBBox model.Wire v   
-                | None -> [] 
             dispatch <| Wire (BusWire.EndDragging)
-            (* match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+           (*  match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some s ->  dispatch <| Wire (BusWire.Symbol ( Symbol.EndDragging s.Id))
-            | None -> () *)
-
+            | None -> ()
+ *)
 
         
         
@@ -152,28 +148,30 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | KeyPress AltV -> 
         let wModel, wCmd = BusWire.update BusWire.EndDragging model.Wire    
         {model with Wire = wModel}, Cmd.map Wire wCmd
-    | KeyPress AltC ->
+    | KeyPress AltZ ->
         let wId = 
             Map.toList model.Wire.WX 
             |> List.head
             |> fst
         let wModel, wCmd = BusWire.update (BusWire.DeleteWire wId) model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
-    | KeyPress AltZ -> 
+    | KeyPress AltC -> 
         let pIdPair = makeRandomPortConnection model.Wire.Symbol
-        printf $"{pIdPair}"
         let wModel, wCmd = BusWire.update (BusWire.AddWire pIdPair) model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
-    | KeyPress s -> // all other keys are turned into SetColor commands
-        let c =
+    | KeyPress AltV -> 
+        let wModel, wCmd = BusWire.update (BusWire.ToggleAnnotations) model.Wire
+        {model with Wire = wModel}, Cmd.map Wire wCmd
+    | KeyPress s -> failwithf "Not implemented" // all other keys are turned into SetColor commands
+        (* let c =
             match s with
-            //| AltC -> CommonTypes.Blue
-            //| AltV -> CommonTypes.Green
+            | AltC -> CommonTypes.Blue
+            | AltV -> CommonTypes.Green
             | AltZ -> CommonTypes.Red
             | _ -> CommonTypes.Grey
         printfn "Key:%A" c
-        model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
-
+        model, Cmd.ofMsg (Wire <| BusWire.SetColor c) *)
+    
 let init() = 
     let model,cmds = (BusWire.init 400)()
     {

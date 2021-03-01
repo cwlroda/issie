@@ -230,6 +230,16 @@ let updateVerts w (idx1, idx2) move orien =
             | _ -> vert)
         w.WireSegments
 
+let wiresConnectedToSymbol (wModel: Model) (symId: CommonTypes.ComponentId) : CommonTypes.ConnectionId list =
+    let inLst pLst portId=
+        List.exists (fun el -> el = portId) pLst
+    let portConnected = Symbol.getPortsOfSymbol wModel.Symbol symId
+    
+    Map.toList wModel.WX
+    |> List.filter (fun (wId, w) -> (inLst portConnected w.SrcPort) || (inLst portConnected w.TargetPort))
+    |> List.map fst 
+
+    ///Takes a position and a wireId, updates the position of the segment closest to the mouse
 let manuelRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos) =
     let w = wire wModel wireId
 
@@ -260,7 +270,7 @@ let manuelRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos
               WireSegments = updatedWireSegs
               LastPos = pos }
         wModel.WX
-
+/// Updates the wire routing to adjust for any movement in symbols location, i.e. ports have moved 
 let updateSelectedWires (wModel: Model) (wIdLst: CommonTypes.ConnectionId list) =
     let updateModel wId w =
         Map.add
@@ -478,7 +488,14 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     match msg with
     | Symbol sMsg ->
         let sm, sCmd = Symbol.update sMsg model.Symbol
-        { model with Symbol = sm }, Cmd.map Symbol sCmd
+        let wx = 
+            match sMsg with
+            | Symbol.Dragging (symId,_) -> 
+                let wIdLst = wiresConnectedToSymbol model symId
+                updateSelectedWires model wIdLst
+            | _ -> model.WX
+        { model with Symbol = sm; WX = wx }, Cmd.map Symbol sCmd
+        
     | AddWire (wMsgId1, wMsgId2) ->
         let wxUpdated = addWire model wMsgId1 wMsgId2
         { model with WX = wxUpdated }, Cmd.none
@@ -514,7 +531,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         Cmd.none
     | SetColor c-> 
         (Map.fold (fun wModel wId w -> {wModel with WX = (setColor wModel c wId)}) model model.WX), Cmd.none
-    | ToggleAnnoations -> 
+    | ToggleAnnotations ->
         {model with WireAnnotation = not model.WireAnnotation}, Cmd.none
 
     | MouseMsg mMsg-> model, Cmd.ofMsg (Symbol(Symbol.MouseMsg mMsg))
