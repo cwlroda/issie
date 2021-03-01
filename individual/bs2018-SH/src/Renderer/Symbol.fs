@@ -68,7 +68,7 @@ type Msg =
 let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Option = 
     let clickInSym sym =
         let bb = {
-            XYPos = sym.Pos
+            Pos = sym.Pos
             Height = float sym.Component.H
             Width = float sym.Component.W
         }
@@ -111,7 +111,7 @@ let portType (symModel : Model) (pId : CommonTypes.PortId) : CommonTypes.PortTyp
 let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option = 
     let posInPort (sym: Symbol) (port : Port) : bool =
         let bb = {
-            XYPos = posOf (port.RelPos.X + sym.Pos.X - 2.5) (port.RelPos.Y + sym.Pos.Y - 2.5)
+            Pos = posOf (port.RelPos.X + sym.Pos.X - 2.5) (port.RelPos.Y + sym.Pos.Y - 2.5)
             Height = 10.
             Width = 10.
         }
