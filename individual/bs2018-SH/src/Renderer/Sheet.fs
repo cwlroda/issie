@@ -35,6 +35,8 @@ type Model = {
     LastMousePos: XYPos
     SelectionBox: SelectionBox
     Grid: Grid
+    ScrollOffset: XYPos
+    Zoom: float
 }
 
 type KeyboardMsg =
@@ -47,11 +49,7 @@ type Msg =
     | MouseMove of XYPos
     | MouseUp of XYPos * bool
     | Symbol of Symbol.Msg
-
-/// Determines top-level zoom, > 1 => magnify.
-/// This should be moved into the model as state
-let zoom = 1.0    
-
+    | Scroll of float * float
 
 
 /// This function zooms an SVG canvas by transforming its content and altering its size.
@@ -63,7 +61,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
     let selectionBox = model.SelectionBox
     let grid = model.Grid
     let size = 1000.0
-    let sizeInPixels = sprintf "%.2fpx" ((size * zoom))
+    let sizeInPixels = sprintf "%.2fpx" ((size * model.Zoom))
     /// Is the mouse button currently down?
     let mDown (ev:Types.MouseEvent) = 
         if ev.buttons <> 0. then true else false
@@ -133,25 +131,35 @@ let view (model:Model) (dispatch : Msg -> unit) =
 
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
+    let mousePos x y =
+        posOf ((x+model.ScrollOffset.X)/model.Zoom) ((y+model.ScrollOffset.Y)/model.Zoom)
     div [ Style 
             [ 
-                // Height "100vh" 
-                // MaxWidth "100vw"
-                // CSSProp.OverflowX OverflowOptions.Auto 
-                // CSSProp.OverflowY OverflowOptions.Auto
-            ] 
+                Height "100vh" 
+                MaxWidth "90%"
+                CSSProp.OverflowX OverflowOptions.Auto 
+                CSSProp.OverflowY OverflowOptions.Auto
+            ]
+          Id "sheetDiv"
+
+          OnScroll (fun _ ->
+            let sDiv = document.getElementById "sheetDiv"
+            Scroll (sDiv.scrollLeft, sDiv.scrollTop)
+            |> dispatch
+          )
+
           OnMouseDown (fun ev -> 
-            MouseDown((posOf ev.pageX ev.pageY), ev.shiftKey)
+            MouseDown(mousePos ev.pageX ev.pageY, ev.shiftKey)
             |> dispatch
           )
 
           OnMouseMove (fun ev -> 
-            MouseMove(posOf ev.pageX ev.pageY)
+            MouseMove(mousePos ev.pageX ev.pageY)
             |> dispatch
           )
           
           OnMouseUp (fun ev -> 
-            MouseUp((posOf ev.pageX ev.pageY), ev.shiftKey)
+            MouseUp(mousePos ev.pageX ev.pageY, ev.shiftKey)
             |> dispatch
           )
         ]
@@ -164,7 +172,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
                 ]
             ]
             [ g // group list of elements with list of attributes
-                [ Style [Transform (sprintf "scale(%f)" zoom)]] // top-level transform style attribute for zoom
+                [ Style [Transform (sprintf "scale(%f)" model.Zoom)]] // top-level transform style attribute for zoom
                 bodyLst
             ]
         ]
@@ -194,6 +202,9 @@ let highlightPorts (model : Model) (pos : XYPos) (fromPid : CommonTypes.PortId) 
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
+    | Scroll (x, y) ->
+        {model with ScrollOffset = posOf x y}
+        , Cmd.none
     | Wire wMsg -> 
         let wModel, wCmd = BusWire.update wMsg model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
@@ -385,4 +396,6 @@ let init() =
             Show = true
         }
         LastMousePos = posOf 0. 0.
+        ScrollOffset = posOf 0. 0.
+        Zoom = 1.5
     }, Cmd.map Wire cmds
