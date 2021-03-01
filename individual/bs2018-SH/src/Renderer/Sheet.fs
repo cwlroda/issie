@@ -251,13 +251,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             match targetedPort with
             | Some portId -> FromPort (portId, pos), model.SelectedSymbols, false
             | None ->
-                match BusWire.getTargetedWire model.Wire pos with
-                | Some wId -> FromWire wId, model.SelectedSymbols, false
+                let targetedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol pos
+                match targetedSymbol with
+                | Some symbolId -> FromSymbol, processSelectedSymbols symbolId, false
                 | None -> 
-                    let targetedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol pos
-                    match targetedSymbol with
-                    | Some symbolId -> FromSymbol, processSelectedSymbols symbolId, false
-                    | None -> FromEmpty, [], true
+                    match BusWire.getTargetedWire model.Wire pos with
+                        | Some wId -> FromWire wId, model.SelectedSymbols, false
+                        | None -> FromEmpty, [], true
 
         let wireDragCommands =
             match mouseState with
