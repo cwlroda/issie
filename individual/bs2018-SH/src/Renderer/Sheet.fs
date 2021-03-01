@@ -38,7 +38,7 @@ type Model = {
 }
 
 type KeyboardMsg =
-    | AltShiftZ | DEL | CtrlA | CtrlN
+    | AltShiftZ | DEL | CtrlA | CtrlN | CtrlG
 
 type Msg =
     | Wire of BusWire.Msg
@@ -231,6 +231,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let posOnGrid = posToGridIfEnabled model.Grid model.LastMousePos
             
         model, Cmd.ofMsg (Symbol <| Symbol.AddSymbol (CommonTypes.Not, posOnGrid))
+    
+    | KeyPress CtrlG ->
+        {model with
+            Grid = {model.Grid with SnapToGrid = (not model.Grid.SnapToGrid)}
+        }, Cmd.none
 
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =
