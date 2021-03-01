@@ -162,6 +162,11 @@ let view (model:Model) (dispatch : Msg -> unit) =
             MouseUp(mousePos ev.pageX ev.pageY, ev.shiftKey)
             |> dispatch
           )
+
+          OnMouseLeave (fun ev ->
+            MouseUp(mousePos ev.pageX ev.pageY, ev.shiftKey)
+            |> dispatch
+          )
         ]
         [ svg
             [ Style 
