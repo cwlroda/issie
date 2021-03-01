@@ -48,7 +48,10 @@
             invisibleMenu.submenu <-
                 [| makeKeyInput "Space" (fun () -> dispatch KeyboardMsg.Space)
                    makeKeyInput "Escape" (fun () -> dispatch KeyboardMsg.Escape)
-                   makeKeyInput "Alt+A" (fun () -> dispatch KeyboardMsg.AltA) |]
+                   makeKeyInput "Alt+A" (fun () -> dispatch KeyboardMsg.AltA)
+                   makeKeyInput "Ctrl+Shift+=" (fun () -> dispatch KeyboardMsg.CtrlShiftEqual)
+                   makeKeyInput "Ctrl+-" (fun () -> dispatch KeyboardMsg.CtrlMinus)
+                |]
                 |> U2.Case1
 
     let editMenu dispatch =
@@ -67,8 +70,7 @@
                    makeRoleItem MenuItemRole.ForceReload
                    makeRoleItem MenuItemRole.Reload
                    makeRoleItem MenuItemRole.ToggleDevTools
-                   makeRoleItem MenuItemRole.ZoomIn
-                   makeRoleItem MenuItemRole.ZoomOut|]
+                |]
                 |> U2.Case1
     
     let attachMenusAndKeyShortcuts dispatch =

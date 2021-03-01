@@ -30,6 +30,7 @@ type Model = {
     PanX: float
     PanY: float
     Zoom: float
+    Size: float
 }
 
 type KeyboardMsg =
@@ -42,6 +43,8 @@ type KeyboardMsg =
     | Space
     | Escape
     | AltA
+    | CtrlShiftEqual
+    | CtrlMinus
 
 type Modifier =
     | Control
@@ -52,12 +55,14 @@ type Msg =
     | KeyPress of KeyboardMsg
     | MouseMsg of MouseT * Modifier
 
+let gridSize = 5.
+
 /// This function zooms an SVG canvas by transforming its content and altering its size.
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
 /// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
 let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
     let borderSize = 3.
-    let sizeInPixels = sprintf "%.2fpx" ((1000. * model.Zoom))
+    let sizeInPixels = sprintf "%.2fpx" ((model.Size))
     /// Is the mouse button currently down?
     let mDown (ev: Types.MouseEvent) = ev.buttons <> 0.
     /// Dispatch a BusWire MouseMsg message
@@ -87,11 +92,12 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                 NoModifier
         )
 
-    div [ Style [ Height "800px"
-                  MaxWidth "800px"
+    div [ Style [ Height sizeInPixels
+                  MaxWidth sizeInPixels
                   Border (sprintf "%fpx solid green" borderSize)
                   CSSProp.OverflowX OverflowOptions.Hidden
-                  CSSProp.OverflowY OverflowOptions.Hidden ]
+                  CSSProp.OverflowY OverflowOptions.Hidden
+                ]
     ] [ svg [ Style [ Height sizeInPixels
                       Width sizeInPixels ]
               OnMouseDown(fun ev -> (mouseOp Down ev))
@@ -279,8 +285,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             | Pan (origPan, panStart, _) ->
                 { model with
                     DragState=Pan (origPan, panStart, p)
-                    PanX = origPan.X + (p.X - panStart.X)
-                    PanY = origPan.Y + (p.Y - panStart.Y)
+                    PanX = origPan.X + (p.X - panStart.X) * model.Zoom
+                    PanY = origPan.Y + (p.Y - panStart.Y) * model.Zoom
                 }, Cmd.none
             | NotDragging -> model, Cmd.none
         | (Up, _, _) ->
@@ -338,8 +344,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             | DragState.Pan (origPan, panStart, panEnd) ->
                 { model with
                     DragState=NotDragging
-                    PanX = origPan.X + (panEnd.X - panStart.X)
-                    PanY = origPan.Y + (panEnd.Y - panStart.Y)
+                    PanX = origPan.X + (panEnd.X - panStart.X) * model.Zoom
+                    PanY = origPan.Y + (panEnd.Y - panStart.Y) * model.Zoom
                 }, Cmd.none
             | _ -> model, Cmd.none
         | (Leave, _, _) ->
@@ -395,6 +401,25 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | _ ->
             {model with DragState=NotDragging}
             , Cmd.none
+    | KeyPress k when k = CtrlShiftEqual || k = CtrlMinus ->
+        let multiplier =
+            match k with
+            | CtrlShiftEqual -> 1.05
+            | CtrlMinus -> 0.95
+            | _ -> failwithf "This can't happen"
+
+        let adjustPanValue pan =
+            let translatedPan = pan - model.Size / 2.
+            let multipliedPan = multiplier * translatedPan
+            multipliedPan + model.Size / 2.
+
+        let (panX, panY) =
+            (adjustPanValue model.PanX, adjustPanValue model.PanY)
+        { model with
+            Zoom = multiplier * model.Zoom
+            PanX = panX
+            PanY = panY
+        }, Cmd.none
     | KeyPress AltShiftZ ->
         printStats () // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
@@ -429,4 +454,5 @@ let init () =
         PanX = 0.
         PanY = 0.
         Zoom = 1.
+        Size = 1000.
     }, Cmd.map Wire cmds
