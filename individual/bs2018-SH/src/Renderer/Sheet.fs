@@ -170,13 +170,15 @@ let view (model:Model) (dispatch : Msg -> unit) =
         ]
 
 
-let closestPosOnGrid (grid : Grid) (pos : XYPos) : XYPos =
-    let leftDist = pos.X % grid.Size
-    let upDist = pos.Y % grid.Size
-    let x = if leftDist < grid.Size - leftDist then pos.X - leftDist else pos.X + grid.Size - leftDist
-    let y = if upDist < grid.Size - upDist then pos.Y - upDist else pos.Y + grid.Size - upDist
-    printf $"{x},{y}"
-    posOf x y
+let posToGridIfEnabled (grid : Grid) (pos : XYPos) : XYPos =
+    if grid.SnapToGrid then
+        let leftDist = pos.X % grid.Size
+        let upDist = pos.Y % grid.Size
+        let x = if leftDist < grid.Size - leftDist then pos.X - leftDist else pos.X + grid.Size - leftDist
+        let y = if upDist < grid.Size - upDist then pos.Y - upDist else pos.Y + grid.Size - upDist
+        posOf x y
+    else
+        pos
 
 
 let highlightPorts (model : Model) (pos : XYPos) = 
@@ -226,7 +228,9 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         model, Cmd.batch (List.append wireCommands symbolCommands)
 
     | KeyPress CtrlN ->
-        model, Cmd.ofMsg (Symbol <| Symbol.AddSymbol (CommonTypes.Not, model.LastMousePos))
+        let posOnGrid = posToGridIfEnabled model.Grid model.LastMousePos
+            
+        model, Cmd.ofMsg (Symbol <| Symbol.AddSymbol (CommonTypes.Not, posOnGrid))
 
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =
@@ -270,7 +274,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         },
         Cmd.batch(
             [
-                Cmd.ofMsg (Symbol <| Symbol.StartDragging (selectedSymbols, pos));
+                Cmd.ofMsg (Symbol <| Symbol.StartDragging (selectedSymbols, (posToGridIfEnabled model.Grid pos)));
                 Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols);
             ]
             |> List.append wireDragCommands
@@ -352,7 +356,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 },
                 [Cmd.none]
             | FromSymbol ->
-                model, [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, pos))]
+                model, [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, (posToGridIfEnabled model.Grid pos)))]
             | FromPort (pId,_) ->
                 {
                     model with
