@@ -14,6 +14,7 @@ type DragState =
     | Symbol
     | AreaSelect of XYPos * XYPos * bool
     | WireCreation of CommonTypes.PortId * XYPos
+    | Pan of XYPos * XYPos * XYPos
     | NotDragging
 
 type SelectionState =
@@ -26,6 +27,10 @@ type Model = {
     Wire: BusWire.Model
     DragState: DragState
     Selection: SelectionState
+    PanX: float
+    PanY: float
+    Zoom: float
+    Size: float
 }
 
 type KeyboardMsg =
@@ -38,6 +43,8 @@ type KeyboardMsg =
     | Space
     | Escape
     | AltA
+    | CtrlShiftEqual
+    | CtrlMinus
 
 type Modifier =
     | Control
@@ -48,20 +55,25 @@ type Msg =
     | KeyPress of KeyboardMsg
     | MouseMsg of MouseT * Modifier
 
-/// Determines top-level zoom, > 1 => magnify.
-/// This should be moved into the model as state
-let zoom = 1.0
+let gridSize = 10.
 
 /// This function zooms an SVG canvas by transforming its content and altering its size.
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
 /// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
-let displaySvgWithZoom (model: Model) (zoom: float) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
-    let sizeInPixels = sprintf "%.2fpx" ((1000. * zoom))
+let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
+    let borderSize = 3.
+    let sizeInPixels = sprintf "%.2fpx" ((model.Size))
     /// Is the mouse button currently down?
     let mDown (ev: Types.MouseEvent) = ev.buttons <> 0.
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
     let mouseOp op (ev: Types.MouseEvent) =
+        let (panX, panY) =
+            match model.DragState with
+            | Pan (origPan, _, _) ->
+                (origPan.X, origPan.Y)
+            | _ -> (model.PanX, model.PanY)
+
         dispatch
         <| MouseMsg(
             { 
@@ -72,25 +84,27 @@ let displaySvgWithZoom (model: Model) (zoom: float) (svgReact: ReactElement) (di
                          | _ -> MouseButton.Unknown
                 Op = op
                 Pos =
-                    { X = (-3. + ev.clientX) / zoom
-                      Y = (-3. + ev.clientY) / zoom } },
+                    { X = (ev.clientX - borderSize - panX) / model.Zoom
+                      Y = (ev.clientY - borderSize - panY) / model.Zoom } },
             if ev.ctrlKey then
                 Control
             else
                 NoModifier
         )
 
-    div [ Style [ Height "100vh"
-                  MaxWidth "100vw"
-                  CSSProp.OverflowX OverflowOptions.Auto
-                  CSSProp.OverflowY OverflowOptions.Auto ]
-          OnMouseDown(fun ev -> (mouseOp Down ev))
-          OnMouseUp(fun ev -> (mouseOp Up ev))
-          OnMouseMove(fun ev -> mouseOp (if mDown ev then Drag else Move) ev) ] [
-        svg [ Style [ Border "3px solid green"
-                      Height sizeInPixels
-                      Width sizeInPixels ] ] [
-            g [ Style [ Transform(sprintf "scale(%f)" zoom) ] ] [  // top-level transform style attribute for zoom
+    div [ Style [ Height sizeInPixels
+                  MaxWidth sizeInPixels
+                  Border (sprintf "%fpx solid green" borderSize)
+                  CSSProp.OverflowX OverflowOptions.Hidden
+                  CSSProp.OverflowY OverflowOptions.Hidden
+                ]
+    ] [ svg [ Style [ Height sizeInPixels
+                      Width sizeInPixels ]
+              OnMouseDown(fun ev -> (mouseOp Down ev))
+              OnMouseUp(fun ev -> (mouseOp Up ev))
+              OnMouseMove(fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
+              OnMouseLeave(fun ev -> mouseOp Leave ev)] [
+            g [ Style [ Transform (sprintf "translate(%fpx,%fpx) scale(%f)" model.PanX model.PanY model.Zoom) ] ] [  // top-level transform style attribute for zoom
                 match model.DragState with
                 | AreaSelect (p1, p2, additive) ->
                     let area = pointsToBBox p1 p2
@@ -134,10 +148,13 @@ let displaySvgWithZoom (model: Model) (zoom: float) (svgReact: ReactElement) (di
 let view (model: Model) (dispatch: Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
     let wireSvg = BusWire.view model.Wire wDispatch
-    displaySvgWithZoom model zoom wireSvg dispatch
+    displaySvgWithZoom model wireSvg dispatch
 
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
+    let snapToGrid p =
+        posOf (gridSize * (floor (p.X / gridSize))) (gridSize * (floor (p.Y / gridSize)))
+
     match msg with
     | Wire wMsg ->
         let wModel, wCmd = BusWire.update wMsg model.Wire
@@ -151,8 +168,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let selectedWire = BusWire.getTargetedWire model.Wire p
                 let selectedSymbol =
                     Symbol.getTargetedSymbol model.Wire.Symbol p
-
-                printfn "Symbol: %A" selectedSymbol
 
                 match (targetedPort, selectedSymbol, selectedWire, m) with
                 | (Some pId, _, _, _) ->
@@ -194,7 +209,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     }
                     , Cmd.batch [
                         Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
-                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.StartDragging (selectedSymbols, p))))
+                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.StartDragging (selectedSymbols, snapToGrid p))))
                         Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     ]
                 | (_, _, Some wId, _) ->
@@ -205,7 +220,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     , Cmd.batch [
                         Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
                         Cmd.ofMsg (Wire (BusWire.Select wId))
-                        Cmd.ofMsg (Wire (BusWire.StartDrag (wId, p)))
+                        Cmd.ofMsg (Wire (BusWire.StartDrag (wId, snapToGrid p)))
                     ]
                 | (_, None, None, Control) ->
                     { model with
@@ -227,7 +242,19 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
                     Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     Cmd.ofMsg (Wire (BusWire.EndDrag))
-                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, p))))
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid p))))
+                ]
+            | MouseButton.Middle ->
+                { model with
+                    Selection = Empty
+                    DragState = Pan (posOf model.PanX model.PanY, p, p)
+                }
+                , Cmd.batch [
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
+                    Cmd.ofMsg (Wire (BusWire.UnselectAll))
+                    Cmd.ofMsg (Wire (BusWire.EndDrag))
                 ]
             | _ ->
                 { model with Selection=Empty;DragState=NotDragging }
@@ -250,13 +277,19 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     | Symbols s -> s
                     | _ -> failwithf "We only drag if there is a selection"
                 model,
-                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Dragging (selectedSymbols, p))))
+                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Dragging (selectedSymbols, snapToGrid p))))
             | DragState.Wire wId ->
                 model,
-                Cmd.ofMsg (Wire (BusWire.Dragging (wId, p)))
+                Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
             | WireCreation (pId, _) ->
                 { model with
                     DragState=WireCreation (pId, p)
+                }, Cmd.none
+            | Pan (origPan, panStart, _) ->
+                { model with
+                    DragState=Pan (origPan, panStart, p)
+                    PanX = origPan.X + (p.X - panStart.X) * model.Zoom
+                    PanY = origPan.Y + (p.Y - panStart.Y) * model.Zoom
                 }, Cmd.none
             | NotDragging -> model, Cmd.none
         | (Up, _, _) ->
@@ -304,15 +337,50 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     Selection = Empty
                 }
                 , match targetedPort with
-                  | Some pIdEnd ->
+                  | Some pIdEnd when pIdEnd <> pIdStart ->
                       Cmd.batch [
                           Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
                           Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
                       ]
-                  | None -> 
+                  | _ -> 
                       Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
+            | DragState.Pan (origPan, panStart, panEnd) ->
+                { model with
+                    DragState=NotDragging
+                    PanX = origPan.X + (panEnd.X - panStart.X) * model.Zoom
+                    PanY = origPan.Y + (panEnd.Y - panStart.Y) * model.Zoom
+                }, Cmd.none
             | _ -> model, Cmd.none
-        | _ -> model, Cmd.none
+        | (Leave, _, _) ->
+            match model.DragState with
+            | AreaSelect _ ->
+                {model with
+                    DragState = NotDragging
+                } , Cmd.none
+            | DragState.Wire _ ->
+                { model with
+                    DragState = NotDragging
+                }
+                , Cmd.ofMsg (Wire (BusWire.EndDrag))
+            | DragState.Symbol ->
+                { model with
+                    DragState = NotDragging
+                }
+                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
+            | DragState.WireCreation _ ->
+                { model with
+                    DragState = NotDragging
+                    Selection = Empty
+                }
+                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
+            | DragState.Pan (origPan, pStart, panEnd) ->
+                { model with
+                    DragState=NotDragging
+                    PanX = origPan.X + (panEnd.X - pStart.X)
+                    PanY = origPan.Y + (panEnd.Y - pStart.Y)
+                }, Cmd.none
+            | NotDragging -> model, Cmd.none
+        | (Move, _, _) -> model, Cmd.none
     | KeyPress AltA ->
         let selectedSymbols = Symbol.getAllSymbols model.Wire.Symbol
 
@@ -336,6 +404,25 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | _ ->
             {model with DragState=NotDragging}
             , Cmd.none
+    | KeyPress k when k = CtrlShiftEqual || k = CtrlMinus ->
+        let multiplier =
+            match k with
+            | CtrlShiftEqual -> 1.05
+            | CtrlMinus -> 0.95
+            | _ -> failwithf "This can't happen"
+
+        let adjustPanValue pan =
+            let translatedPan = pan - model.Size / 2.
+            let multipliedPan = multiplier * translatedPan
+            multipliedPan + model.Size / 2.
+
+        let (panX, panY) =
+            (adjustPanValue model.PanX, adjustPanValue model.PanY)
+        { model with
+            Zoom = multiplier * model.Zoom
+            PanX = panX
+            PanY = panY
+        }, Cmd.none
     | KeyPress AltShiftZ ->
         printStats () // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
@@ -367,4 +454,8 @@ let init () =
         Wire = model
         Selection = Empty
         DragState = NotDragging
+        PanX = 0.
+        PanY = 0.
+        Zoom = 1.
+        Size = 1000.
     }, Cmd.map Wire cmds
