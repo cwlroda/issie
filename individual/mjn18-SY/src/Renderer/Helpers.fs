@@ -16,20 +16,6 @@ type XYPos =
         Y : float
     }
 
-let posDiff a b =
-    {X=a.X-b.X; Y=a.Y-b.Y}
-
-let posAdd a b =
-    {X=a.X+b.X; Y=a.Y+b.Y}
-
-let posOf x y = {X=x;Y=y}
-
-let posLength p =
-    sqrt <| p.X * p.X + p.Y * p.Y
-
-let posDist a b =
-    posLength <| posDiff a b
-
 type MouseOp = 
     /// button up
     | Up
@@ -40,14 +26,7 @@ type MouseOp =
     /// Move with button Down
     | Drag
 
-type MouseButton =
-    | Left
-    | Right
-    | Middle
-    | Unknown
-
 type MouseT = {
-    Button: MouseButton
     Pos: XYPos
     Op: MouseOp}
 

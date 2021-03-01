@@ -4,29 +4,65 @@ module CommonTypes
     let draw2dCanvasWidth = 3000
     let draw2dCanvasHeight = 2000
 
+     // The next types are not strictly necessary, but help in understanding what is what.
+    // Used consistently they provide type protection that greatly reduces coding errors
+
+    /// SHA hash unique to a component - common between JS and F#
+
+    [<Erase>]
+    type ComponentId      = | ComponentId of string
+    /// SHA hash unique to a connection - common between JS and F#
+
+    [<Erase>]
+    type ConnectionId     = | ConnectionId of string
+    /// Human-readable name of component as displayed on sheet.
+    /// For I/O/labelIO components a width indication eg (7:0) is also displayed, but NOT included here
+
+    [<Erase>]
+    type ComponentLabel   = | ComponentLabel of string
+    /// SHA hash unique to a component port - common between JS and F#.
+    /// Connection ports and connected component ports have the same port Id
+    /// InputPortId and OutputPortID wrap the hash to distinguish component
+    /// inputs and outputs some times (e.g. in simulation)
+
+    [<Erase>]
+    type InputPortId      = | InputPortId of string
+    /// SHA hash unique to a component port - common between JS and F#.
+    /// Connection ports and connected component ports have the same port Id
+    /// InputPortId and OutputPortID wrap the hash to distinguish component
+    /// inputs and outputs some times (e.g. in simulation)
+
+    [<Erase>]
+    type OutputPortId     = | OutputPortId of string
+
+    /// Port numbers are sequential unique with port lists.
+    /// Inputs and Outputs are both numberd from 0 up.
+
+    [<Erase>]
+    type PortId           =  PortId of string
+    
+    [<Erase>]
+    type PortNumber  = | PortNumber of int
+    /// Port numbers are sequential unique with port lists.
+    /// Inputs and Outputs are both numberd from 0 up.
+
+    [<Erase>]
+    type PortHover  = | PortHover of bool
+
+    [<Erase>]
+    type PortWidth = | PortWidth of int
+
+
+// Specify the position and type of a port in a JSComponent.
+
     //==========================================//
     // Canvas state mapped to f# data structure //
     //==========================================//
 
-    // Specify the position and type of a port in a JSComponent.
-    type PortType = Input | Output
-
-    /// A component I/O.
-    /// Id (like any other Id) is a string generated with 32 random hex charactes,
-    /// so it is (practically) globally unique. These Ids are used by the draw2d
-    /// library to uniquely refer to ports and components. They are generated via:
-    /// http://www.draw2d.org/draw2d_touch/jsdoc_6/#!/api/draw2d.util.UUID.
-    /// PortNumber is used to identify which port on a component, contiguous from 0
-    /// separately for inputs and outputs.
-    /// HostId is the unique Id of the component where the port is. For example,
-    /// all three ports on the same And component will have the same HostId.
-    type Port = {
-        Id : string
-        // For example, an And would have input ports 0 and 1, and output port 0.
-        // If the port is used in a Connection record as Source or Target, the Number is None. 
-        PortNumber : int option
-        PortType : PortType
-        HostId : string
+    type BBox = {
+        Point:Helpers.XYPos
+        Width:float
+        Height:float
     }
 
     /// Name identified the LoadedComponent used.
@@ -53,6 +89,28 @@ module CommonTypes
         Data : Map<int64,int64>
     }
 
+    type PortType = Input | Output
+
+    /// A component I/O.
+    /// Id (like any other Id) is a string generated with 32 random hex charactes,
+    /// so it is (practically) globally unique. These Ids are used by the draw2d
+    /// library to uniquely refer to ports and components. They are generated via:
+    /// http://www.draw2d.org/draw2d_touch/jsdoc_6/#!/api/draw2d.util.UUID.
+    /// PortNumber is used to identify which port on a component, contiguous from 0
+    /// separately for inputs and outputs.
+    /// HostId is the unique Id of the component where the port is. For example,
+    /// all three ports on the same And component will have the same HostId.
+    type Port = {
+        PortId : PortId
+        // For example, an And would have input ports 0 and 1, and output port 0.
+        // If the port is used in a Connection record as Source or Target, the Number is None. 
+        PortNumber : PortNumber option
+        PortType : PortType
+        PortPos : Helpers.XYPos
+        HostId : ComponentId
+        Hover : PortHover
+        Width : PortWidth
+    }
     // Types instantiating objects in the Digital extension.
     type ComponentType =
         | Input of BusWidth: int | Output of BusWidth: int | IOLabel 
@@ -72,15 +130,15 @@ module CommonTypes
     /// Id uniquely identifies the component within a sheet and is used by draw2d library.
     /// Label is optional descriptor displayed on schematic.
     type Component = {
-        Id : string
+        Id : ComponentId
         Type : ComponentType
         Label : string // All components have a label that may be empty.
         InputPorts : Port list
         OutputPorts : Port list
-        X : int
-        Y : int
-        H : int
-        W : int
+        X : float
+        Y : float
+        H : float
+        W : float
     }
 
     /// JSConnection mapped to F# record.
@@ -120,52 +178,8 @@ module CommonTypes
             
             
 
-    // The next types are not strictly necessary, but help in understanding what is what.
-    // Used consistently they provide type protection that greatly reduces coding errors
-
-    /// SHA hash unique to a component - common between JS and F#
-
-    [<Erase>]
-    type ComponentId      = | ComponentId of string
-    /// SHA hash unique to a connection - common between JS and F#
-
-    [<Erase>]
-    type ConnectionId     = | ConnectionId of string
-    /// Human-readable name of component as displayed on sheet.
-    /// For I/O/labelIO components a width indication eg (7:0) is also displayed, but NOT included here
-
-    [<Erase>]
-    type ComponentLabel   = | ComponentLabel of string
-    /// SHA hash unique to a component port - common between JS and F#.
-    /// Connection ports and connected component ports have the same port Id
-    /// InputPortId and OutputPortID wrap the hash to distinguish component
-    /// inputs and outputs some times (e.g. in simulation)
-
-    // A single PortId to capture both input and output ports
-    [<Erase>]
-    type PortId     = | PortId of string
-
-    [<Erase>]
-    type InputPortId      = | InputPortId of string
-    /// SHA hash unique to a component port - common between JS and F#.
-    /// Connection ports and connected component ports have the same port Id
-    /// InputPortId and OutputPortID wrap the hash to distinguish component
-    /// inputs and outputs some times (e.g. in simulation)
-
-    [<Erase>]
-    type OutputPortId     = | OutputPortId of string
-
-    /// Port numbers are sequential unique with port lists.
-    /// Inputs and Outputs are both numberd from 0 up.
-
-    [<Erase>]
-    type InputPortNumber  = | InputPortNumber of int
-    /// Port numbers are sequential unique with port lists.
-    /// Inputs and Outputs are both numberd from 0 up.
-
-    [<Erase>]
-    type OutputPortNumber = | OutputPortNumber of int
-
+   
+    
     (*---------------------------Types for wave Simulation----------------------------------------*)
 
     // The "NetList" types contain all the circuit from Diagram in an abstracted form that
@@ -177,7 +191,8 @@ module CommonTypes
     /// Note that one output port can drive multiple NLTargets.
     type NLTarget = {
         TargetCompId: ComponentId
-        InputPort: InputPortNumber
+        //InputPort: InputPortNumber
+        InputPort: PortNumber
         TargetConnId: ConnectionId
         }
 
@@ -185,7 +200,8 @@ module CommonTypes
     /// This is stored with a NLComponent input port number
     type NLSource = {
         SourceCompId: ComponentId
-        OutputPort: OutputPortNumber
+        OutputPort: PortNumber
+        //OutputPort: OutputPortNumber
         SourceConnId: ConnectionId
         }
 
@@ -198,10 +214,13 @@ module CommonTypes
         Label : string
         // List of input port numbers, and single mapped driving output port
         // and component.
-        Inputs : Map<InputPortNumber, NLSource option>
+        Inputs : Map<PortNumber, NLSource option>
+        //Inputs : Map<InputPortNumber, NLSource option>
         // Mapping from each output port number to all of the input ports and
         // Components connected to that port.
-        Outputs : Map<OutputPortNumber, NLTarget list>
+        Outputs : Map<PortNumber, NLTarget list>
+        // Outputs : Map<OutputPortNumber, NLTarget list>
+
      }
 
     /// Circuit topology with connections abstracted away.

@@ -26,6 +26,10 @@ type Symbol =
         IsSelected : bool
         IsDragging : bool
         Id : CommonTypes.ComponentId
+        InputPort: CommonTypes.PortId
+        OutputPort: CommonTypes.PortId
+        HighlightInputPort: bool
+        HighlightOutputPort: bool
     }
 
 
@@ -41,15 +45,16 @@ type Msg =
     /// Mouse info with coords adjusted form top-level zoom
     | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
-    | DeselectAll
+    | AddSymbol of CommonTypes.ComponentType * XYPos
     | Select of CommonTypes.ComponentId list
     | StartDragging of CommonTypes.ComponentId list * XYPos
     /// coords not adjusted for top-level zoom
     | Dragging of CommonTypes.ComponentId list * XYPos
     | EndDragging
-    | AddCircle of XYPos // used by demo code to add a circle
     | DeleteSymbols of sId:CommonTypes.ComponentId list
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
+    | HighlightPort of CommonTypes.PortId
+    | UnhighlightPorts
 
 
 //---------------------------------helper types and functions----------------//
@@ -66,19 +71,67 @@ let BBoxFromSymbol (sym: Symbol) =
     let pos = posDiff sym.Pos (posOf 20. 20.)
     BBox.toBBox pos.X pos.Y 40. 40.
 
+let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos =
+    List.find (fun sym -> sym.InputPort = pId || sym.OutputPort = pId) model
+    |> (fun sym ->
+        let bb = BBoxFromSymbol sym
+        if sym.InputPort = pId then
+            posOf (bb.Pos.X + 5.) (bb.Pos.Y + 5.)
+        else
+            posOf (bb.Pos.X + bb.Width - 5.) (bb.Pos.Y + bb.Height - 5.)
+    )
+
 let getAllSymbols (model: Model) : CommonTypes.ComponentId list =
     model
     |> List.map (fun sym -> sym.Id)
 
-let getTargetedSymbol (model: Model) (p: XYPos) : Symbol option =
+let getPortsFromSymbols (model: Model) (symbols: CommonTypes.ComponentId list) : CommonTypes.PortId list =
+    let sIdSet = Set.ofList symbols
+
+    model
+    |> List.collect (fun sym ->
+        if Set.contains sym.Id sIdSet then
+            [sym.InputPort;sym.OutputPort]
+        else
+            []
+    )
+
+let getAllPorts (model: Model) : CommonTypes.PortId list =
+    model
+    |> List.collect (fun sym -> [sym.InputPort;sym.OutputPort])
+
+let getTargetedSymbol (model: Model) (p: XYPos) : CommonTypes.ComponentId option =
     model
     |> List.filter (fun sym -> BBoxFromSymbol sym |> containsPoint p)
+    |> List.map (fun sym -> sym.Id)
     |> List.tryHead
 
 let getSymbolsInBBox (model: Model) (bb: BBox) : CommonTypes.ComponentId list =
     model
     |> List.filter (fun sym -> BBoxFromSymbol sym |> overlaps bb)
     |> List.map (fun sym -> sym.Id)
+
+let getPortBBoxes (sym: Symbol) : BBox * BBox =
+    let bbSym = BBoxFromSymbol sym
+    let x = bbSym.Pos.X
+    let y = bbSym.Pos.Y
+    let w = bbSym.Width
+    let h = bbSym.Height
+    let size = 10.
+    (toBBox x y size size), (toBBox (x + w - size) (y + h - size) size size)
+
+let getTargetedPort (model: Model) (p: XYPos) : CommonTypes.PortId option =
+    model
+    |> List.collect (fun sym ->
+        let (inputBB, outputBB) = getPortBBoxes sym
+        [
+            (sym.InputPort, inputBB)
+            (sym.OutputPort, outputBB)
+        ]
+    )
+    |> List.filter (fun (_, bb) -> containsPoint p bb)
+    |> List.map fst
+    |> List.tryHead
 
 
 //-----------------------Skeleton Message type for symbols---------------------//
@@ -93,6 +146,10 @@ let createNewSymbol (pos:XYPos) =
         IsSelected = false
         IsDragging = false
         Id = CommonTypes.ComponentId (Helpers.uuid()) // create a unique id for this symbol
+        InputPort = CommonTypes.PortId (Helpers.uuid())
+        OutputPort = CommonTypes.PortId (Helpers.uuid())
+        HighlightInputPort = false
+        HighlightOutputPort = false
     }
 
 
@@ -105,16 +162,11 @@ let init () =
 /// update function which displays symbols
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
-    | AddCircle pos -> 
+    | AddSymbol (_, pos) -> 
         createNewSymbol pos :: model, Cmd.none
     | DeleteSymbols sIdLst -> 
         let sIdSet = Set.ofList sIdLst
         List.filter (fun sym -> not <| Set.contains sym.Id sIdSet) model, Cmd.none
-    | DeselectAll ->
-        model
-        |> List.map (fun sym ->
-            { sym with IsSelected=false }
-        ), Cmd.none
     | Select sIdLst ->
         let sIdSet = Set.ofList sIdLst
 
@@ -171,6 +223,24 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                     sym
             ), Cmd.none
         | _ -> model, Cmd.none
+    | HighlightPort pId ->
+        model
+        |> List.map (fun sym ->
+            if sym.InputPort = pId then
+                { sym with HighlightInputPort = true }
+            else if sym.OutputPort = pId then
+                { sym with HighlightOutputPort = true }
+            else
+                sym
+        ), Cmd.none
+    | UnhighlightPorts ->
+        model
+        |> List.map (fun sym ->
+            { sym with
+                HighlightInputPort = false
+                HighlightOutputPort = false
+            }
+        ), Cmd.none
     | _ -> failwithf "Not implemented"
 
 //----------------------------View Function for Symbols----------------------------//
@@ -195,12 +265,44 @@ let private renderCircle =
                     "grey"
 
             let bb = BBoxFromSymbol props.Circle
+            let (inputBB, outputBB) = getPortBBoxes props.Circle
+            let inputPortColor =
+                if props.Circle.HighlightInputPort then
+                    "Green"
+                else
+                    "grey"
+            let outputPortColor =
+                if props.Circle.HighlightOutputPort then
+                    "Green"
+                else
+                    "grey"
 
-            polygon [ // Bus decoder square
-                    SVGAttr.Points <| sprintf "%f,%f %f,%f %f,%f %f,%f" bb.Pos.X bb.Pos.Y bb.Pos.X (bb.Pos.Y + bb.Bounds.Height) (bb.Pos.X + bb.Bounds.Width) (bb.Pos.Y + bb.Bounds.Height) (bb.Pos.X + bb.Bounds.Width) bb.Pos.Y
-                    SVGAttr.StrokeWidth "1px"
-                    SVGAttr.Stroke "Red"
-                    SVGAttr.Fill color] []
+            g [] [
+                rect [ // Bus decoder square
+                        X bb.Pos.X
+                        Y bb.Pos.Y
+                        SVGAttr.Width bb.Width
+                        SVGAttr.Height bb.Height
+                        SVGAttr.StrokeWidth "1px"
+                        SVGAttr.Stroke "Red"
+                        SVGAttr.Fill color] []
+                rect [ // Bus decoder square
+                        X inputBB.Pos.X
+                        Y inputBB.Pos.Y
+                        SVGAttr.Width inputBB.Width
+                        SVGAttr.Height inputBB.Height
+                        SVGAttr.StrokeWidth "1px"
+                        SVGAttr.Stroke "Green"
+                        SVGAttr.Fill inputPortColor] []
+                rect [ // Bus decoder square
+                        X outputBB.Pos.X
+                        Y outputBB.Pos.Y
+                        SVGAttr.Width outputBB.Width
+                        SVGAttr.Height outputBB.Height
+                        SVGAttr.StrokeWidth "1px"
+                        SVGAttr.Stroke "Green"
+                        SVGAttr.Fill outputPortColor] []
+            ]
     , "Circle"
     , equalsButFunctions
     )
