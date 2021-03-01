@@ -139,11 +139,28 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
 let init n () =
     let symbols, cmd = Symbol.init()
     {WX=[];Symbol=symbols; Color=CommonTypes.Red},Cmd.none
+
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
     | Symbol sMsg -> 
+        let delWires = 
+            match sMsg with
+            | Symbol.DeleteSymbols sIds ->
+                sIds
+                |> List.map (fun sId ->
+                    let symPorts = Symbol.getPortsOfSymbol model.Symbol sId
+                    model.WX
+                    |> List.filter (fun w -> List.contains w.SrcPort symPorts || List.contains w.TargetPort symPorts)
+                )
+                |> List.collect id
+                |> List.map (fun w -> w.Id)
+
+            | _ -> []
+        let newWx =
+            model.WX
+            |> List.filter (fun w -> not(List.contains w.Id delWires))
         let sm,sCmd = Symbol.update sMsg model.Symbol
-        {model with Symbol=sm}, Cmd.map Symbol sCmd
+        {model with Symbol=sm; WX=newWx}, Cmd.map Symbol sCmd
     | AddWire (sPid, tPid) ->
         let wires =
             model.WX

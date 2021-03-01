@@ -198,9 +198,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let wModel, wCmd = BusWire.update wMsg model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
     | Symbol sMsg ->
-        let sModel, sCmd = Symbol.update sMsg model.Wire.Symbol
-        let wModel = {model.Wire with Symbol = sModel}
-        {model with Wire = wModel}, Cmd.map Symbol sCmd
+        let wModel, wCmd = BusWire.update (BusWire.Symbol sMsg) model.Wire
+        {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress AltShiftZ -> 
         printStats() // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged

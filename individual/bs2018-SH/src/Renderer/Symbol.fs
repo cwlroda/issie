@@ -206,7 +206,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     | AddSymbol (_, pos) -> 
         createNewSymbol pos :: model, Cmd.none
     | DeleteSymbols sIds -> 
-        printf $"Deleting symbols {sIds}"
         List.filter (fun sym -> not (List.contains sym.Id sIds)) model, Cmd.none
     | StartDragging (sLst, pagePos) ->
         model
