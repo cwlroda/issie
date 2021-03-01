@@ -40,7 +40,14 @@ type MouseOp =
     /// Move with button Down
     | Drag
 
+type MouseButton =
+    | Left
+    | Right
+    | Middle
+    | Unknown
+
 type MouseT = {
+    Button: MouseButton
     Pos: XYPos
     Op: MouseOp}
 
