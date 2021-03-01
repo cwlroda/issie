@@ -43,11 +43,14 @@
             invisibleMenu.label <- "Edit"
             invisibleMenu.visible <- true // false if you want keys but no "Edit" menu
             invisibleMenu.submenu <-
-                [|
-                   makeKeyItem "Delete selected"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
-                   makeKeyItem "New symbol" "CmdOrCtrl+N" (fun () -> dispatch KeyboardMsg.CtrlN)
-                   makeKeyItem "Select all" "Alt+A" (fun () -> dispatch KeyboardMsg.CtrlA)
-                   makeKeyItem "Toggle snap-to-grid" "CmdOrCtrl+G" (fun () -> dispatch KeyboardMsg.CtrlG)
+                [| makeKeyItem "Default" "CmdOrCtrl+S" (fun () -> dispatch KeyboardMsg.CtrlS)
+                   makeKeyItem "Blue" "Alt+C" (fun () -> dispatch KeyboardMsg.AltC)
+                   makeKeyItem "Green" "Alt+V" (fun () -> dispatch KeyboardMsg.AltV)
+                   makeKeyItem "Red" "Alt+Z" (fun () -> dispatch KeyboardMsg.AltZ)
+                   menuSeparator
+                   makeKeyItem "Delete Selected Symbol"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
+                   makeKeyItem "Create New Symbol"  "insert" (fun () -> dispatch KeyboardMsg.INS)
+                  
                    menuSeparator
                    makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch KeyboardMsg.AltShiftZ)
                    makeRoleItem MenuItemRole.ForceReload
@@ -82,7 +85,7 @@
     Program.mkProgram Sheet.init update' view'
     |> Program.withReactBatched "app"
     |> Program.withSubscription attachMenusAndKeyShortcuts
-    //|> Program.withTrace traceFn
+    |> Program.withTrace traceFn
     //|> Program.withConsoleTrace
     |> Program.run
 

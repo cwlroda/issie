@@ -22,9 +22,9 @@ open Helpers
 /// a separate datatype and Id, or whether port offsets from
 /// component coordinates are held in some other way, is up to groups.
 type Wire = {
-    Id: CommonTypes.ConnectionId 
-    SrcSymbol: CommonTypes.ComponentId
-    TargetSymbol: CommonTypes.ComponentId
+    Id: CommonTypes.ConnectionId
+    SrcPort: CommonTypes.PortId
+    TargetPort: CommonTypes.PortId
     Color: CommonTypes.HighLightColor
     DragPositions: (XYPos * XYPos) option
     }
@@ -43,7 +43,7 @@ type Model = {
 /// for highlighting, width inference, etc
 type Msg =
     | Symbol of Symbol.Msg
-    | AddWire of (CommonTypes.ConnectionId * CommonTypes.ConnectionId)
+    | AddWire of (CommonTypes.PortId * CommonTypes.PortId)
     | Delete of CommonTypes.ConnectionId
     | Select of CommonTypes.ConnectionId
     | UnselectAll
@@ -70,8 +70,8 @@ let getTargetedWire (model: Model) (pos: XYPos) : CommonTypes.ConnectionId optio
     let closestWire = model.WX
                       |> List.map (fun w ->
                           let distFrom c =
-                              let a = Symbol.symbolPos model.Symbol w.SrcSymbol
-                              let b = Symbol.symbolPos model.Symbol w.TargetSymbol
+                              let a = Symbol.portPos model.Symbol w.SrcPort
+                              let b = Symbol.portPos model.Symbol w.TargetPort
 
                               let normalize p =
                                   let length = posLength p
@@ -131,8 +131,8 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
             let props = {
                 key = w.Id
                 WireP = w
-                SrcP = Symbol.symbolPos model.Symbol w.SrcSymbol 
-                TgtP = Symbol.symbolPos model.Symbol w.TargetSymbol 
+                SrcP = Symbol.portPos model.Symbol w.SrcPort 
+                TgtP = Symbol.portPos model.Symbol w.TargetPort 
                 ColorP = w.Color.Text()
                 DragPositions = w.DragPositions
                 StrokeWidthP = "2px" }
@@ -145,20 +145,20 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
 /// this initialisation depends on details of Symbol.Model type.
 let init n () =
     let symbols, cmd = Symbol.init()
-    let symIds = List.map (fun (sym:Symbol.Symbol) -> sym.Id) symbols
+    let symIds = Symbol.getAllPorts symbols
     let rng = System.Random 0
     let makeRandomWire() =
         let n = symIds.Length
-        let s1,s2 =
+        let p1,p2 =
             match rng.Next(0,n-1), rng.Next(0,n-2) with
             | r1,r2 when r1 = r2 -> 
-                symbols.[r1],symbols.[n-1] // prevents wire target and source being same
+                symIds.[r1],symIds.[n-1] // prevents wire target and source being same
             | r1,r2 -> 
-                symbols.[r1],symbols.[r2]
+                symIds.[r1],symIds.[r2]
         {
             Id=CommonTypes.ConnectionId (uuid())
-            SrcSymbol = s1.Id
-            TargetSymbol = s2.Id
+            SrcPort = p1
+            TargetPort = p2
             Color = CommonTypes.Red
             DragPositions=None
         }
@@ -170,18 +170,28 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | Symbol sMsg -> 
         let wires = match sMsg with
                     | Symbol.DeleteSymbols sIdLst ->
-                        let sIdSet = Set.ofList sIdLst
+                        let pIdSet = Set.ofList <| Symbol.getPortsFromSymbols model.Symbol sIdLst
                         model.WX
                         |> List.filter (fun w ->
                             not (
-                                Set.contains w.SrcSymbol sIdSet
-                                || Set.contains w.TargetSymbol sIdSet
+                                Set.contains w.SrcPort pIdSet
+                                || Set.contains w.TargetPort pIdSet
                             )
                         )
                     | _ -> model.WX
         let sm,sCmd = Symbol.update sMsg model.Symbol
         {model with Symbol=sm;WX=wires}, Cmd.map Symbol sCmd
-    | AddWire _ -> failwithf "Not implemented"
+    | AddWire (p1, p2) ->
+        let wires =
+            {
+                Id=CommonTypes.ConnectionId (uuid())
+                SrcPort = p1
+                TargetPort = p2
+                Color = CommonTypes.Red
+                DragPositions=None
+            } :: model.WX
+
+        { model with WX=wires}, Cmd.none
     | Delete wId ->
         let wires = model.WX
                     |> List.filter (fun w -> w.Id <> wId)

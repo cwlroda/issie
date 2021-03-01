@@ -42,18 +42,23 @@ type Msg =
     /// Mouse info with coords adjusted form top-level zoom
     | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
-    | StartDragging of sId : ComponentId * pagePos: XYPos
-    /// coords not adjusted for top-level zoom
-    | Dragging of sId : ComponentId * pagePos: XYPos
-    | EndDragging of sId : ComponentId
+    | StartDraggingDummy of sId : ComponentId * pagePos: XYPos
+    | DraggingDummy of sId : ComponentId * pagePos: XYPos
+    | StartDragging of sId : ComponentId list * pagePos: XYPos
+    | Dragging of sIdLst: ComponentId list * pagePos: XYPos
+    // | EndDraggingDummy of sId : ComponentId
+    | EndDragging
     // | AddSymbol of comp:Component*pos:XYPos // used by demo code to add a circle
     //| DeleteSymbol of sId:ComponentId 
     | AddSymbol
     | DeleteSymbol
     | UpdateSymbolModelWithComponent of Component // Issie interface
-    | SetSelected of topLeft:XYPos * bottomRight:XYPos // 
-    | MouseOverPort of port : Port
-    | MouseOutPort of port : Port
+    | SetSelectedDummy of topLeft:XYPos * bottomRight:XYPos // 
+    | SetSelected of sIdLst:ComponentId list
+    | MouseOverPort of port : Port // Used for Dummy Code
+    | MouseOutPort of port : Port // Used for Dummy Code
+    | HighlightPorts of pId : PortId list
+    | UnhighlightPorts
 
 
 //---------------------------------helper types and functions----------------//
@@ -79,6 +84,16 @@ let combinedPortsList (sym:Symbol) : Port list =
         ) portList
     filledPortList sym.Component.InputPorts @ filledPortList sym.Component.OutputPorts
 
+let getPortsOfSymbol (symModel:Model) (symId:ComponentId) : PortId list =
+    symModel
+    |> List.find (fun sym -> sym.Id = symId)
+    |> combinedPortsList
+    |> List.map (fun port -> port.PortId)
+
+let getAllSymbols (symModel:Model) : ComponentId list =
+    symModel
+    |> List.map (fun sym->sym.Id)
+
 let allPortsInModel (symModel:Model) : Port list = 
     symModel
     |>List.fold (
@@ -88,7 +103,7 @@ let allPortsInModel (symModel:Model) : Port list =
 
 let findSymbolFromPort (symModel: Model) (port:Port) : Symbol =
     symModel
-    |> List.find (fun sym -> sym.Component.Id = port.HostId)
+    |> List.find (fun sym -> sym.Component.Id = port.HostId) 
 
 let getTargetedSymbol (symModel: Model) (pos:XYPos) : ComponentId Option = 
     let foundSymbol = 
@@ -108,10 +123,10 @@ let getTargetedSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId Li
     symModel
     |> List.filter
         (fun (sym:Symbol) ->
-            (sym.Component.X >= bbox.Corner.X)
-            && (sym.Component.Y >= bbox.Corner.Y)
-            && (sym.Component.X + sym.Component.W <= bbox.Corner.X + bbox.W)
-            && (sym.Component.Y + sym.Component.H <= bbox.Corner.Y + bbox.H)
+            (sym.Component.X >= bbox.Point.X)
+            && (sym.Component.Y >= bbox.Point.Y)
+            && (sym.Component.X + sym.Component.W <= bbox.Point.X + bbox.Width)
+            && (sym.Component.Y + sym.Component.H <= bbox.Point.Y + bbox.Height)
         )
     |> List.map
         (fun (sym:Symbol) -> sym.Id)
@@ -137,24 +152,35 @@ let symbolPos (symModel: Model) (sId: ComponentId) : XYPos =
     List.find (fun sym -> sym.Id = sId) symModel
     |> (fun sym -> {X=sym.Component.X;Y=sym.Component.Y})
 
-  
-let portPos (symModel: Model) (portId: PortId) : XYPos = 
-
-    let foundPort =
+let findPort (symModel: Model) (portId: PortId) : Port =
         allPortsInModel symModel
         |> List.find(
             fun (port:Port) -> port.PortId = portId
         )
-    let foundSymbol = findSymbolFromPort symModel foundPort
 
+
+let portPos (symModel: Model) (portId: PortId) : XYPos = 
+
+    let foundPort = findPort symModel portId
+    let foundSymbol = findSymbolFromPort symModel foundPort
     {
         X = foundPort.PortPos.X + foundSymbol.Component.X
         Y = foundPort.PortPos.Y + foundSymbol.Component.Y
     }
-    
-let isSelected (symModel: Model) : Symbol list =
+
+let portType (symModel: Model) (portId: PortId) : PortType = 
+    let foundPort = findPort symModel portId
+    foundPort.PortType
+
+let portWidth (symModel: Model) (portId: PortId) : PortWidth = 
+    let foundPort = findPort symModel portId
+    foundPort.Width
+
+let getSymbolFromSymbolId (symModel:Model) (symId:ComponentId) : Symbol = 
     symModel
-    |> List.filter (fun sym -> sym.Selected)
+    |> List.find(
+        fun sym -> sym.Id = symId
+    )
 
     // let foundSymbol = List.find (fun sym -> sym.Id = sId) symModel
     // let checkInput = Option.toList (List.tryFind (fun (x:Port)-> x.PortId = portId) (foundSymbol.Component.InputPorts))
@@ -204,11 +230,12 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             PortId = PortId (uuid())
             PortNumber =  Some (PortNumber (portNumber))
             PortType = portType
-            PortPos = {X=offset; Y = 20. + ((float portNumber) + 1.) * portPos}
+            PortPos = {X=offset; Y = float ( int (20. + ((float portNumber) + 1.) * portPos )) }
             HostId = hostID
             Hover = PortHover false
             Width = portWidth
         }
+
     
     let (inputPorts, outputPorts): (Port list * Port list) =
         match compType with 
@@ -219,7 +246,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber = Some (PortNumber (0))
                         PortType = PortType.Input
-                        PortPos = {X=0.; Y = compH/2.}
+                        PortPos = {X=0.; Y = float (int (compH/2.))}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
@@ -229,7 +256,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber = Some (PortNumber (0))
                         PortType = PortType.Output
-                        PortPos = {X=compW; Y = compH/2.}
+                        PortPos = {X=compW; Y = float (int (compH/2.))}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
@@ -243,7 +270,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber =  None
                         PortType = PortType.Output
-                        PortPos = {X=compW/2.; Y = compH}
+                        PortPos = {X=float (int (compW/2.)); Y = compH}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
@@ -261,7 +288,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber =  None
                         PortType = PortType.Input
-                        PortPos = {X=compW/2.; Y = compH}
+                        PortPos = {X= float (int (compW/2.)); Y = compH}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
@@ -399,7 +426,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber =  None
                         PortType = PortType.Output
-                        PortPos = {X=compW/2.; Y = compH}
+                        PortPos = {X=float (int (compW/2.)); Y = compH}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
@@ -499,13 +526,13 @@ let createNewSymbol ()  =
         | 14 -> ComponentType.ROM (memory())
         | 15 -> ComponentType.RAM (memory())
         | 16 -> ComponentType.Decode4
-        // | 17 -> ComponentType.Input (rng0 ())
-        // | 18 -> ComponentType.Output (rng0 ())
+        | 17 -> ComponentType.Input (rng0 ())
+        | 18 -> ComponentType.Output (rng0 ())
         | 19 -> ComponentType.IOLabel
         | 20 -> ComponentType.Demux2
         | 21 -> ComponentType.MergeWires
         | 22 -> ComponentType.BusSelection (rng0(),rng0())
-        // | 23 -> ComponentType.Constant (rng0(), rng0())
+        | 23 -> ComponentType.Constant (rng0(), rng0())
         | _ -> ComponentType.SplitWire (rng0())
 
         //| 3 -> testComponentDemux2 ()
@@ -580,12 +607,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     //     List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
     | DeleteSymbol -> 
         List.filter (fun sym -> not sym.Selected) model , Cmd.none
-    | SetSelected (topLeft, topRight) ->
+    | SetSelectedDummy (topLeft, topRight) ->
         (setSelectedFunction (topLeft, topRight) model), Cmd.none
+
     | UpdateSymbolModelWithComponent comp ->
         updateSymbolModelWithComponent model comp, Cmd.none
 
-    | StartDragging (sId, pagePos) ->
+    | StartDraggingDummy (sId, pagePos) ->
         let sIdSymbol:Symbol = 
             (List.filter (fun x -> x.Id = sId) model)
             |>List.head
@@ -607,9 +635,46 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 |> startDrag
 
         ), Cmd.none
-        
 
-    | Dragging (rank, pagePos) ->
+    
+    |SetSelected (sIdLst) ->
+        (
+            sIdLst
+            |> List.map (getSymbolFromSymbolId model)
+            |> List.fold (fun acc elem ->
+                acc
+                |> List.map (fun sym ->
+                    if sym.Id = elem.Id then
+                        {sym with
+                            Selected = true
+                        }
+                    else 
+                        {sym with
+                            Selected = false
+                        }
+                )
+            ) model
+        ), Cmd.none
+
+
+    | StartDragging (sIdLst, pagePos) ->
+        (
+            sIdLst
+            |> List.map (getSymbolFromSymbolId model)
+            |> List.fold (fun acc elem ->
+                acc
+                |> List.map (fun sym ->
+                    if sym.Id = elem.Id then
+                        {sym with
+                            LastDragPos = pagePos
+                            IsDragging = true
+                        }
+                    else sym
+                )
+            ) model
+        ), Cmd.none
+
+    | DraggingDummy (rank, pagePos) ->
         model 
         |> List.map (fun sym ->
             if sym.Selected then
@@ -624,17 +689,124 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 sym
             ), Cmd.none
 
-    | EndDragging sId ->
-        model 
+    | Dragging (sIdLst, pagePos) ->
+        (
+            sIdLst
+            |> List.map (getSymbolFromSymbolId model)
+            |> List.fold (fun acc elem ->
+                acc
+                |> List.map (fun sym ->
+                if sym.Id = elem.Id then
+                    let diff = posDiff pagePos sym.LastDragPos
+                    {sym with
+                        Component = {sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
+                        LastDragPos = pagePos
+                    }
+                else
+                    sym
+                )
+            ) model 
+        ), Cmd.none
+
+        
+
+
+    // | EndDraggingDummy sId ->
+    //     model 
+    //     |> List.map (fun sym ->
+    //         if sym.Selected then
+    //             {sym with 
+    //                 IsDragging = false
+    //             }
+    //         else
+    //             sym
+    //         ), Cmd.none
+    
+    | EndDragging ->
+        model
         |> List.map (fun sym ->
-            if sym.Selected then
-                {sym with 
+            if sym.IsDragging then
+                {sym with
                     IsDragging = false
                 }
-            else
-                sym
-            ), Cmd.none
-    | MouseOutPort port ->
+            else sym
+        ), Cmd.none
+
+    | HighlightPorts pIdLst ->
+        (
+            pIdLst
+            |> List.map (findPort model)
+            |> List.fold (fun acc elem ->
+                acc
+                |> List.map (fun sym ->
+                    if sym.Component.Id = elem.HostId then
+                        match elem.PortType with
+                        | PortType.Input ->
+                            {sym with
+                                Component = 
+                                    {sym.Component with 
+                                        InputPorts =
+                                            sym.Component.InputPorts
+                                                |>List.map (fun checkPort ->
+                                                    {checkPort with
+                                                        Hover = PortHover false
+                                                    }
+                                                )           
+                                    }
+                            }
+                        |_ ->
+                            {sym with
+                                Component = 
+                                    {sym.Component with 
+                                        OutputPorts =
+                                            sym.Component.OutputPorts
+                                                |>List.map (fun checkPort ->
+                                                    {checkPort with
+                                                        Hover = PortHover false
+                                                    }
+                                                )       
+                                    }
+                            }
+                    else
+                        sym 
+                )
+            ) model
+        ), Cmd.none
+        
+    | UnhighlightPorts ->
+        model
+        |> List.map (
+            (fun sym ->
+                {sym with
+                    Component = 
+                        {sym.Component with
+                            InputPorts =
+                                sym.Component.InputPorts
+                                |> List.map (fun checkPort ->
+                                {checkPort with   
+                                        Hover = PortHover false
+                                    }
+                                )
+                        }
+                }
+            ) >> 
+            (fun sym ->
+                {sym with
+                    Component = 
+                        {sym.Component with
+                            InputPorts =
+                                sym.Component.OutputPorts
+                                |> List.map (fun checkPort ->
+                                {checkPort with   
+                                        Hover = PortHover false
+                                    }
+                                )
+                        }
+                }
+            )
+        )
+        ,Cmd.none
+    | MouseOutPort port -> // Used for Dummy Code
         let portType = port.PortType
         model
         |> List.map (fun sym ->
@@ -669,7 +841,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
             else
                 sym
             ),Cmd.none
-    | MouseOverPort port -> 
+    | MouseOverPort port -> //Used for Dummy Code
         let portType = port.PortType
         model
         |> List.map (fun sym ->
@@ -739,7 +911,7 @@ let private renderSymbol (model:Model) =
                     let ev = ev :?> Types.MouseEvent
                     // x,y coordinates here do not compensate for transform in Sheet
                     // and are wrong unless zoom=1.0 MouseMsg coordinates are correctly compensated.
-                    Dragging(props.Symbol.Id, posOf ev.pageX ev.pageY)
+                    DraggingDummy(props.Symbol.Id, posOf ev.pageX ev.pageY)
                     |> props.Dispatch
                 )
 
@@ -797,7 +969,7 @@ let private renderSymbol (model:Model) =
                 seq {
                         OnMouseUp (fun ev -> 
                             document.removeEventListener("mousemove", handleMouseMove.current)
-                            EndDragging props.Symbol.Id
+                            EndDragging
                             |> props.Dispatch
                         )
                         OnMouseDown (fun ev -> 
@@ -805,9 +977,9 @@ let private renderSymbol (model:Model) =
                             // StartDragging (props.Symbol.Id, posOf ev.pageX ev.pageY)
                             let multipleSelection = List.fold (fun acc elem -> if elem.Selected then acc+1 else acc) 0 model
                             if multipleSelection <= 1 then
-                                SetSelected (topLeft, bottomRight)
+                                SetSelectedDummy (topLeft, bottomRight)
                                 |> props.Dispatch
-                            StartDragging (props.Symbol.Id, posOf ev.pageX ev.pageY)
+                            StartDraggingDummy (props.Symbol.Id, posOf ev.pageX ev.pageY)
                             |> props.Dispatch
                             document.addEventListener("mousemove", handleMouseMove.current)
                         )
@@ -861,7 +1033,7 @@ let private renderSymbol (model:Model) =
                 seq {
                     OnMouseUp (fun ev -> 
                         document.removeEventListener("mousemove", handleMouseMove.current)
-                        EndDragging props.Symbol.Id
+                        EndDragging
                         |> props.Dispatch
                     )
                     OnMouseDown (fun ev -> 
@@ -869,9 +1041,9 @@ let private renderSymbol (model:Model) =
                         // StartDragging (props.Symbol.Id, posOf ev.pageX ev.pageY)
                         let multipleSelection = List.fold (fun acc elem -> if elem.Selected then acc+1 else acc) 0 model
                         if multipleSelection <= 1 then
-                            SetSelected (topLeft, bottomRight)
+                            SetSelectedDummy (topLeft, bottomRight)
                             |> props.Dispatch
-                        StartDragging (props.Symbol.Id, posOf ev.pageX ev.pageY)
+                        StartDraggingDummy (props.Symbol.Id, posOf ev.pageX ev.pageY)
                         |> props.Dispatch
                         document.addEventListener("mousemove", handleMouseMove.current)
                     )

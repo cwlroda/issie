@@ -54,7 +54,7 @@ type Msg =
     /// coords not adjusted for top-level zoom
     | Dragging of idLst : CommonTypes.ComponentId list * pagePos: XYPos
     | EndDragging
-    | AddCircle of XYPos // used by demo code to add a circle
+    | AddSymbol of CommonTypes.ComponentType * XYPos
     | DeleteSymbol of sId:CommonTypes.ComponentId 
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
     | SetSelected of CommonTypes.ComponentId list
@@ -192,15 +192,13 @@ let createNewSymbol (pos:XYPos) =
 
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
-    List.allPairs [1..14] [1..14]
-    |> List.map (fun (x,y) -> {X = float (x*64+30); Y=float (y*64+30)})
-    |> List.map createNewSymbol
+    []
     , Cmd.none
 
 /// update function which displays symbols
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
-    | AddCircle pos -> 
+    | AddSymbol (_, pos) -> 
         createNewSymbol pos :: model, Cmd.none
     | DeleteSymbol sId -> 
         List.filter (fun sym -> sym.Id <> sId) model, Cmd.none

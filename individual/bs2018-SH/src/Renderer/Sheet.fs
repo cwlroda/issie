@@ -24,6 +24,7 @@ type MouseDown =
     | FromPort of CommonTypes.PortId * XYPos
     | FromSymbol
     | FromEmpty
+    | FromWire of CommonTypes.ConnectionId
 
 
 type Model = {
@@ -31,12 +32,13 @@ type Model = {
     SelectedSymbols: CommonTypes.ComponentId list
     SelectedWire: CommonTypes.ConnectionId Option
     MouseState: MouseDown
+    LastMousePos: XYPos
     SelectionBox: SelectionBox
     Grid: Grid
 }
 
 type KeyboardMsg =
-    | CtrlS | AltC | AltV | AltZ | AltShiftZ | DEL | CtrlA
+    | AltShiftZ | DEL | CtrlA | CtrlN | CtrlG
 
 type Msg =
     | Wire of BusWire.Msg
@@ -168,13 +170,15 @@ let view (model:Model) (dispatch : Msg -> unit) =
         ]
 
 
-let closestPosOnGrid (grid : Grid) (pos : XYPos) : XYPos =
-    let leftDist = pos.X % grid.Size
-    let upDist = pos.Y % grid.Size
-    let x = if leftDist < grid.Size - leftDist then pos.X - leftDist else pos.X + grid.Size - leftDist
-    let y = if upDist < grid.Size - upDist then pos.Y - upDist else pos.Y + grid.Size - upDist
-    printf $"{x},{y}"
-    posOf x y
+let posToGridIfEnabled (grid : Grid) (pos : XYPos) : XYPos =
+    if grid.SnapToGrid then
+        let leftDist = pos.X % grid.Size
+        let upDist = pos.Y % grid.Size
+        let x = if leftDist < grid.Size - leftDist then pos.X - leftDist else pos.X + grid.Size - leftDist
+        let y = if upDist < grid.Size - upDist then pos.Y - upDist else pos.Y + grid.Size - upDist
+        posOf x y
+    else
+        pos
 
 
 let highlightPorts (model : Model) (pos : XYPos) = 
@@ -223,16 +227,15 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         
         model, Cmd.batch (List.append wireCommands symbolCommands)
 
-    | KeyPress s -> // all other keys are turned into SetColor commands
-        let c =
-            match s with
-            | AltC -> CommonTypes.Blue
-            | AltV -> CommonTypes.Green
-            | AltZ -> CommonTypes.Red
-            | _ -> CommonTypes.Grey
-        printfn "Key:%A" c
-        model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
-
+    | KeyPress CtrlN ->
+        let posOnGrid = posToGridIfEnabled model.Grid model.LastMousePos
+            
+        model, Cmd.ofMsg (Symbol <| Symbol.AddSymbol (CommonTypes.Not, posOnGrid))
+    
+    | KeyPress CtrlG ->
+        {model with
+            Grid = {model.Grid with SnapToGrid = (not model.Grid.SnapToGrid)}
+        }, Cmd.none
 
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =
@@ -253,9 +256,15 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 let targetedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol pos
                 match targetedSymbol with
                 | Some symbolId -> FromSymbol, processSelectedSymbols symbolId, false
-                | None -> FromEmpty, [], true
+                | None -> 
+                    match BusWire.getTargetedWire model.Wire pos with
+                        | Some wId -> FromWire wId, model.SelectedSymbols, false
+                        | None -> FromEmpty, [], true
 
-        
+        let wireDragCommands =
+            match mouseState with
+            | FromWire wId -> [Cmd.ofMsg (Wire <| BusWire.StartDrag (wId, pos))]
+            | _ -> []        
         
         {model with
             MouseState = mouseState;
@@ -266,11 +275,15 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                     MovingCorner = pos
                     Show = showSelection
             }
+            LastMousePos = pos
         },
-        Cmd.batch[
-            Cmd.ofMsg (Symbol <| Symbol.StartDragging (selectedSymbols, pos));
-            Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols);
-        ]
+        Cmd.batch(
+            [
+                Cmd.ofMsg (Symbol <| Symbol.StartDragging (selectedSymbols, (posToGridIfEnabled model.Grid pos)));
+                Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols);
+            ]
+            |> List.append wireDragCommands
+        )
         
     | MouseUp (pos, isShift) ->
         let processSelectionBox =
@@ -313,7 +326,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | _ -> []
 
         let cmds = 
-            [Cmd.ofMsg (Symbol <| Symbol.EndDragging);Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)]
+            [
+                Cmd.ofMsg (Symbol <| Symbol.EndDragging)
+                Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)
+                Cmd.ofMsg (Wire <| BusWire.EndDrag)
+            ]
             |> List.append addWireCommands
             |> List.append selectWireCommands
 
@@ -344,12 +361,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 },
                 [Cmd.none]
             | FromSymbol ->
-                model, [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, pos))]
+                model, [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, (posToGridIfEnabled model.Grid pos)))]
             | FromPort (pId,_) ->
                 {
                     model with
                         MouseState = FromPort (pId, pos)
                 }, [Cmd.none]
+            | FromWire wId -> model, [Cmd.ofMsg (Wire <| BusWire.Dragging (wId, pos))]
             | _ -> model, [Cmd.none]
 
 
@@ -376,4 +394,5 @@ let init() =
             SnapToGrid = true
             Show = true
         }
+        LastMousePos = posOf 0. 0.
     }, Cmd.map Wire cmds

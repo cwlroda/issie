@@ -56,26 +56,26 @@ let displaySvgWithZoom (zoom:float) (svgReact: ReactElement) (dispatch: Dispatch
             [ g // group list of elements with list of attributes
                 [ Style [Transform (sprintf "scale(%f)" zoom)]] // top-level transform style attribute for zoom
                 [ 
-                    text [ // a demo text svg element
-                        X 500; 
-                        Y 50; 
-                        Style [
-                            TextAnchor "middle" // horizontal algnment vs (X,Y)
-                            DominantBaseline "middle" // vertical alignment vs (X,Y)
-                            FontSize "40px"
-                            FontWeight "Bold"
-                            Fill "Green" // font color
-                        ]
-                    ] [str "sample text"]
+                    // text [ // a demo text svg element
+                    //     X 500; 
+                    //     Y 50; 
+                    //     Style [
+                    //         TextAnchor "middle" // horizontal algnment vs (X,Y)
+                    //         DominantBaseline "middle" // vertical alignment vs (X,Y)
+                    //         FontSize "40px"
+                    //         FontWeight "Bold"
+                    //         Fill "Green" // font color
+                    //     ]
+                    // ] [str "sample text"]
 
                     svgReact // the application code
 
-                    polygon [ // a demo svg polygon triangle written on top of the application
-                        SVGAttr.Points "10,10 900,900 10,900"
-                        SVGAttr.StrokeWidth "5px"
-                        SVGAttr.Stroke "Black"
-                        SVGAttr.FillOpacity 0.1
-                        SVGAttr.Fill "Blue"] []
+                    // polygon [ // a demo svg polygon triangle written on top of the application
+                    //     SVGAttr.Points "10,10 900,900 10,900"
+                    //     SVGAttr.StrokeWidth "5px"
+                    //     SVGAttr.Stroke "Black"
+                    //     SVGAttr.FillOpacity 0.1
+                    //     SVGAttr.Fill "Blue"] []
                 ]
             ]
         ]
@@ -97,6 +97,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | KeyPress AltShiftZ -> 
         printStats() // print and reset the performance statistics in dev tools window
         model, Cmd.none // do nothing else and return model unchanged
+    | KeyPress DEL ->
+        model, Cmd.ofMsg (Wire <| BusWire.DeleteWires)
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with
@@ -105,10 +107,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | AltZ -> CommonTypes.Red
             | _ -> CommonTypes.Grey
         printfn "Key:%A" c
-        model, Cmd.ofMsg (Wire <| BusWire.SetColor c)
+        model, Cmd.ofMsg (Wire <| BusWire.SetWireColor c)
+
 
 let init() = 
-    let model,cmds = (BusWire.init 400)()
+    let model,cmds = (BusWire.init 4)()
     {
         Wire = model
     }, Cmd.map Wire cmds
