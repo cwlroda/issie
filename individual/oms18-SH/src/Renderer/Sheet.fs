@@ -55,7 +55,11 @@ type Msg =
     | KeyPress of KeyboardMsg
     | MouseMsg of MouseT * Modifier
 
-let gridSize = 5.
+let gridSize = 5
+
+let discretizeToGrid v =
+    let fGridSize = float gridSize
+    (fGridSize * (floor (v / (float fGridSize))))
 
 /// This function zooms an SVG canvas by transforming its content and altering its size.
 /// Currently the zoom expands based on top left corner. Better would be to collect dimensions
@@ -92,6 +96,40 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                 NoModifier
         )
 
+    let gridlines =
+        let panX = int (discretizeToGrid model.PanX)
+        let panY = int (discretizeToGrid model.PanY)
+        let size = int model.Size
+
+        let getGridCoords offset =
+            [0..int (ceil model.Size)]
+            |> List.map (fun i -> i * gridSize)
+            |> List.takeWhile (fun gc -> gc < int model.Size)
+
+        let color gc offset =
+            if (gc - offset) % (gridSize * 10) = 0 then "grey" else "lightgrey"
+
+        let makeLine x0 y0 x1 y1 color offset =
+            line [
+                X1 (x0 - panX)
+                Y1 (y0 - panY)
+                X2 (x1 - panX)
+                Y2 (y1 - panY)
+                SVGAttr.Stroke (color offset)
+                SVGAttr.StrokeWidth "1px"
+            ] []
+        let createHalfGrid offset lineFun =
+            getGridCoords offset
+            |> List.map (lineFun >> (fun f -> f offset))
+
+        g [] (
+            [
+                createHalfGrid panX (fun x -> makeLine x -gridSize x size <| color x)
+                createHalfGrid panY (fun y -> makeLine -gridSize y size y <| color y)
+            ]
+            |> List.concat
+        )
+
     div [ Style [ Height sizeInPixels
                   MaxWidth sizeInPixels
                   Border (sprintf "%fpx solid green" borderSize)
@@ -114,6 +152,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                         else
                             "Blue"
 
+                    gridlines
                     svgReact // the application code
                     rect [
                         X area.Pos.X
@@ -128,6 +167,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                 | WireCreation (pId, p) -> 
                     let portPos = Symbol.portPos model.Wire.Symbol pId
 
+                    gridlines
                     svgReact
                     line [
                         X1 portPos.X
@@ -137,7 +177,9 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                         SVGAttr.Stroke "Purple"
                         SVGAttr.StrokeWidth "3px"
                     ] []
-                | _ -> svgReact
+                | _ ->
+                    gridlines
+                    svgReact
             ]
         ] // top-level transform style attribute for zoom
     ] // top-level transform style attribute for zoom
@@ -153,7 +195,7 @@ let view (model: Model) (dispatch: Msg -> unit) =
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     let snapToGrid p =
-        posOf (gridSize * (floor (p.X / gridSize))) (gridSize * (floor (p.Y / gridSize)))
+        posOf (discretizeToGrid p.X) (discretizeToGrid p.Y)
 
     match msg with
     | Wire wMsg ->
