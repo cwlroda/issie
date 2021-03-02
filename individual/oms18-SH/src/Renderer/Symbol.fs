@@ -62,16 +62,40 @@ type Msg =
 
 //---------------Other interface functions--------------------//
 
+// internal to setup
+let getAllPorts (model: Model) : CommonTypes.PortId list * CommonTypes.PortId list =
+    model
+    |> List.map (fun sym -> (sym.InputPort, sym.OutputPort))
+    |> List.fold (fun (si, so) (i, o) -> (i :: si, o :: so)) ([], [])
+
+// internal
+let symbolToBBox (sym: Symbol) =
+    let pos = posDiff sym.Pos (posOf 20. 20.)
+    BBox.toBBox pos.X pos.Y 40. 40.
+
+let symbolBBox (model: Model) (sId: CommonTypes.ComponentId) =
+    List.find (fun sym -> sym.Id = sId) model
+    |> symbolToBBox
+
+let symbolType (_: Model) (_: CommonTypes.ComponentId) =
+    CommonTypes.ComponentType.And
+
 let symbolPos (model: Model) (sId: CommonTypes.ComponentId) : XYPos = 
     List.find (fun sym -> sym.Id = sId) model
     |> (fun sym -> sym.Pos)
 
-let BBoxFromSymbol (sym: Symbol) =
-    let pos = posDiff sym.Pos (posOf 20. 20.)
-    BBox.toBBox pos.X pos.Y 40. 40.
+let portType (model: Model) (pId: CommonTypes.PortId) : CommonTypes.PortType = 
+    List.find (fun sym -> sym.InputPort = pId || sym.OutputPort = pId) model
+    |> (fun sym ->
+        if sym.InputPort = pId then
+            CommonTypes.PortType.Input
+        else
+            CommonTypes.PortType.Output
+    )
 
+// internal
 let getPortBBoxes (sym: Symbol) : BBox * BBox =
-    let bbSym = BBoxFromSymbol sym
+    let bbSym = symbolToBBox sym
     let x = bbSym.Pos.X
     let y = bbSym.Pos.Y
     let w = bbSym.Width
@@ -82,7 +106,7 @@ let getPortBBoxes (sym: Symbol) : BBox * BBox =
 let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos =
     List.find (fun sym -> sym.InputPort = pId || sym.OutputPort = pId) model
     |> (fun sym ->
-        let bb = BBoxFromSymbol sym
+        let bb = symbolToBBox sym
         if sym.InputPort = pId then
             posOf (bb.Pos.X + 5.) (bb.Pos.Y + 5.)
         else
@@ -104,10 +128,6 @@ let getPortsFromSymbols (model: Model) (symbols: CommonTypes.ComponentId list) :
             []
     )
 
-let getAllPorts (model: Model) : CommonTypes.PortId list =
-    model
-    |> List.collect (fun sym -> [sym.InputPort;sym.OutputPort])
-
 let portsInRange (model: Model) (p: XYPos) (range : float) : CommonTypes.PortId list =
     model
     |> List.collect (fun sym ->
@@ -124,13 +144,13 @@ let portsInRange (model: Model) (p: XYPos) (range : float) : CommonTypes.PortId 
 
 let getTargetedSymbol (model: Model) (p: XYPos) : CommonTypes.ComponentId option =
     model
-    |> List.filter (fun sym -> BBoxFromSymbol sym |> containsPoint p)
+    |> List.filter (fun sym -> symbolToBBox sym |> containsPoint p)
     |> List.map (fun sym -> sym.Id)
     |> List.tryHead
 
 let getSymbolsInBBox (model: Model) (bb: BBox) : CommonTypes.ComponentId list =
     model
-    |> List.filter (fun sym -> BBoxFromSymbol sym |> overlaps bb)
+    |> List.filter (fun sym -> symbolToBBox sym |> overlaps bb)
     |> List.map (fun sym -> sym.Id)
 
 let getTargetedPort (model: Model) (p: XYPos) : CommonTypes.PortId option =
@@ -229,7 +249,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         | (Down, p) ->
             model
             |> List.map (fun sym ->
-                let bb = BBoxFromSymbol sym
+                let bb = symbolToBBox sym
                 if containsPoint p bb then
                     { sym with IsSelected = true }
                 else
@@ -271,7 +291,7 @@ let private renderCircle =
                 else
                     "grey"
 
-            let bb = BBoxFromSymbol props.Circle
+            let bb = symbolToBBox props.Circle
             let (inputBB, outputBB) = getPortBBoxes props.Circle
             let inputPortColor =
                 if props.Circle.HighlightInputPort then

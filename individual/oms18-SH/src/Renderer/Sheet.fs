@@ -23,10 +23,16 @@ type SelectionState =
     | Port of CommonTypes.PortId
     | Empty
 
+type CopyState =
+    | Copied of (CommonTypes.ComponentType * XYPos) list
+    | Uninitialized
+
 type Model = {
     Wire: BusWire.Model
     DragState: DragState
     Selection: SelectionState
+    CopyState: CopyState
+    MousePosition: XYPos
     PanX: float
     PanY: float
     Zoom: float
@@ -162,6 +168,35 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
             ] []
         | _ -> g [] []
 
+    let errorOverlay =
+        g [] (
+            BusWire.getErrors model.Wire
+            |> List.map (fun e ->
+                g [] [
+                    rect [
+                        X e.Pos.X
+                        Y e.Pos.Y
+                        SVGAttr.Width "280"
+                        SVGAttr.Height "30"
+                        SVGAttr.Fill "#a11"
+                        SVGAttr.Stroke "black"
+                        SVGAttr.StrokeWidth "4px"
+                    ] []
+                    text [ // "Bus Decoder" header
+                        X (e.Pos.X + 5.)
+                        Y (e.Pos.Y + 20.)
+                        Style [
+                            UserSelect UserSelectOptions.None
+                            TextAnchor "left"
+                            DominantBaseline "baseline"
+                            FontSize "15px"
+                            FontWeight "Bold"
+                            Fill "White"
+                        ]
+                    ] [str e.Msg]
+                ]
+            )
+        )
 
     div [ Style [ Height sizeInPixels
                   MaxWidth sizeInPixels
@@ -179,6 +214,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                     gridlines
                     svgReact
                     overlay
+                    errorOverlay
             ]
         ] // top-level transform style attribute for zoom
     ] // top-level transform style attribute for zoom
@@ -305,6 +341,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | (Drag, p, _) ->
             let portsNearMouse = Symbol.portsInRange model.Wire.Symbol p 100.
             // TODO: Send StartDrag
+            let model = { model with MousePosition=p}
             match model.DragState with
             | AreaSelect (start, _, additive) ->
                 { model with DragState=AreaSelect (start, p, additive)}
@@ -431,7 +468,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | (Move, p, _) ->
             let portsNearMouse = Symbol.portsInRange model.Wire.Symbol p 100.
 
-            model
+            { model with MousePosition=p}
             , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse)))
     | KeyPress AltA ->
         let selectedSymbols = Symbol.getAllSymbols model.Wire.Symbol
@@ -486,6 +523,44 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.DeleteSymbols sIdLst)))
         | SelectionState.Port _ -> Cmd.none
         | Empty -> Cmd.none
+    | KeyPress AltC ->
+        match model.Selection with
+        | Symbols sIdLst ->
+            let sIdAndPosLst = 
+                sIdLst
+                |> List.map (fun sId ->
+                    (Symbol.symbolType model.Wire.Symbol sId,
+                     (Symbol.symbolBBox model.Wire.Symbol sId).Pos)
+                )
+
+            let topLeftOfSymbols =
+                let middle lst = List.min lst + (List.max lst - List.min lst) / 2.
+
+                sIdAndPosLst
+                |> List.map (fun (_, p) -> (p.X, p.Y))
+                |> List.fold (fun (xs, ys) (x, y) -> (x :: xs, y :: ys)) ([], [])
+                |> fun (xs, ys) -> posOf (middle xs) (middle ys)
+                
+            let sIdAndPosLst = 
+                sIdAndPosLst
+                |> List.map (fun (sId, p) -> (sId, posDiff p topLeftOfSymbols))
+
+            { model with
+                CopyState=CopyState.Copied sIdAndPosLst
+            }
+        | _ -> model
+        , Cmd.none
+    | KeyPress AltV ->
+        model,
+        match model.CopyState with
+        | Copied sIdLst ->
+            Cmd.batch (
+                sIdLst
+                |> List.map (fun (sType, p) ->
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (sType, posAdd p model.MousePosition))))
+                )
+            )
+        | Uninitialized -> Cmd.none
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with
@@ -505,6 +580,8 @@ let init () =
         Wire = model
         Selection = Empty
         DragState = NotDragging
+        CopyState = Uninitialized
+        MousePosition = posOf 0. 0.
         PanX = 0.
         PanY = 0.
         Zoom = 1.
