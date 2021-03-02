@@ -62,6 +62,7 @@ type Msg =
     | Symbol of Symbol.Msg
     | Scroll of float * float
     | SnapToGridMsg
+    | SelectSymbolsAtPositions of XYPos list
 
 let view (model:Model) (dispatch : Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
@@ -306,19 +307,41 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     ///Copy
     | KeyPress CtrlC -> {model with Clipboard = model.SelectedSymbols}, Cmd.none
 
-    ///Paste new symbols shifted 20px right and 20px down from originals.
+    ///Paste new symbols shifted 20px right and 20px down from originals
+    ///and select new symbols.
     | KeyPress CtrlV ->
-        model,
-        [Cmd.ofMsg SnapToGridMsg]
-        |> List.append (
+        let newPosLst =
             model.Clipboard
             |> List.map (Symbol.symbolBBox model.Wire.Symbol)
-            |> List.map (fun bb -> Cmd.ofMsg(Symbol <| Symbol.AddSymbol (CommonTypes.Not, (posAdd bb.Pos (posOf 20. 20.)))))
+            |> List.map (fun bb -> posAdd bb.Pos (posOf 20. 20.))
+
+        model,
+        [Cmd.ofMsg SnapToGridMsg]
+        |> List.append [
+            Cmd.ofMsg (SelectSymbolsAtPositions newPosLst)
+        ]
+        |> List.append (
+            newPosLst
+            |> List.map (fun p -> Cmd.ofMsg(Symbol <| Symbol.AddSymbol (CommonTypes.Not, p)))
         )
         |> Cmd.batch
 
     ///Snaps all symbols to grid.
     | SnapToGridMsg -> model, alignSymbolsToGrid model
+
+    ///Select symbols at positions in posLst
+    | SelectSymbolsAtPositions posLst ->
+        let ids =
+            posLst
+            // |> List.map (fun p -> posAdd p (posOf 3. 3.))
+            |> List.collect (fun p ->
+                match Symbol.getTargetedSymbol model.Wire.Symbol p with
+                | Some id -> [id]
+                | None -> []
+            )
+        {model with SelectedSymbols=ids},
+        Cmd.ofMsg (Symbol <| Symbol.SetSelected ids)
+        
 
     ///Processes mouse down events. Click priority: Port -> Symbol -> Wire -> Empty
     | MouseDown (pos, isShift) ->

@@ -74,7 +74,7 @@ let getTargetedSymbol (symModel: Model) (pos:XYPos) : CommonTypes.ComponentId Op
         }
         containsPoint pos bb
 
-    match (symModel |> List.tryFind clickInSym) with
+    match (symModel |> List.rev |> List.tryFind clickInSym) with
     | None -> None
     | Some sym -> Some sym.Id
 
@@ -213,7 +213,7 @@ let init () =
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     | AddSymbol (_, pos) -> 
-        createNewSymbol pos :: model, Cmd.none
+        model @ [createNewSymbol pos], Cmd.none
     | DeleteSymbols sIds -> 
         List.filter (fun sym -> not (List.contains sym.Id sIds)) model, Cmd.none
     | StartDragging (sLst, pagePos) ->
@@ -331,7 +331,7 @@ let private renderCircle =
                     Cy props.Circle.Pos.Y
                     SVGAttr.Points (polygonPointsString props.Circle.Pos (posOf (props.Circle.Pos.X + 40.) (props.Circle.Pos.Y + 40.)))
                     SVGAttr.Fill color
-                    SVGAttr.Stroke color
+                    SVGAttr.Stroke "black"
                     SVGAttr.StrokeWidth 1
                 ]
                 [ ]
