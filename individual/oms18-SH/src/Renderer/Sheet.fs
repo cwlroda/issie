@@ -99,14 +99,12 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
     let gridlines =
         let panX = int (discretizeToGrid model.PanX)
         let panY = int (discretizeToGrid model.PanY)
-        let size = int model.Size
+        let size = int (ceil model.Size)
 
-        let getGridCoords offset =
-            [0..int (ceil model.Size)]
-            |> List.map (fun i -> i * gridSize)
-            |> List.takeWhile (fun gc -> gc < int model.Size)
+        let getGridCoords =
+            [0..gridSize..size]
 
-        let color gc offset =
+        let getColor gc offset =
             if (gc - offset) % (gridSize * 10) = 0 then "grey" else "lightgrey"
 
         let makeLine x0 y0 x1 y1 color offset =
@@ -119,16 +117,46 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                 SVGAttr.StrokeWidth "1px"
             ] []
         let createHalfGrid offset lineFun =
-            getGridCoords offset
+            getGridCoords
             |> List.map (lineFun >> (fun f -> f offset))
 
         g [] (
             [
-                createHalfGrid panX (fun x -> makeLine x -gridSize x size <| color x)
-                createHalfGrid panY (fun y -> makeLine -gridSize y size y <| color y)
+                createHalfGrid panX (fun x -> makeLine x -gridSize x size <| getColor x)
+                createHalfGrid panY (fun y -> makeLine -gridSize y size y <| getColor y)
             ]
             |> List.concat
         )
+
+    let overlay =
+        match model.DragState with
+        | AreaSelect (p1, p2, additive) ->
+            let area = pointsToBBox p1 p2
+            let color = if additive then "Green" else "Blue"
+
+            rect [
+                X area.Pos.X
+                Y area.Pos.Y
+                SVGAttr.Width area.Width
+                SVGAttr.Height area.Height
+                SVGAttr.Fill color
+                SVGAttr.Stroke color
+                SVGAttr.StrokeWidth "1px"
+                SVGAttr.FillOpacity 0.3
+            ] []
+        | WireCreation (pId, p) -> 
+            let portPos = Symbol.portPos model.Wire.Symbol pId
+
+            line [
+                X1 portPos.X
+                Y1 portPos.Y
+                X2 p.X
+                Y2 p.Y
+                SVGAttr.Stroke "Purple"
+                SVGAttr.StrokeWidth "3px"
+            ] []
+        | _ -> g [] []
+
 
     div [ Style [ Height sizeInPixels
                   MaxWidth sizeInPixels
@@ -143,43 +171,9 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
               OnMouseMove(fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
               OnMouseLeave(fun ev -> mouseOp Leave ev)] [
             g [ Style [ Transform (sprintf "translate(%fpx,%fpx) scale(%f)" model.PanX model.PanY model.Zoom) ] ] [  // top-level transform style attribute for zoom
-                match model.DragState with
-                | AreaSelect (p1, p2, additive) ->
-                    let area = pointsToBBox p1 p2
-                    let color =
-                        if additive then
-                            "Green"
-                        else
-                            "Blue"
-
-                    gridlines
-                    svgReact // the application code
-                    rect [
-                        X area.Pos.X
-                        Y area.Pos.Y
-                        SVGAttr.Width area.Width
-                        SVGAttr.Height area.Height
-                        SVGAttr.Fill color
-                        SVGAttr.Stroke color
-                        SVGAttr.StrokeWidth "1px"
-                        SVGAttr.FillOpacity 0.3
-                    ] []
-                | WireCreation (pId, p) -> 
-                    let portPos = Symbol.portPos model.Wire.Symbol pId
-
                     gridlines
                     svgReact
-                    line [
-                        X1 portPos.X
-                        Y1 portPos.Y
-                        X2 p.X
-                        Y2 p.Y
-                        SVGAttr.Stroke "Purple"
-                        SVGAttr.StrokeWidth "3px"
-                    ] []
-                | _ ->
-                    gridlines
-                    svgReact
+                    overlay
             ]
         ] // top-level transform style attribute for zoom
     ] // top-level transform style attribute for zoom
