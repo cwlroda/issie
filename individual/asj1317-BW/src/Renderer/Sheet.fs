@@ -40,10 +40,11 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
             | Some w -> 
                 dispatch <| Wire (BusWire.SetSelected w) 
                 dispatch <| Wire (BusWire.StartDragging (w,  {X =  ev.clientX / zoom; Y = ev.clientY / zoom}))
-            | None -> ()
-            match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
-            | Some s ->  dispatch <| Wire (BusWire.Symbol (Symbol.StartDragging (s.Id, {X =  ev.clientX / zoom; Y = ev.clientY / zoom})))
-            | None -> ()
+            | None ->   
+                match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+                | Some s ->  dispatch <| Wire (BusWire.Symbol (Symbol.StartDragging (s.Id, {X =  ev.clientX / zoom; Y = ev.clientY / zoom})))
+                | None -> () 
+                
             
         | Drag ->
             match BusWire.getTargetedWire model.Wire {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with

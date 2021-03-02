@@ -226,12 +226,7 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
 
     initialSegs @ finalSegs
 
-let updateVerts w (idx1, idx2) move orien =
-
-    let relMove =
-        match orien.X, orien.Y with
-        | x, y when abs (x) < abs (y) -> { X = move.X; Y = 0.0 }
-        | _ -> { X = 0.0; Y = move.Y }
+let updateVerts w (idx1, idx2) (relMove: XYPos)  =
 
     List.mapi
         (fun idx vert ->
@@ -252,8 +247,8 @@ let wiresConnectedToSymbol (wModel: Model) (symId: CommonTypes.ComponentId) : Co
     |> List.filter (fun (wId, w) -> (inLst portConnected w.SrcPort) || (inLst portConnected w.TargetPort))
     |> List.map fst 
 
-    ///Takes a position and a wireId, updates the position of the segment closest to the mouse
-let manuelRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos) =
+ ///Takes a position and a wireId, updates the position of the segment closest to the mouse
+let manualRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos) =
     let w = wire wModel wireId
 
     let isTarget wWidth segPts =
@@ -268,14 +263,21 @@ let manuelRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos
     let move = posDiff w.LastPos pos
 
 
-    let updatedWireSegs =
-        match segIdx with
-        | idx when  idx = 0 || idx = (List.length w.WireSegments) -> w.WireSegments
-        | idx ->
-            let orien =
-                posDiff w.WireSegments.[idx] w.WireSegments.[idx + 1]
+    let updatedWireSegs = 
+        let relMove = 
+            match segIdx with
+                | idx when  idx = 0 || idx = (List.length w.WireSegments) ->  
+                    match move.X, move.Y with
+                    | x,y when abs(x)> abs(y) -> {X = x; Y = 0.0 }
+                    | _, y -> {X = 0.0; Y = y}
+                | idx ->
+                        let orien = posDiff  w.WireSegments.[idx] w.WireSegments.[idx + 1]
 
-            updateVerts w (idx, idx + 1) move orien
+                        match orien.X, orien.Y with
+                        | x, y when abs (x) < abs (y) -> { X = move.X; Y = 0.0 }
+                        | _ -> { X = 0.0; Y = move.Y }
+
+        updateVerts w (segIdx, segIdx + 1) relMove 
 
     Map.add
         wireId
@@ -298,7 +300,8 @@ let updateSelectedWires (wModel: Model) (wIdLst: CommonTypes.ConnectionId list) 
         | None -> wxModel
 
     List.fold foldfunc wModel.WX wIdLst
-
+(* let manualRouting (wModel: Model) (wId: CommonTypes.PortId) (pos: XYPos) =
+    let srcBB = portPos wModel.Symbol  *)
 /// Given two port creates a wire connection and  which it auto routes
 let addWire
     (wModel: Model)
@@ -382,18 +385,18 @@ let setSelectedColor (wModel: Model) (wID: CommonTypes.ConnectionId): Map<Common
     wModel.WX.Add(
         wID,
         { w with
-              WireColor = CommonTypes.HighLightColor.Blue }
+              WireColor = CommonTypes.HighLightColor.Green }
     )
 
 /// Reset the color of all the wires except those set in red to highlight error
 let setUnselectedColor (wModel: Model): Map<CommonTypes.ConnectionId, Wire> =
     Map.map
         (fun wId w ->
-            if w.Error <> None then
+            if w.Error = None then
                 { w with
                       WireColor = CommonTypes.HighLightColor.Blue }
             else
-                w)
+                {w with WireColor = CommonTypes.HighLightColor.Red})
         wModel.WX
 
 let endDrag (wModel: Model): Map<CommonTypes.ConnectionId, Wire> = setUnselectedColor wModel
@@ -534,17 +537,18 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
               WX = setUnselectedColor model },
         Cmd.none
     | Dragging (wMsgId, wMsgPos) ->
-        let wxUpdated = manuelRouting model wMsgId wMsgPos
+        let wxUpdated = manualRouting model wMsgId wMsgPos
         //let wxUpdated = updateSelectedWires model wMsgId
         { model with WX = wxUpdated }, Cmd.none
     | StartDragging (wMsgId, wMsgPos) ->
         let oldWX = model.WX
         let wxUpdated = startDrag model wMsgId wMsgPos
-        let bb = createBB wxUpdated
+        (* let bb = createBB wxUpdated *)
 
         { model with
               WX = wxUpdated
-              BB = bb },
+              //BB = bb 
+              },
         Cmd.none
     | EndDragging ->
         let wXUpdated = endDrag model
