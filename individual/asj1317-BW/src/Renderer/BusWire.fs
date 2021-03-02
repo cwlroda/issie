@@ -49,7 +49,7 @@ type Wire =
       Error: string Option
       }
 
-let BBoxSize = 1.0
+let BBoxSize = 2.0
 
 type Model =
     { Symbol: Symbol.Model
@@ -130,19 +130,19 @@ let createSegBB (wireW: int) ((startPt, endPt): XYPos * XYPos) = // (seg: WireSe
     let relDiff = posDiff startPt endPt
 
     let adjTopLeft =
-        { X = float -BBoxSize
-          Y = float BBoxSize }
+        { X =  -(BBoxSize + (float wireW)/2.)
+          Y =  (BBoxSize + (float wireW)/2.) }
 
     let wHCalc (diff: float) =
         match abs (diff) < 1.0 with
-        | true -> 2. * BBoxSize + float wireW
-        | _ -> (abs diff) + 2. * BBoxSize
+        | true ->   2.*BBoxSize + (float wireW)
+        | _ -> (abs diff) +  2.*BBoxSize + float (wireW)
 
     let topLeftCorner =
-        match abs relDiff.X, relDiff.Y with 
+        match relDiff.X, relDiff.Y with 
         | x,y when ((abs y) > (abs x))  && y > 0. -> posAdd startPt adjTopLeft
         | x,y when ((abs y) > (abs x)) -> posAdd endPt adjTopLeft
-        | x,_ when x < 0. -> posAdd endPt adjTopLeft
+        | x,_ when x > 0. -> posAdd endPt adjTopLeft
         |_ ,_ -> posAdd startPt adjTopLeft
 
     makeBBox topLeftCorner (wHCalc relDiff.X) (wHCalc relDiff.Y)
@@ -203,8 +203,20 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
 
     initialSegs @ finalSegs
 
-let updateVerts w (idx1, idx2) (relMove: XYPos)  =
+let updateConnectionSeg (idx0, idx1) (move:XYPos) (segments: XYPos list) =
+    List.mapi (fun idx vert ->
+        match idx with
+        | idx when idx0 = idx -> posDiff vert move
+        | idx when idx1 = idx -> posDiff vert {X=0.0; Y=move.Y}
+        | _ -> vert
+        ) segments
 
+let updateVerts (idx1, idx2) (move: XYPos) (orien: XYPos) (segments: XYPos list) =
+    let relMove =
+        match orien.X, orien.Y with
+        | x, y when abs (x) < abs (y) -> { X = move.X; Y = 0.0 }
+        | _ -> { X = 0.0; Y = move.Y }
+        
     List.mapi
         (fun idx vert ->
             match idx with
@@ -213,7 +225,7 @@ let updateVerts w (idx1, idx2) (relMove: XYPos)  =
             | idx when idx2 = idx ->
                 posDiff vert relMove
             | _ -> vert)
-        w.WireSegments
+        segments
 
 let wiresConnectedToSymbol (wModel: Model) (symId: CommonTypes.ComponentId) : CommonTypes.ConnectionId list =
     let inLst pLst portId=
@@ -236,25 +248,19 @@ let manualRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos
     let segIdx =
         List.pairwise w.WireSegments
         |> List.findIndex (isTarget w.WireWidth)
-    printf $"{segIdx}"
     let move = posDiff w.LastPos pos
-
+    
 
     let updatedWireSegs = 
-        let relMove = 
             match segIdx with
-                | idx when  idx = 0 || idx = (List.length w.WireSegments) ->  
-                    match move.X, move.Y with
-                    | x,y when abs(x)> abs(y) -> {X = x; Y = 0.0 }
-                    | _, y -> {X = 0.0; Y = y}
-                | idx ->
-                        let orien = posDiff  w.WireSegments.[idx] w.WireSegments.[idx + 1]
-
-                        match orien.X, orien.Y with
-                        | x, y when abs (x) < abs (y) -> { X = move.X; Y = 0.0 }
-                        | _ -> { X = 0.0; Y = move.Y }
-
-        updateVerts w (segIdx, segIdx + 1) relMove 
+                | idx when  idx = 0 -> 
+                    updateConnectionSeg (idx, idx+1) move w.WireSegments
+                | idx when idx = (List.length w.WireSegments)-1 ->  
+                    updateConnectionSeg (idx-1, idx) move w.WireSegments
+                | idx -> 
+                    let orien = posDiff w.WireSegments.[idx] w.WireSegments.[idx + 1]
+                    updateVerts (idx, idx+1) move orien w.WireSegments
+                        
 
     Map.add
         wireId
