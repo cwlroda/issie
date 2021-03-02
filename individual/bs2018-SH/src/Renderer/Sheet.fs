@@ -21,7 +21,7 @@ type Grid = {
 
 type MouseState =
     | MouseIsUp
-    | FromPort of CommonTypes.PortId * XYPos
+    | FromPort of CommonTypes.PortId * XYPos    //PortId indicates the source port, XYPos indicates the destiantion (mouse end) of the preview wire.
     | FromSymbol
     | FromEmpty of SelectionBox
     | FromWire of CommonTypes.ConnectionId
@@ -56,9 +56,9 @@ type KeyboardMsg =
 type Msg =
     | Wire of BusWire.Msg
     | KeyPress of KeyboardMsg
-    | MouseDown of XYPos * bool
+    | MouseDown of XYPos * bool //bool for if shift is pressed.
     | MouseMove of XYPos
-    | MouseUp of XYPos * bool
+    | MouseUp of XYPos
     | Symbol of Symbol.Msg
     | Scroll of float * float
     | SnapToGridMsg
@@ -168,12 +168,12 @@ let view (model:Model) (dispatch : Msg -> unit) =
           )
           
           OnMouseUp (fun ev -> 
-            MouseUp(mousePos ev.pageX ev.pageY, ev.shiftKey)
+            MouseUp(mousePos ev.pageX ev.pageY)
             |> dispatch
           )
 
           OnMouseLeave (fun ev ->
-            MouseUp(mousePos ev.pageX ev.pageY, ev.shiftKey)
+            MouseUp(mousePos ev.pageX ev.pageY)
             |> dispatch
           )
         ]
@@ -212,6 +212,7 @@ let highlightPorts (model : Model) (pos : XYPos) (fromPid : CommonTypes.PortId) 
 
     [Cmd.ofMsg (Symbol <| Symbol.HighlightPort ports)]
     |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
+    |> Cmd.batch
 
 ///Generates commands to snap all symbols to the grid.
 let alignSymbolsToGrid (model : Model) =
@@ -330,7 +331,9 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     ///Snaps all symbols to grid.
     | SnapToGridMsg -> model, alignSymbolsToGrid model
 
+    ///Processes mouse down events. Click priority: Port -> Symbol -> Wire -> Empty
     | MouseDown (pos, isShift) ->
+        ///Process selected list depending on if symbol is already selected and if shift is pressed.
         let processSelectedSymbols targetedId =
             if List.contains targetedId model.SelectedSymbols then
                 if isShift then
@@ -341,65 +344,42 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 if isShift then List.append model.SelectedSymbols [targetedId]
                 else [targetedId]
 
-        let mouseState, selectedSymbols =
-            let targetedPort = Symbol.getTargetedPort model.Wire.Symbol pos
-            match targetedPort with
-            | Some portId -> FromPort (portId, pos), model.SelectedSymbols
+        let mouseState, selectedSymbols, cmds =
+
+            match Symbol.getTargetedPort model.Wire.Symbol pos with
+            | Some portId -> FromPort (portId, pos), model.SelectedSymbols, []  //clicked on port
+
             | None ->
-                let targetedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol pos
-                match targetedSymbol with
-                | Some symbolId -> FromSymbol, processSelectedSymbols symbolId
+                match Symbol.getTargetedSymbol model.Wire.Symbol pos with
+                | Some symbolId ->                                              //clicked on symbol; select it and start dragging.
+                    let selSyms = processSelectedSymbols symbolId
+                    FromSymbol, selSyms,
+                    [
+                        Cmd.ofMsg (Symbol <| Symbol.StartDragging (selSyms, (posToGridIfEnabled model.Grid pos)))
+                        Cmd.ofMsg (Symbol <| Symbol.SetSelected selSyms)
+                    ]
+
                 | None -> 
                     match BusWire.getTargetedWire model.Wire pos with
-                        | Some wId -> FromWire wId, model.SelectedSymbols
-                        | None -> FromEmpty {FixedCorner = pos; MovingCorner = pos; Show = true}, []
+                        | Some wId -> FromWire wId, model.SelectedSymbols, [Cmd.ofMsg (Wire <| BusWire.StartDrag (wId, pos))]   //clicked on wire; start dragging.
 
-        let wireDragCommands =
-            match mouseState with
-            | FromWire wId -> [Cmd.ofMsg (Wire <| BusWire.StartDrag (wId, pos))]
-            | _ -> []        
-        
+                        | None -> FromEmpty {FixedCorner = pos; MovingCorner = pos; Show = true}, [], []    //clicked on empty space; initialise selection box.
+
         {model with
             MouseState = mouseState;
             SelectedSymbols = selectedSymbols;
             LastMousePos = pos
         },
-        Cmd.batch(
-            [
-                Cmd.ofMsg (Symbol <| Symbol.StartDragging (selectedSymbols, (posToGridIfEnabled model.Grid pos)));
-                Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols);
-            ]
-            |> List.append wireDragCommands
-        )
-        
-    | MouseUp (pos, isShift) ->
-        let processSelectionBox sb =
-            let symbolsInSelectionBox =
-                let selectionBBox = bboxFromDiagonals sb.FixedCorner pos
-                Symbol.getSymbolsInTargetArea model.Wire.Symbol selectionBBox
-            if List.length symbolsInSelectionBox > 1 then symbolsInSelectionBox
-            else model.SelectedSymbols
+        Cmd.batch cmds
+    
+    ///Processes mouse up events. Behaviour depends on MouseState (i.e. what was mouse-down'ed on)
+    | MouseUp pos ->
+        let selectedSymbols, selectedWire, cmds =
 
-        let selectedSymbols =
             match model.MouseState with
-            | FromEmpty sb -> processSelectionBox sb
-            | _ -> model.SelectedSymbols
-
-        let selectWireCommands, selectedWire =
-            if selectedSymbols = model.SelectedSymbols then
-                match BusWire.getTargetedWire model.Wire pos with
-                | None -> [], None
-                | Some wId -> [Cmd.ofMsg (Wire <| BusWire.SetSelected wId)], Some wId
-            else
-                [], None
-
-        let selectWireCommands = 
-            selectWireCommands
-            |> List.append [Cmd.ofMsg (Wire <| BusWire.UnselectAll)]
-
-        let addWireCommands =
-            match model.MouseState with
+            ///If down click was on a port, create a wire if mouse is currently over a port and unhighlight all ports
             | FromPort (fromPid, toPos) ->
+                model.SelectedSymbols, model.SelectedWire,
                 match Symbol.getTargetedPort model.Wire.Symbol toPos with
                 | Some toPid ->
                     let fromPortType = Symbol.portType model.Wire.Symbol fromPid
@@ -408,48 +388,61 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                         [Cmd.ofMsg (Wire <| BusWire.AddWire (fromPid, toPid))]
                     else []
                 | None -> []
-            | _ -> []
+                |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
 
-        let cmds = 
-            [
-                Cmd.ofMsg (Symbol <| Symbol.EndDragging)
-                Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)
-                Cmd.ofMsg (Wire <| BusWire.EndDrag)
-                Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)
-            ]
-            |> List.append addWireCommands
-            |> List.append selectWireCommands
+            ///If down click was on empty space, set selected symbols to those within the selection box,
+            ///and deselect any selected wire.
+            | FromEmpty sb ->
+                let symbolsInSelectionBox =
+                    let selectionBBox = bboxFromDiagonals sb.FixedCorner pos
+                    Symbol.getSymbolsInTargetArea model.Wire.Symbol selectionBBox
+                symbolsInSelectionBox, None,
+                [
+                    Cmd.ofMsg (Symbol <| Symbol.SetSelected symbolsInSelectionBox)
+                    Cmd.ofMsg (Wire <| BusWire.UnselectAll)
+                ]
+
+            ///If down click was on a wire, select the wire if it's still targeted, and end wire dragging.
+            | FromWire _ -> 
+                match BusWire.getTargetedWire model.Wire pos with
+                | None -> model.SelectedSymbols, None, [Cmd.ofMsg (Wire <| BusWire.EndDrag)]
+                | Some wId -> model.SelectedSymbols, Some wId, [Cmd.ofMsg (Wire <| BusWire.EndDrag); Cmd.ofMsg (Wire <| BusWire.SetSelected wId)]
+
+            ///If down click was on a symbol, end symbol dragging.
+            | FromSymbol -> model.SelectedSymbols, model.SelectedWire, [Cmd.ofMsg (Symbol <| Symbol.EndDragging)]
+
+            ///Otherwise do nothing.
+            | _ -> model.SelectedSymbols, model.SelectedWire, []
 
         {
             model with
                 SelectedSymbols = selectedSymbols
                 SelectedWire = selectedWire
                 MouseState = MouseIsUp
-                // SelectionBox = {
-                //     model.SelectionBox with
-                //         Show = false
-                // }
         }, 
         Cmd.batch cmds
 
-
+    ///Processes mouse down events. Behaviour depends on MouseState (i.e. what was mouse-down'ed on)
     | MouseMove pos ->
-        let model, draggingCommands =
-            match model.MouseState with
-            | FromEmpty sb -> {model with MouseState = FromEmpty {sb with MovingCorner = pos}}, [Cmd.none]
-            | FromSymbol ->
-                model, [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, (posToGridIfEnabled model.Grid pos)))]
-            | FromPort (pId,_) ->
-                {
-                    model with
-                        MouseState = FromPort (pId, pos)
-                },
-                highlightPorts model pos pId
-            | FromWire wId -> model, [Cmd.ofMsg (Wire <| BusWire.Dragging (wId, pos))]
-            | _ -> model, [Cmd.none]
+        match model.MouseState with
 
+        ///Update SelectionBox moving corner.
+        | FromEmpty sb -> {model with MouseState = FromEmpty {sb with MovingCorner = pos}}, Cmd.none
 
-        model, Cmd.batch draggingCommands
+        ///Drag symbols with snap-to-grid, if it's enabled.
+        | FromSymbol ->
+            model,
+            Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, (posToGridIfEnabled model.Grid pos)))
+
+        ///Update FromPort values to draw preview wire, and highlight relevant ports.
+        | FromPort (pId,_) -> {model with MouseState = FromPort (pId, pos)}, highlightPorts model pos pId
+
+        ///Drag selected wire.
+        | FromWire wId -> model, Cmd.ofMsg (Wire <| BusWire.Dragging (wId, pos))
+
+        ///Otherwise do nothing
+        | _ -> model, Cmd.none
+
 
 ///Intialise state
 let init() = 
