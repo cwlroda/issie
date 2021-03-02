@@ -77,7 +77,8 @@ let getErrors (model: Model): Error list =
                 [ { Msg = "Can't connect output ports together!"
                     Pos = Symbol.portPos model.Symbol w.SrcPort } ]
             else
-                [])
+                []
+        )
 
 let getTargetedWire (model: Model) (pos: XYPos): CommonTypes.ConnectionId option =
     let closestWire =

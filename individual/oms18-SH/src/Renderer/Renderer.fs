@@ -50,6 +50,7 @@
                    makeKeyInput "Escape" (fun () -> dispatch KeyboardMsg.Escape)
                    makeKeyInput "Alt+A" (fun () -> dispatch KeyboardMsg.AltA)
                    makeKeyInput "Ctrl+Shift+=" (fun () -> dispatch KeyboardMsg.CtrlShiftEqual)
+                   makeKeyInput "Ctrl+=" (fun () -> dispatch KeyboardMsg.CtrlEqual)
                    makeKeyInput "Ctrl+-" (fun () -> dispatch KeyboardMsg.CtrlMinus)
                 |]
                 |> U2.Case1

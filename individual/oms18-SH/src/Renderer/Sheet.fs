@@ -50,6 +50,7 @@ type KeyboardMsg =
     | Escape
     | AltA
     | CtrlShiftEqual
+    | CtrlEqual
     | CtrlMinus
 
 type Modifier =
@@ -172,11 +173,15 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         g [] (
             BusWire.getErrors model.Wire
             |> List.map (fun e ->
+                // Approximate the width of the text, does not work very well
+                // the good solutions are all very hacky, will look at more in
+                // the team phase per piazza
+                let textWidth = 8.8 * float e.Msg.Length
                 g [] [
                     rect [
                         X e.Pos.X
                         Y e.Pos.Y
-                        SVGAttr.Width "280"
+                        SVGAttr.Width (textWidth + 20.)
                         SVGAttr.Height "30"
                         SVGAttr.Fill "#a11"
                         SVGAttr.Stroke "black"
@@ -186,9 +191,10 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                         X (e.Pos.X + 5.)
                         Y (e.Pos.Y + 20.)
                         Style [
-                            UserSelect UserSelectOptions.None
+                            //UserSelect UserSelectOptions.None
                             TextAnchor "left"
                             DominantBaseline "baseline"
+                            FontFamily "Monospace"
                             FontSize "15px"
                             FontWeight "Bold"
                             Fill "White"
@@ -492,12 +498,19 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | _ ->
             {model with DragState=NotDragging}
             , Cmd.none
-    | KeyPress k when k = CtrlShiftEqual || k = CtrlMinus ->
+    | KeyPress k when k = CtrlShiftEqual || k = CtrlMinus || k = CtrlEqual ->
         let multiplier =
             match k with
             | CtrlShiftEqual -> 1.05
             | CtrlMinus -> 0.95
+            | CtrlEqual -> 1. / model.Zoom
             | _ -> failwithf "This can't happen"
+
+        let multiplier =
+            match multiplier * model.Zoom with
+            | z when z > 3. -> 3. / model.Zoom
+            | z when z < 0.5 -> 0.5 / model.Zoom
+            | _ -> multiplier
 
         let adjustPanValue pan =
             let translatedPan = pan - model.Size / 2.
@@ -506,6 +519,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
         let (panX, panY) =
             (adjustPanValue model.PanX, adjustPanValue model.PanY)
+
+        printfn "zoom: %A" <| multiplier * model.Zoom
         { model with
             Zoom = multiplier * model.Zoom
             PanX = panX
