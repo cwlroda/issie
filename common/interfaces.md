@@ -28,6 +28,8 @@
 * portWidth: Model -> PortId -> PortWidth
 * symbolBBox: Model -> ComponentId -> BBox
 * portsInRange: Model -> XYPos -> (range : float) -> PortId list
+* getHostId: Model -> PortId -> ComponenetId
+* symbolType: Model -> ComponentId -> ComponentType
 
 ##### Messages
 
