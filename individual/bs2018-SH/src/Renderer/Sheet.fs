@@ -377,7 +377,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let selectedSymbols, selectedWire, cmds =
 
             match model.MouseState with
-            ///If down click was on a port, create a wire if mouse is currently over a port and unhighlight all ports
+            ///If down click was on a port, create a wire if mouse is currently over a destination port,
+             ///  and unhighlight all ports
             | FromPort (fromPid, toPos) ->
                 model.SelectedSymbols, model.SelectedWire,
                 match Symbol.getTargetedPort model.Wire.Symbol toPos with
@@ -406,7 +407,12 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             | FromWire _ -> 
                 match BusWire.getTargetedWire model.Wire pos with
                 | None -> model.SelectedSymbols, None, [Cmd.ofMsg (Wire <| BusWire.EndDrag)]
-                | Some wId -> model.SelectedSymbols, Some wId, [Cmd.ofMsg (Wire <| BusWire.EndDrag); Cmd.ofMsg (Wire <| BusWire.SetSelected wId)]
+                | Some wId -> model.SelectedSymbols, Some wId,
+                                [
+                                    Cmd.ofMsg (Wire <| BusWire.EndDrag)
+                                    Cmd.ofMsg (Wire <| BusWire.UnselectAll)
+                                    Cmd.ofMsg (Wire <| BusWire.SetSelected wId)
+                                ]
 
             ///If down click was on a symbol, end symbol dragging.
             | FromSymbol -> model.SelectedSymbols, model.SelectedWire, [Cmd.ofMsg (Symbol <| Symbol.EndDragging)]
