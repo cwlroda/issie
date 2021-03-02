@@ -474,7 +474,7 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
         then
             model.WX
             |> Map.toList
-            |> List.fold (fun lst (wId, w) -> [(w.SrcPort, w.SrcLabel, w.WireColor, (posAdd w.WireSegments.[0] (posOf 3.0 (float w.WireWidth + 5.)))); (w.TargetPort, w.TargetLabel, w.WireColor, (posAdd w.WireSegments.[(w.WireSegments.Length)-1] (posOf -3.0 (float w.WireWidth + 5.))))]@lst) []
+            |> List.fold (fun lst (wId, w) -> [(w.SrcPort, w.SrcLabel, w.WireColor, (posAdd w.WireSegments.[0] (posOf 5.0 (float w.WireWidth - 5.)))); (w.TargetPort, w.TargetLabel, w.WireColor, (posAdd w.WireSegments.[(w.WireSegments.Length)-1] (posOf -10.0 (float w.WireWidth - 5.))))]@lst) []
             |> List.map (fun (pId, pLabel,c,pos) -> 
                 let labelProps = 
                     {
