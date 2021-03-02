@@ -4,7 +4,7 @@
 * BBox
 	```
 	type BBox = {
-		Pos : XYPos
+		Pos: XYPos
 		Width: float
 		Height: float
 	}
@@ -12,7 +12,14 @@
 	- containsPoint: BBox -> XYPos -> bool
 	- distanceFromPoint: BBox -> XYPos -> float
 	- overlaps: BBox -> BBox -> bool
-	- makeBBox: (pos : XYPos) (width : float) (height : float)
+	- makeBBox: (pos: XYPos) -> (width: float) -> (height: float) -> BBox
+* Error
+ 	```
+	type Error = {
+		Msg: string
+		Pos: XYPos
+	}
+	```
 * PortId of string
 
 ### Symbol
@@ -45,7 +52,8 @@
 ### BusWire
 
 ##### Interfaces
-* getTargetedWire: Model -> XYPos -> ConnectionId Option	
+* getTargetedWire: Model -> XYPos -> ConnectionId Option
+* getErrors: Model -> Error Option
 
 ##### Messages
 * AddWire of PortId * PortId
