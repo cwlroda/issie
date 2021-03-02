@@ -97,24 +97,29 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         )
 
     let gridlines =
-        let panX = int (discretizeToGrid model.PanX)
-        let panY = int (discretizeToGrid model.PanY)
-        let size = int (ceil model.Size)
+        let panX = int (discretizeToGrid (model.PanX / model.Zoom))
+        let panY = int (discretizeToGrid (model.PanY / model.Zoom))
+        let size = int (ceil (model.Size / model.Zoom))
 
         let getGridCoords =
             [0..gridSize..size]
 
-        let getColor gc offset =
-            if (gc - offset) % (gridSize * 10) = 0 then "grey" else "lightgrey"
+        let getColorAndOpacity gc offset =
+            if (gc - offset) % (gridSize * 10) = 0 then
+                "grey", 1.
+            else
+                "lightgrey", 0.5
 
-        let makeLine x0 y0 x1 y1 color offset =
+        let makeLine x0 y0 x1 y1 colorAndOpacity offset =
+            let (color, opacity) = colorAndOpacity offset
             line [
                 X1 (x0 - panX)
                 Y1 (y0 - panY)
                 X2 (x1 - panX)
                 Y2 (y1 - panY)
-                SVGAttr.Stroke (color offset)
+                SVGAttr.Stroke color
                 SVGAttr.StrokeWidth "1px"
+                SVGAttr.StrokeOpacity opacity
             ] []
         let createHalfGrid offset lineFun =
             getGridCoords
@@ -122,8 +127,8 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
 
         g [] (
             [
-                createHalfGrid panX (fun x -> makeLine x -gridSize x size <| getColor x)
-                createHalfGrid panY (fun y -> makeLine -gridSize y size y <| getColor y)
+                createHalfGrid panX (fun x -> makeLine x -gridSize x size <| getColorAndOpacity x)
+                createHalfGrid panY (fun y -> makeLine -gridSize y size y <| getColorAndOpacity y)
             ]
             |> List.concat
         )
@@ -211,7 +216,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         Selection=SelectionState.Port pId
                         DragState=WireCreation (pId, p)
                     }, Cmd.batch [
-                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPort pId)))
                         Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
                     ]
                 | (_, Some sym, _, m) ->
@@ -275,7 +279,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
-                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
                     Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     Cmd.ofMsg (Wire (BusWire.EndDrag))
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid p))))
@@ -288,7 +291,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
-                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
                     Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     Cmd.ofMsg (Wire (BusWire.EndDrag))
                 ]
@@ -297,36 +299,41 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
-                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
                     Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     Cmd.ofMsg (Wire (BusWire.EndDrag))
                 ]
         | (Drag, p, _) ->
+            let portsNearMouse = Symbol.portsInRange model.Wire.Symbol p 100.
             // TODO: Send StartDrag
             match model.DragState with
             | AreaSelect (start, _, additive) ->
                 { model with DragState=AreaSelect (start, p, additive)}
-                , Cmd.none
+                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
             | DragState.Symbol ->
                 let selectedSymbols =
                     match model.Selection with
                     | Symbols s -> s
                     | _ -> failwithf "We only drag if there is a selection"
                 model,
-                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Dragging (selectedSymbols, snapToGrid p))))
+                Cmd.batch [
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Dragging (selectedSymbols, snapToGrid p))))
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
+                ]
             | DragState.Wire wId ->
                 model,
                 Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
             | WireCreation (pId, _) ->
                 { model with
                     DragState=WireCreation (pId, p)
-                }, Cmd.none
+                }
+                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
             | Pan (origPan, panStart, _) ->
                 { model with
                     DragState=Pan (origPan, panStart, p)
                     PanX = origPan.X + (p.X - panStart.X) * model.Zoom
                     PanY = origPan.Y + (p.Y - panStart.Y) * model.Zoom
-                }, Cmd.none
+                }
+                , Cmd.none
             | NotDragging -> model, Cmd.none
         | (Up, _, _) ->
             match model.DragState with
@@ -374,12 +381,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 }
                 , match targetedPort with
                   | Some pIdEnd when pIdEnd <> pIdStart ->
-                      Cmd.batch [
-                          Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
-                          Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
-                      ]
-                  | _ -> 
-                      Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
+                      Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
+                  | _ -> Cmd.none
             | DragState.Pan (origPan, panStart, panEnd) ->
                 { model with
                     DragState=NotDragging
@@ -392,31 +395,44 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             | AreaSelect _ ->
                 {model with
                     DragState = NotDragging
-                } , Cmd.none
+                }
+                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
             | DragState.Wire _ ->
                 { model with
                     DragState = NotDragging
                 }
-                , Cmd.ofMsg (Wire (BusWire.EndDrag))
+                , Cmd.batch [
+                    Cmd.ofMsg (Wire (BusWire.EndDrag))
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
+                ]
             | DragState.Symbol ->
                 { model with
                     DragState = NotDragging
                 }
-                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
+                , Cmd.batch [
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
+                ]
             | DragState.WireCreation _ ->
                 { model with
                     DragState = NotDragging
                     Selection = Empty
                 }
-                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
+                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
             | DragState.Pan (origPan, pStart, panEnd) ->
                 { model with
                     DragState=NotDragging
                     PanX = origPan.X + (panEnd.X - pStart.X)
                     PanY = origPan.Y + (panEnd.Y - pStart.Y)
-                }, Cmd.none
-            | NotDragging -> model, Cmd.none
-        | (Move, _, _) -> model, Cmd.none
+                }, Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
+            | NotDragging ->
+                model
+                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
+        | (Move, p, _) ->
+            let portsNearMouse = Symbol.portsInRange model.Wire.Symbol p 100.
+
+            model
+            , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse)))
     | KeyPress AltA ->
         let selectedSymbols = Symbol.getAllSymbols model.Wire.Symbol
 
@@ -428,7 +444,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             { model with Selection = Empty }
             , Cmd.batch [
                 Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
-                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
         | WireCreation _ ->
@@ -436,7 +451,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 Selection=Empty
                 DragState=NotDragging
             }
-            , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.UnhighlightPorts)))
+            , Cmd.none
         | _ ->
             {model with DragState=NotDragging}
             , Cmd.none

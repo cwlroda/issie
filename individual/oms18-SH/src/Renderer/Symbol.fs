@@ -53,8 +53,7 @@ type Msg =
     | EndDragging
     | DeleteSymbols of sId:CommonTypes.ComponentId list
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
-    | HighlightPort of CommonTypes.PortId
-    | UnhighlightPorts
+    | HighlightPorts of CommonTypes.PortId list
 
 
 //---------------------------------helper types and functions----------------//
@@ -70,6 +69,15 @@ let symbolPos (model: Model) (sId: CommonTypes.ComponentId) : XYPos =
 let BBoxFromSymbol (sym: Symbol) =
     let pos = posDiff sym.Pos (posOf 20. 20.)
     BBox.toBBox pos.X pos.Y 40. 40.
+
+let getPortBBoxes (sym: Symbol) : BBox * BBox =
+    let bbSym = BBoxFromSymbol sym
+    let x = bbSym.Pos.X
+    let y = bbSym.Pos.Y
+    let w = bbSym.Width
+    let h = bbSym.Height
+    let size = 10.
+    (toBBox x y size size), (toBBox (x + w - size) (y + h - size) size size)
 
 let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos =
     List.find (fun sym -> sym.InputPort = pId || sym.OutputPort = pId) model
@@ -100,6 +108,20 @@ let getAllPorts (model: Model) : CommonTypes.PortId list =
     model
     |> List.collect (fun sym -> [sym.InputPort;sym.OutputPort])
 
+let portsInRange (model: Model) (p: XYPos) (range : float) : CommonTypes.PortId list =
+    model
+    |> List.collect (fun sym ->
+        let (inputBB, outputBB) = getPortBBoxes sym
+        [
+            (sym.InputPort, posAdd inputBB.Pos (posOf 5. 5.))
+            (sym.OutputPort, posAdd outputBB.Pos (posOf 5. 5.))
+        ])
+    |> List.filter (fun (_, pPos) ->
+        let diff = posDiff p pPos
+        diff.X * diff.X + diff.Y * diff.Y <= range * range
+    )
+    |> List.map fst
+
 let getTargetedSymbol (model: Model) (p: XYPos) : CommonTypes.ComponentId option =
     model
     |> List.filter (fun sym -> BBoxFromSymbol sym |> containsPoint p)
@@ -110,15 +132,6 @@ let getSymbolsInBBox (model: Model) (bb: BBox) : CommonTypes.ComponentId list =
     model
     |> List.filter (fun sym -> BBoxFromSymbol sym |> overlaps bb)
     |> List.map (fun sym -> sym.Id)
-
-let getPortBBoxes (sym: Symbol) : BBox * BBox =
-    let bbSym = BBoxFromSymbol sym
-    let x = bbSym.Pos.X
-    let y = bbSym.Pos.Y
-    let w = bbSym.Width
-    let h = bbSym.Height
-    let size = 10.
-    (toBBox x y size size), (toBBox (x + w - size) (y + h - size) size size)
 
 let getTargetedPort (model: Model) (p: XYPos) : CommonTypes.PortId option =
     model
@@ -223,22 +236,16 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                     sym
             ), Cmd.none
         | _ -> model, Cmd.none
-    | HighlightPort pId ->
+    | HighlightPorts pIdList ->
+        let portIdSet = Set.ofList pIdList
+            
         model
         |> List.map (fun sym ->
-            if sym.InputPort = pId then
-                { sym with HighlightInputPort = true }
-            else if sym.OutputPort = pId then
-                { sym with HighlightOutputPort = true }
-            else
-                sym
-        ), Cmd.none
-    | UnhighlightPorts ->
-        model
-        |> List.map (fun sym ->
+            let highlightInputPort = Set.contains sym.InputPort portIdSet
+            let highlightOutputPort = Set.contains sym.OutputPort portIdSet
             { sym with
-                HighlightInputPort = false
-                HighlightOutputPort = false
+                HighlightInputPort=highlightInputPort
+                HighlightOutputPort=highlightOutputPort
             }
         ), Cmd.none
     | _ -> failwithf "Not implemented"
