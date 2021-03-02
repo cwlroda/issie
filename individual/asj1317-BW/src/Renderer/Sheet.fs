@@ -38,6 +38,7 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
         | Down ->  
             match BusWire.getTargetedWire model.Wire {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some w -> 
+                printf $"Selected a wire"
                 dispatch <| Wire (BusWire.SetSelected w) 
                 dispatch <| Wire (BusWire.StartDragging (w,  {X =  ev.clientX / zoom; Y = ev.clientY / zoom}))
             | None ->   

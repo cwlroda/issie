@@ -42,8 +42,36 @@ type BBox =
 /// return a v4 (random) universally unique identifier (UUID)
 let uuid():string = import "v4" "uuid"
 
+
+/// Useful helper functions
+let posOf x y = { X = x; Y = y }
+
+/// Takes a set of coordinates and returns a new set of cooridantes adjusted according to the adjPos floats given
+/// each in the X and Y respectively
+let posDiff a b = { X = a.X - b.X; Y = a.Y - b.Y }
+
+let posAdd a b = { X = a.X + b.X; Y = a.Y + b.Y }
+
+let midPt (aPos: XYPos) (bPos: XYPos): XYPos =
+    let diff = posDiff bPos aPos
+    posAdd aPos (posOf (diff.X / 2.) (diff.Y / 2.))
+
 let makeBBox (pos: XYPos) (width: float) (height: float) =
     {Pos = pos; W =  width; H = height}
+
+let ptInBB (pt: XYPos) (bb: BBox): bool =
+    let bRCorner = posAdd bb.Pos { X = bb.W; Y = -bb.H }
+    printf $"{bb.W},{bb.H}"
+    match pt.X, pt.Y with
+    | x, _ when (x < bb.Pos.X) || (x > bRCorner.X) ->
+        printf $"Fails on X: {x},{bb.Pos.X}, {bRCorner.X}"
+        false
+
+    | _, y when (y > bb.Pos.Y) || (y < bRCorner.Y) ->
+        printf $"Fails on Y: {y}, {bb.Pos.Y}, {bRCorner.Y}"
+        false
+    | _ -> true
+
 
 
 //-----------------Code to record and print execution time statistics-------//

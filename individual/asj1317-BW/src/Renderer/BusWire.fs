@@ -49,7 +49,7 @@ type Wire =
       Error: string Option
       }
 
-let BBoxSize = 3.0
+let BBoxSize = 1.0
 
 type Model =
     { Symbol: Symbol.Model
@@ -81,35 +81,11 @@ type Msg =
 
 
 ///--------------------Helpers Functions -------------------------------------///
-/// Useful helper functions
-let posOf x y = { X = x; Y = y }
 
-/// Takes a set of coordinates and returns a new set of cooridantes adjusted according to the adjPos floats given
-/// each in the X and Y respectively
-let posDiff a b = { X = a.X - b.X; Y = a.Y - b.Y }
-
-let posAdd a b = { X = a.X + b.X; Y = a.Y + b.Y }
-
-let midPt (aPos: XYPos) (bPos: XYPos): XYPos =
-    let diff = posDiff bPos aPos
-    posAdd aPos (posOf (diff.X / 2.) (diff.Y / 2.))
 
 ///Takes a point and a BBox and checks if the point are within the bounderies of the box
 /// Returns true if the points is within the bounderires of the BBox
 /// Otherwise returns false
-
-let ptInBB (pt: XYPos) (bb: BBox): bool =
-    let bRCorner = posAdd bb.Pos { X = bb.W; Y = -bb.H }
-
-    match pt.X, pt.Y with
-    | x, _ when x < bb.Pos.X || x > bRCorner.X ->
-        printf "Fails on X"
-        false
-
-    | _, y when y > bb.Pos.Y || y < bRCorner.Y ->
-        printf "Fails on y"
-        false
-    | _ -> true
 
 
 //Calculates the distance between a point and a wire segment
@@ -129,7 +105,6 @@ let distPtToSeg (pt: XYPos) ((startPt, endPt): XYPos * XYPos) = //(wSeg: WireSeg
     abs (crossProd) / magPtAToPtB
 ///Give list of verticies outputs a string that will define a polyline
 let lineDef (verts: XYPos list) =
-    printf $" Verticies: {verts}"
 
     List.map (fun pos -> $"{pos.X},{pos.Y}") verts
 
@@ -152,7 +127,7 @@ let wire (wModel: Model) (wId: CommonTypes.ConnectionId): Wire =
 /// Takes a wire segment and the width of the wire as input and using its oritenation returns the correct BBox
 let createSegBB (wireW: int) ((startPt, endPt): XYPos * XYPos) = // (seg: WireSegment): BBox =
 
-    let posDiff = posDiff startPt endPt
+    let relDiff = posDiff startPt endPt
 
     let adjTopLeft =
         { X = float -BBoxSize
@@ -160,15 +135,17 @@ let createSegBB (wireW: int) ((startPt, endPt): XYPos * XYPos) = // (seg: WireSe
 
     let wHCalc (diff: float) =
         match abs (diff) < 1.0 with
-        | true -> 2. * BBoxSize
-        | _ -> diff + 2. * BBoxSize
+        | true -> 2. * BBoxSize + float wireW
+        | _ -> (abs diff) + 2. * BBoxSize
 
     let topLeftCorner =
-        match abs (posDiff.X) < abs (posDiff.Y) with
-        | true -> posAdd startPt adjTopLeft
-        | _ -> posAdd endPt adjTopLeft
+        match abs relDiff.X, relDiff.Y with 
+        | x,y when ((abs y) > (abs x))  && y > 0. -> posAdd startPt adjTopLeft
+        | x,y when ((abs y) > (abs x)) -> posAdd endPt adjTopLeft
+        | x,_ when x < 0. -> posAdd endPt adjTopLeft
+        |_ ,_ -> posAdd startPt adjTopLeft
 
-    makeBBox topLeftCorner (wHCalc posDiff.X) (wHCalc posDiff.Y)
+    makeBBox topLeftCorner (wHCalc relDiff.X) (wHCalc relDiff.Y)
 
 ///Takes as input a wire and a point and checks if the pt is within the BBox of any of the segments
 /// Returns true if it is close to one of the segments
@@ -259,7 +236,7 @@ let manualRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos
     let segIdx =
         List.pairwise w.WireSegments
         |> List.findIndex (isTarget w.WireWidth)
-
+    printf $"{segIdx}"
     let move = posDiff w.LastPos pos
 
 
@@ -425,6 +402,20 @@ type LabelRenderProps =
         Pos: XYPos
         }
 
+type BBoxRenderProps = { Key: string; Box: BBox }
+
+let singleBBox (box: BBoxRenderProps) =
+
+    polygon [ SVGAttr.Points(boxDef box.Box.Pos box.Box.W box.Box.H)
+              SVGAttr.StrokeWidth "1px"
+              SVGAttr.Stroke "Black"
+              SVGAttr.FillOpacity 0.2
+              SVGAttr.Fill "Blue" ] []
+
+
+let private renderBBox =
+    FunctionComponent.Of(fun (props: BBoxRenderProps) -> singleBBox props)
+
 let singleWireView =
     FunctionComponent.Of
         (fun (props: SegRenderProps) ->
@@ -489,6 +480,12 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
                     }
                 singleLabelView labelProps)
         else []  
+    let bBoxs =
+         createBB model.WX
+        |> List.map
+            (fun bb ->
+                let propsBB = { Key = Helpers.uuid (); Box = bb }
+                renderBBox propsBB)
 
     let symbols =
         Symbol.view model.Symbol (fun sMsg -> dispatch (Symbol sMsg))
@@ -496,6 +493,7 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
     g [] [
         (g [] wires)
         (g [] wireAnnotations)
+        (g [] bBoxs)
         symbols
     ]
 
