@@ -148,7 +148,7 @@ let getTargetedSymbol (model: Model) (p: XYPos) : CommonTypes.ComponentId option
     |> List.map (fun sym -> sym.Id)
     |> List.tryHead
 
-let getSymbolsInBBox (model: Model) (bb: BBox) : CommonTypes.ComponentId list =
+let getSymbolsInTargetArea (model: Model) (bb: BBox) : CommonTypes.ComponentId list =
     model
     |> List.filter (fun sym -> symbolToBBox sym |> overlaps bb)
     |> List.map (fun sym -> sym.Id)
@@ -218,6 +218,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
             if Set.contains sym.Id sIdSet then
                 { sym with
                     LastDragPos = pos
+                    IsDragging = true
                 }
             else
                 sym

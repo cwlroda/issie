@@ -20,7 +20,6 @@ type DragState =
 type SelectionState =
     | Wire of CommonTypes.ConnectionId
     | Symbols of CommonTypes.ComponentId list
-    | Port of CommonTypes.PortId
     | Empty
 
 type CopyState =
@@ -40,13 +39,11 @@ type Model = {
 }
 
 type KeyboardMsg =
-    | CtrlS
     | AltC
     | AltV
     | AltZ
     | AltShiftZ
     | DEL
-    | Space
     | Escape
     | AltA
     | CtrlShiftEqual
@@ -238,84 +235,163 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     let snapToGrid p =
         posOf (discretizeToGrid p.X) (discretizeToGrid p.Y)
 
+    let handleLeftClick p m =
+        let targetedPort = Symbol.getTargetedPort model.Wire.Symbol p
+        let selectedWire = BusWire.getTargetedWire model.Wire p
+        let selectedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol p
+
+        match (targetedPort, selectedSymbol, selectedWire, m) with
+        | (Some pId, _, _, _) ->
+            { model with DragState=WireCreation (pId, p) }
+            , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
+        | (_, Some sym, _, m) ->
+            let isSelected =
+                match model.Selection with
+                | Symbols sIdLst -> Set.contains sym (Set.ofList sIdLst)
+                | _ -> false
+
+            let selectedSymbols =
+                match (model.Selection, isSelected, m) with
+                | (Symbols sIdLst, true, _) -> sIdLst
+                | (Symbols sIdLst, _, Control) ->
+                    sIdLst
+                    |> Set.ofList
+                    |> Set.add sym
+                    |> Set.toList
+                | _ -> [sym]
+
+            { model with
+                Selection = Symbols selectedSymbols
+                DragState = DragState.Symbol
+            }, Cmd.batch [
+                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
+                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.StartDragging (selectedSymbols, snapToGrid p))))
+                Cmd.ofMsg (Wire (BusWire.UnselectAll))
+            ]
+        | (_, _, Some wId, _) ->
+            { model with
+                Selection = SelectionState.Wire wId
+                DragState = DragState.Wire wId
+            }, Cmd.batch [
+                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
+                Cmd.ofMsg (Wire (BusWire.Select wId))
+                Cmd.ofMsg (Wire (BusWire.StartDrag (wId, snapToGrid p)))
+            ]
+        | (_, None, None, Control) ->
+            { model with
+                DragState=AreaSelect (p, p, true)
+            }
+            , Cmd.ofMsg (Wire (BusWire.UnselectAll))
+        | (_, None, None, NoModifier) ->
+            { model with
+                Selection = Empty
+                DragState = AreaSelect (p, p, false)
+            }, Cmd.batch [
+                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
+                Cmd.ofMsg (Wire (BusWire.UnselectAll))
+            ]
+
+    let handleKeyPress key =
+        match key with
+        | AltA ->
+            let selectedSymbols = Symbol.getAllSymbols model.Wire.Symbol
+
+            { model with Selection = Symbols selectedSymbols }
+            , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
+        | Escape ->
+            let model = {model with DragState=NotDragging}
+
+            match model.DragState with
+            | NotDragging ->
+                { model with Selection = Empty }
+                , Cmd.batch [
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
+                    Cmd.ofMsg (Wire (BusWire.UnselectAll))
+                ]
+            | WireCreation _ -> model, Cmd.none
+            | _ -> model, Cmd.none
+        | CtrlShiftEqual | CtrlMinus | CtrlEqual ->
+            let multiplier =
+                match key with
+                | CtrlShiftEqual -> 1.05
+                | CtrlMinus -> 0.95
+                | CtrlEqual -> 1. / model.Zoom
+                | _ -> failwithf "This can't happen"
+
+            let multiplier =
+                match multiplier * model.Zoom with
+                | z when z > 3. -> 3. / model.Zoom
+                | z when z < 0.5 -> 0.5 / model.Zoom
+                | _ -> multiplier
+
+            let adjustPanValue pan =
+                let translatedPan = pan - model.Size / 2.
+                let multipliedPan = multiplier * translatedPan
+                multipliedPan + model.Size / 2.
+
+            let (panX, panY) =
+                (adjustPanValue model.PanX, adjustPanValue model.PanY)
+
+            { model with
+                Zoom = multiplier * model.Zoom
+                PanX = panX
+                PanY = panY
+            }, Cmd.none
+        | DEL ->
+            { model with Selection = Empty;DragState=NotDragging }
+            , match model.Selection with
+              | SelectionState.Wire wId -> Cmd.ofMsg (Wire (BusWire.Delete wId))
+              | Symbols sIdLst -> Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.DeleteSymbols sIdLst)))
+              | Empty -> Cmd.none
+        | AltC ->
+            match model.Selection with
+            | Symbols sIdLst ->
+                let sIdAndPosLst = 
+                    sIdLst
+                    |> List.map (fun sId ->
+                        (Symbol.symbolType model.Wire.Symbol sId,
+                         (Symbol.symbolBBox model.Wire.Symbol sId).Pos)
+                    )
+
+                let topLeftOfSymbols =
+                    let middle lst = List.min lst + (List.max lst - List.min lst) / 2.
+
+                    sIdAndPosLst
+                    |> List.map (fun (_, p) -> (p.X, p.Y))
+                    |> List.fold (fun (xs, ys) (x, y) -> (x :: xs, y :: ys)) ([], [])
+                    |> fun (xs, ys) -> posOf (middle xs) (middle ys)
+                    
+                let sIdAndPosLst = 
+                    sIdAndPosLst
+                    |> List.map (fun (sId, p) -> (sId, posDiff p topLeftOfSymbols))
+
+                { model with CopyState=CopyState.Copied sIdAndPosLst }
+            | _ -> model
+            , Cmd.none
+        | AltV ->
+            model
+            , match model.CopyState with
+              | Copied sIdLst ->
+                  Cmd.batch (
+                      sIdLst
+                      |> List.map (fun (sType, p) ->
+                          Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (sType, posAdd p model.MousePosition))))
+                      )
+                  )
+              | Uninitialized -> Cmd.none
+        | AltZ | AltShiftZ -> model, Cmd.none
+
     match msg with
     | Wire wMsg ->
         let wModel, wCmd = BusWire.update wMsg model.Wire
-        { model with Wire = wModel }, Cmd.map Wire wCmd
+        { model with Wire = wModel }
+        , Cmd.map Wire wCmd
+    | KeyPress k -> handleKeyPress k
     | MouseMsg (mT, modifier) ->
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, m) ->
             match mT.Button with
-            | MouseButton.Left ->
-                let targetedPort = Symbol.getTargetedPort model.Wire.Symbol p
-                let selectedWire = BusWire.getTargetedWire model.Wire p
-                let selectedSymbol =
-                    Symbol.getTargetedSymbol model.Wire.Symbol p
-
-                match (targetedPort, selectedSymbol, selectedWire, m) with
-                | (Some pId, _, _, _) ->
-                    { model with
-                        Selection=SelectionState.Port pId
-                        DragState=WireCreation (pId, p)
-                    }, Cmd.batch [
-                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
-                    ]
-                | (_, Some sym, _, m) ->
-                    let isSelected =
-                        match model.Selection with
-                        | Symbols sIdLst ->
-                            sIdLst
-                            |> Set.ofList
-                            |> Set.contains sym
-                        | _ -> false
-
-                    let selectedSymbols =
-                        if isSelected then
-                            match model.Selection with
-                            | Symbols sIdLst -> sIdLst
-                            | _ -> [sym]
-                        else if m = Control then
-                            match model.Selection with
-                            | Symbols sIdLst ->
-                                sIdLst
-                                |> Set.ofList
-                                |> Set.add sym
-                                |> Set.toList
-                            | _ -> [sym]
-                        else
-                            [sym]
-
-                    { model with
-                        Selection = Symbols selectedSymbols
-                        DragState=DragState.Symbol
-                    }
-                    , Cmd.batch [
-                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
-                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.StartDragging (selectedSymbols, snapToGrid p))))
-                        Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                    ]
-                | (_, _, Some wId, _) ->
-                    { model with
-                        Selection = SelectionState.Wire wId
-                        DragState = DragState.Wire wId
-                    }
-                    , Cmd.batch [
-                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
-                        Cmd.ofMsg (Wire (BusWire.Select wId))
-                        Cmd.ofMsg (Wire (BusWire.StartDrag (wId, snapToGrid p)))
-                    ]
-                | (_, None, None, Control) ->
-                    { model with
-                        DragState=AreaSelect (p, p, true)
-                    }, Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                | (_, None, None, NoModifier) ->
-                    { model with
-                        Selection = Empty
-                        DragState = AreaSelect (p, p, false)
-                    }, Cmd.batch [
-                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
-                        Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                    ]
+            | MouseButton.Left -> handleLeftClick p m
             | MouseButton.Right ->
                 { model with Selection=Empty;DragState=NotDragging }
                 , Cmd.batch [
@@ -346,37 +422,35 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 ]
         | (Drag, p, _) ->
             let portsNearMouse = Symbol.portsInRange model.Wire.Symbol p 100.
-            // TODO: Send StartDrag
+
             let model = { model with MousePosition=p}
+
             match model.DragState with
             | AreaSelect (start, _, additive) ->
                 { model with DragState=AreaSelect (start, p, additive)}
-                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
+                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse)))
             | DragState.Symbol ->
                 let selectedSymbols =
                     match model.Selection with
                     | Symbols s -> s
                     | _ -> failwithf "We only drag if there is a selection"
-                model,
-                Cmd.batch [
+
+                model
+                , Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Dragging (selectedSymbols, snapToGrid p))))
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
                 ]
             | DragState.Wire wId ->
-                model,
-                Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
+                model, Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
             | WireCreation (pId, _) ->
-                { model with
-                    DragState=WireCreation (pId, p)
-                }
+                { model with DragState=WireCreation (pId, p) }
                 , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
             | Pan (origPan, panStart, _) ->
                 { model with
                     DragState=Pan (origPan, panStart, p)
                     PanX = origPan.X + (p.X - panStart.X) * model.Zoom
                     PanY = origPan.Y + (p.Y - panStart.Y) * model.Zoom
-                }
-                , Cmd.none
+                }, Cmd.none
             | NotDragging -> model, Cmd.none
         | (Up, _, _) ->
             match model.DragState with
@@ -384,19 +458,17 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let area = pointsToBBox p1 p2
                 let selectedSymbols =
                     if additive then
-                        let selectedSymbols = match model.Selection with
-                                              | Symbols s -> s
-                                              | _ -> []
+                        let selectedSymbols =
+                            match model.Selection with
+                            | Symbols s -> s
+                            | _ -> []
+
                         selectedSymbols
                         |> Set.ofList
-                        |> Set.union (
-                            Set.ofList (
-                                Symbol.getSymbolsInBBox model.Wire.Symbol area
-                                )
-                            )
+                        |> Set.union (Set.ofList (Symbol.getSymbolsInTargetArea model.Wire.Symbol area))
                         |> Set.toList
                     else
-                        Symbol.getSymbolsInBBox model.Wire.Symbol area
+                        Symbol.getSymbolsInTargetArea model.Wire.Symbol area
 
                 {model with
                     DragState = NotDragging
@@ -407,14 +479,10 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
                 ]
             | DragState.Wire _ ->
-                { model with
-                    DragState = NotDragging
-                }
+                { model with DragState = NotDragging }
                 , Cmd.ofMsg (Wire (BusWire.EndDrag))
             | DragState.Symbol ->
-                { model with
-                    DragState = NotDragging
-                }
+                { model with DragState = NotDragging }
                 , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
             | DragState.WireCreation (pIdStart, p) ->
                 let targetedPort = Symbol.getTargetedPort model.Wire.Symbol p
@@ -434,160 +502,34 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 }, Cmd.none
             | _ -> model, Cmd.none
         | (Leave, _, _) ->
+            let model = {model with DragState=NotDragging}
             match model.DragState with
             | AreaSelect _ ->
-                {model with
-                    DragState = NotDragging
-                }
-                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
+                model, Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
             | DragState.Wire _ ->
-                { model with
-                    DragState = NotDragging
-                }
-                , Cmd.batch [
+                model, Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.EndDrag))
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
                 ]
             | DragState.Symbol ->
-                { model with
-                    DragState = NotDragging
-                }
-                , Cmd.batch [
+                model, Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.EndDragging)))
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
                 ]
             | DragState.WireCreation _ ->
-                { model with
-                    DragState = NotDragging
-                    Selection = Empty
-                }
+                { model with Selection = Empty }
                 , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
             | DragState.Pan (origPan, pStart, panEnd) ->
                 { model with
-                    DragState=NotDragging
                     PanX = origPan.X + (panEnd.X - pStart.X)
                     PanY = origPan.Y + (panEnd.Y - pStart.Y)
                 }, Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
-            | NotDragging ->
-                model
-                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
+            | NotDragging -> model, Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts [])))
         | (Move, p, _) ->
             let portsNearMouse = Symbol.portsInRange model.Wire.Symbol p 100.
 
             { model with MousePosition=p}
             , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse)))
-    | KeyPress AltA ->
-        let selectedSymbols = Symbol.getAllSymbols model.Wire.Symbol
-
-        { model with Selection = Symbols selectedSymbols }
-        , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
-    | KeyPress Escape ->
-        match model.DragState with
-        | NotDragging ->
-            { model with Selection = Empty }
-            , Cmd.batch [
-                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
-                Cmd.ofMsg (Wire (BusWire.UnselectAll))
-            ]
-        | WireCreation _ ->
-            { model with
-                Selection=Empty
-                DragState=NotDragging
-            }
-            , Cmd.none
-        | _ ->
-            {model with DragState=NotDragging}
-            , Cmd.none
-    | KeyPress k when k = CtrlShiftEqual || k = CtrlMinus || k = CtrlEqual ->
-        let multiplier =
-            match k with
-            | CtrlShiftEqual -> 1.05
-            | CtrlMinus -> 0.95
-            | CtrlEqual -> 1. / model.Zoom
-            | _ -> failwithf "This can't happen"
-
-        let multiplier =
-            match multiplier * model.Zoom with
-            | z when z > 3. -> 3. / model.Zoom
-            | z when z < 0.5 -> 0.5 / model.Zoom
-            | _ -> multiplier
-
-        let adjustPanValue pan =
-            let translatedPan = pan - model.Size / 2.
-            let multipliedPan = multiplier * translatedPan
-            multipliedPan + model.Size / 2.
-
-        let (panX, panY) =
-            (adjustPanValue model.PanX, adjustPanValue model.PanY)
-
-        printfn "zoom: %A" <| multiplier * model.Zoom
-        { model with
-            Zoom = multiplier * model.Zoom
-            PanX = panX
-            PanY = panY
-        }, Cmd.none
-    | KeyPress AltShiftZ ->
-        printStats () // print and reset the performance statistics in dev tools window
-        model, Cmd.none // do nothing else and return model unchanged
-    | KeyPress DEL ->
-        { model with Selection = Empty;DragState=NotDragging },
-        match model.Selection with
-        | SelectionState.Wire wId ->
-            Cmd.ofMsg (Wire (BusWire.Delete wId))
-        | Symbols sIdLst ->
-            Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.DeleteSymbols sIdLst)))
-        | SelectionState.Port _ -> Cmd.none
-        | Empty -> Cmd.none
-    | KeyPress AltC ->
-        match model.Selection with
-        | Symbols sIdLst ->
-            let sIdAndPosLst = 
-                sIdLst
-                |> List.map (fun sId ->
-                    (Symbol.symbolType model.Wire.Symbol sId,
-                     (Symbol.symbolBBox model.Wire.Symbol sId).Pos)
-                )
-
-            let topLeftOfSymbols =
-                let middle lst = List.min lst + (List.max lst - List.min lst) / 2.
-
-                sIdAndPosLst
-                |> List.map (fun (_, p) -> (p.X, p.Y))
-                |> List.fold (fun (xs, ys) (x, y) -> (x :: xs, y :: ys)) ([], [])
-                |> fun (xs, ys) -> posOf (middle xs) (middle ys)
-                
-            let sIdAndPosLst = 
-                sIdAndPosLst
-                |> List.map (fun (sId, p) -> (sId, posDiff p topLeftOfSymbols))
-
-            { model with
-                CopyState=CopyState.Copied sIdAndPosLst
-            }
-        | _ -> model
-        , Cmd.none
-    | KeyPress AltV ->
-        model,
-        match model.CopyState with
-        | Copied sIdLst ->
-            Cmd.batch (
-                sIdLst
-                |> List.map (fun (sType, p) ->
-                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (sType, posAdd p model.MousePosition))))
-                )
-            )
-        | Uninitialized -> Cmd.none
-    | KeyPress s -> // all other keys are turned into SetColor commands
-        let c =
-            match s with
-            | AltC -> CommonTypes.Blue
-            | AltV -> CommonTypes.Green
-            | AltZ -> CommonTypes.Red
-            //| Space -> CommonTypes.Green
-            | _ -> CommonTypes.Grey
-
-        printfn "Color:%A" c
-        printfn "Key:%A" s
-        model, Cmd.none
 
 let init () =
     let model, cmds = (BusWire.init 40) ()
