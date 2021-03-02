@@ -191,7 +191,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                         X (e.Pos.X + 5.)
                         Y (e.Pos.Y + 20.)
                         Style [
-                            //UserSelect UserSelectOptions.None
+                            UserSelect UserSelectOptions.None
                             TextAnchor "left"
                             DominantBaseline "baseline"
                             FontFamily "Monospace"
