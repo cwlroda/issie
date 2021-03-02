@@ -69,61 +69,23 @@ let view (model:Model) (dispatch : Msg -> unit) =
     let grid = model.Grid
     let size = 1000.0
     let sizeInPixels = sprintf "%.2fpx" ((size * model.Zoom))
-
-    let bodyLst = [wireSvg]
-
-    // add selection box if SelectionBox.Show
-    let bodyLst = 
-        match model.MouseState with
-        | FromEmpty sb ->
-            List.append bodyLst [ 
-                        polygon [
-                            SVGAttr.Points (polygonPointsString sb.FixedCorner sb.MovingCorner)
-                            SVGAttr.Fill "LightBlue"
-                            SVGAttr.Stroke "Blue"
-                            SVGAttr.FillOpacity 0.5
-                            SVGAttr.StrokeWidth 1 ] []
-                    ]
-        | _ -> bodyLst
     
-    // add grid lines if Grid.Show
+    ///list containing all SVG elements to be drawn
     let bodyLst =
-        if grid.Show then
-            [0 .. int (size / grid.Size)]
-            |> List.collect (fun i ->
-                [
-                    line [
-                        X1 0.
-                        X2 size
-                        Y1 ((float i)*grid.Size)
-                        Y2 ((float i)*grid.Size)
-                        SVGAttr.Stroke "grey"
-                        SVGAttr.StrokeWidth 1
-                        SVGAttr.StrokeOpacity 0.3
-                    ] []
-
-                    line [
-                        X1 ((float i)*grid.Size)
-                        X2 ((float i)*grid.Size)
-                        Y1 0.
-                        Y2 size
-                        SVGAttr.Stroke "grey"
-                        SVGAttr.StrokeWidth 1
-                        SVGAttr.StrokeOpacity 0.3
-                    ] []
-                
-                ]
-            )
-            |> List.append bodyLst
-        else
-            bodyLst
-
-    // add green dotted line if previewing wire
-    let bodyLst =
+        // add selection box if SelectionBox.Show
+        // or add green dotted wire if MouseState = FromPort(_,_).
         match model.MouseState with
+        | FromEmpty selBox ->
+            [
+                polygon [
+                    SVGAttr.Points (polygonPointsString selBox.FixedCorner selBox.MovingCorner)
+                    SVGAttr.Fill "LightBlue"
+                    SVGAttr.Stroke "Blue"
+                    SVGAttr.FillOpacity 0.5
+                    SVGAttr.StrokeWidth 1 ] []
+            ]
         | FromPort (pId, mousePos) ->
-            bodyLst
-            |> List.append [
+             [
                 let portPos = Symbol.portPos model.Wire.Symbol pId
                 line [
                         X1 portPos.X
@@ -136,11 +98,33 @@ let view (model:Model) (dispatch : Msg -> unit) =
                         SVGAttr.StrokeDasharray "5, 3"
                     ] []
             ]
-        | _ -> bodyLst
+        | _ -> []
+        // add grid lines if Grid.Show
+        |> List.append (
+            if grid.Show then
+                [0 .. int (size / grid.Size)]
+                |> List.collect (fun i ->
+                    let gridLinePos = ((float i)*grid.Size)
+                    let gridLine x1 x2 y1 y2 =
+                        line [
+                            X1 x1; X2 x2; Y1 y1; Y2 y2
+                            SVGAttr.Stroke "grey"
+                            SVGAttr.StrokeWidth 1
+                            SVGAttr.StrokeOpacity 0.3
+                        ] []
+                    [
+                        gridLine 0. size gridLinePos gridLinePos
+                        gridLine gridLinePos gridLinePos 0. size
+                    ]
+                )
+            else []
+        )
+        //add wire svg (wires and symbols)
+        |> List.append [wireSvg]
 
     // convert mouse click to zoomed + scrolled version
-    let mousePos x y =
-        posOf ((x+model.ScrollOffset.X)/model.Zoom) ((y+model.ScrollOffset.Y)/model.Zoom)
+    let mousePos x y = posOf ((x+model.ScrollOffset.X)/model.Zoom) ((y+model.ScrollOffset.Y)/model.Zoom)
+
     div [ Style 
             [ 
                 Height "100vh" 
@@ -185,8 +169,8 @@ let view (model:Model) (dispatch : Msg -> unit) =
                     Width sizeInPixels           
                 ]
             ]
-            [ g // group list of elements with list of attributes
-                [ Style [Transform (sprintf "scale(%f)" model.Zoom)]] // top-level transform style attribute for zoom
+            [ g 
+                [ Style [ Transform (sprintf "scale(%f)" model.Zoom) ] ] //apply zoom to SVG group
                 bodyLst
             ]
         ]
@@ -232,12 +216,17 @@ let alignSymbolsToGrid (model : Model) =
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
+    ///Update scrolling offset in state.
     | Scroll (x, y) -> {model with ScrollOffset = posOf x y}, Cmd.none
 
+    ///Forward wire messages on.
     | Wire wMsg -> 
         let wModel, wCmd = BusWire.update wMsg model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
 
+    ///Forward symbol messages. This has been edited so that they travel through BusWire
+    ///this is required for symbol deletion - BusWire must catch this message and delete
+    ///any connected wires.
     | Symbol sMsg ->
         let wModel, wCmd = BusWire.update (BusWire.Symbol sMsg) model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
