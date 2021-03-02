@@ -19,11 +19,11 @@ type Grid = {
     Show: bool
 }
 
-type MouseDown =
+type MouseState =
     | MouseIsUp
     | FromPort of CommonTypes.PortId * XYPos
     | FromSymbol
-    | FromEmpty
+    | FromEmpty of SelectionBox
     | FromWire of CommonTypes.ConnectionId
 
 
@@ -31,9 +31,8 @@ type Model = {
     Wire: BusWire.Model
     SelectedSymbols: CommonTypes.ComponentId list
     SelectedWire: CommonTypes.ConnectionId Option
-    MouseState: MouseDown
+    MouseState: MouseState
     LastMousePos: XYPos
-    SelectionBox: SelectionBox
     Grid: Grid
     ScrollOffset: XYPos
     Zoom: float
@@ -67,7 +66,6 @@ type Msg =
 let view (model:Model) (dispatch : Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
     let wireSvg = BusWire.view model.Wire wDispatch
-    let selectionBox = model.SelectionBox
     let grid = model.Grid
     let size = 1000.0
     let sizeInPixels = sprintf "%.2fpx" ((size * model.Zoom))
@@ -75,16 +73,18 @@ let view (model:Model) (dispatch : Msg -> unit) =
     let bodyLst = [wireSvg]
 
     // add selection box if SelectionBox.Show
-    let bodyLst = if selectionBox.Show then
-                    List.append bodyLst [ 
-                                polygon [
-                                    SVGAttr.Points (polygonPointsString selectionBox.FixedCorner selectionBox.MovingCorner)
-                                    SVGAttr.Fill "LightBlue"
-                                    SVGAttr.Stroke "Blue"
-                                    SVGAttr.FillOpacity 0.5
-                                    SVGAttr.StrokeWidth 1 ] []
-                            ]
-                  else bodyLst
+    let bodyLst = 
+        match model.MouseState with
+        | FromEmpty sb ->
+            List.append bodyLst [ 
+                        polygon [
+                            SVGAttr.Points (polygonPointsString sb.FixedCorner sb.MovingCorner)
+                            SVGAttr.Fill "LightBlue"
+                            SVGAttr.Stroke "Blue"
+                            SVGAttr.FillOpacity 0.5
+                            SVGAttr.StrokeWidth 1 ] []
+                    ]
+        | _ -> bodyLst
     
     // add grid lines if Grid.Show
     let bodyLst =
@@ -341,18 +341,18 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 if isShift then List.append model.SelectedSymbols [targetedId]
                 else [targetedId]
 
-        let mouseState, selectedSymbols, showSelection =
+        let mouseState, selectedSymbols =
             let targetedPort = Symbol.getTargetedPort model.Wire.Symbol pos
             match targetedPort with
-            | Some portId -> FromPort (portId, pos), model.SelectedSymbols, false
+            | Some portId -> FromPort (portId, pos), model.SelectedSymbols
             | None ->
                 let targetedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol pos
                 match targetedSymbol with
-                | Some symbolId -> FromSymbol, processSelectedSymbols symbolId, false
+                | Some symbolId -> FromSymbol, processSelectedSymbols symbolId
                 | None -> 
                     match BusWire.getTargetedWire model.Wire pos with
-                        | Some wId -> FromWire wId, model.SelectedSymbols, false
-                        | None -> FromEmpty, [], true
+                        | Some wId -> FromWire wId, model.SelectedSymbols
+                        | None -> FromEmpty {FixedCorner = pos; MovingCorner = pos; Show = true}, []
 
         let wireDragCommands =
             match mouseState with
@@ -362,12 +362,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         {model with
             MouseState = mouseState;
             SelectedSymbols = selectedSymbols;
-            SelectionBox = {
-                model.SelectionBox with
-                    FixedCorner = pos
-                    MovingCorner = pos
-                    Show = showSelection
-            }
             LastMousePos = pos
         },
         Cmd.batch(
@@ -379,18 +373,16 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         )
         
     | MouseUp (pos, isShift) ->
-        let processSelectionBox =
+        let processSelectionBox sb =
             let symbolsInSelectionBox =
-                let c1 = model.SelectionBox.FixedCorner
-                let c2 = pos
-                let selectionBBox = bboxFromDiagonals c1 c2
+                let selectionBBox = bboxFromDiagonals sb.FixedCorner pos
                 Symbol.getSymbolsInTargetArea model.Wire.Symbol selectionBBox
             if List.length symbolsInSelectionBox > 1 then symbolsInSelectionBox
             else model.SelectedSymbols
 
         let selectedSymbols =
             match model.MouseState with
-            | FromEmpty -> processSelectionBox
+            | FromEmpty sb -> processSelectionBox sb
             | _ -> model.SelectedSymbols
 
         let selectWireCommands, selectedWire =
@@ -433,10 +425,10 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 SelectedSymbols = selectedSymbols
                 SelectedWire = selectedWire
                 MouseState = MouseIsUp
-                SelectionBox = {
-                    model.SelectionBox with
-                        Show = false
-                }
+                // SelectionBox = {
+                //     model.SelectionBox with
+                //         Show = false
+                // }
         }, 
         Cmd.batch cmds
 
@@ -444,15 +436,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | MouseMove pos ->
         let model, draggingCommands =
             match model.MouseState with
-            | FromEmpty ->
-                {
-                    model with
-                        SelectionBox = {
-                            model.SelectionBox with
-                                MovingCorner = pos
-                        }
-                },
-                [Cmd.none]
+            | FromEmpty sb -> {model with MouseState = FromEmpty {sb with MovingCorner = pos}}, [Cmd.none]
             | FromSymbol ->
                 model, [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, (posToGridIfEnabled model.Grid pos)))]
             | FromPort (pId,_) ->
@@ -475,11 +459,6 @@ let init() =
         SelectedSymbols = []
         SelectedWire = None
         MouseState = MouseIsUp
-        SelectionBox = {
-            FixedCorner = posOf 0.0 0.0
-            MovingCorner = posOf 0.0 0.0
-            Show = false
-        }
         Grid = {
             Size = 20.
             SnapToGrid = true
