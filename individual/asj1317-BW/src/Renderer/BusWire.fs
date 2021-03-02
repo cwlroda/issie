@@ -30,15 +30,23 @@ type WireSegment =
 /// NB - how you define Ports for drawing - whether they correspond to
 /// a separate datatype and Id, or whether port offsets from
 /// component coordinates are held in some other way, is up to groups.
+type ConnectedPorts =
+    {
+        SrcPort: CommonTypes.PortId list
+        TargetPort: CommonTypes.PortId list
+    }
+
 type Wire =
     { Id: CommonTypes.ConnectionId
       SrcPort: CommonTypes.PortId
+      SrcLabel: string
       TargetPort: CommonTypes.PortId
+      TargetLabel: string
       LastPos: XYPos
-      //WireSegments: WireSegment list //When update to use PolyLine SVGAttr.Points (boxDef sym.Pos sym.W sym.H)
       WireSegments: XYPos list
       WireColor: CommonTypes.HighLightColor
-      WireWidth: int 
+      WireWidth: int
+      Error: string Option
       }
 
 let BBoxSize = 3.0
@@ -179,7 +187,6 @@ let distPtToWire (pt: XYPos) (wire: Wire) =
     |> List.map (fun verts -> distPtToSeg pt verts)
     |> List.maxBy (fun dist -> -dist)
 
-
 /// Routing
 let roundSym (startPt: XYPos) (relShift: XYPos) (endPt: XYPos) =
     let midVert = posAdd startPt relShift
@@ -285,6 +292,7 @@ let updateSelectedWires (wModel: Model) (wIdLst: CommonTypes.ConnectionId list) 
         | None -> wxModel
 
     List.fold foldfunc wModel.WX wIdLst
+
 /// Given two port creates a wire connection and  which it auto routes
 let addWire
     (wModel: Model)
@@ -293,30 +301,51 @@ let addWire
     : Map<CommonTypes.ConnectionId, Wire> =
     let getPortType = Symbol.portType wModel.Symbol
 
-    let src, tgt, colour =
-        match getPortType port1, getPortType port2 with
-        | p1, p2 when p1 = p2 -> port2, port1, CommonTypes.HighLightColor.Red
-        | p1, _ when p1 = CommonTypes.PortType.Input -> port2, port1, CommonTypes.HighLightColor.Grey
-        | _, _ -> port1, port2, CommonTypes.HighLightColor.Grey
+    let getType pId =
+        (Symbol.portType wModel.Symbol pId)
+        
+    let getWidth pId =
+        (Symbol.portWidth wModel.Symbol pId)
 
-    let w =
-        match Symbol.portWidth wModel.Symbol src with
-        | Some w -> w
-        | None -> 4
+    let typeValid: Result<CommonTypes.PortId* CommonTypes.PortId, string > =
+        match getType port1, getType port2 with
+        | pT1, pT2 when pT1 = pT2 -> 
+            Error  $"Invalid Port Selection. The Ports cannot be both be {pT1}s."
+        | p, _ when p = CommonTypes.PortType.Input -> Ok (port2, port1) 
+        | _ ->  Ok (port1, port2)
 
+    let (srcLabel,tgtLabel, widthValid): (string*string*Result<int, string >) =
+        match getWidth port1, getWidth port2 with 
+        | Some pW1, Some pW2 when pW1 <> pW2 -> $"{pW1}",$"{pW2}",Error  $"Invalid Port Selection. Wire widths dont match, port widths of {pW1} bit(s) does not match widths of {pW2} bits"
+        | None, Some w -> "Undetermined",$"{w}", Error $"Invalid Port Selection. Wire widths dont match, port widths of None does not match {w}bits" 
+        | Some w, None -> $"{w}", "Undetermined", Error $"Invalid Port Selection. Wire widths dont match, port widths of None does not match {w}bits" 
+        | Some w, _ -> $"{w}",$"{w}", Ok w 
+        | _,_ -> failwithf "Should not occur"
+
+
+    let src, tgt, width, colour, err =
+        match widthValid, typeValid with
+        | _, Error errType -> port1, port2, 5, CommonTypes.HighLightColor.Red, Some errType
+        | Error errStr , Ok (s, t) ->s, t , 5, CommonTypes.HighLightColor.Red, Some errStr
+        |Ok w, Ok (s,t) -> s,t, w, CommonTypes.HighLightColor.Blue, None
+        
     let wSegLst = autoRoute wModel src tgt
+    printf $"{err}"
 
-    let w =
+    let newWire = 
         { Id = CommonTypes.ConnectionId(uuid ())
           SrcPort = src
+          SrcLabel = srcLabel
           TargetPort = tgt
+          TargetLabel = tgtLabel
           WireSegments = wSegLst
           LastPos = wSegLst.[0]
           WireColor = colour
-          WireWidth = w
+          WireWidth = width
+          Error = err
           }
 
-    Map.add w.Id w wModel.WX
+    Map.add newWire.Id newWire wModel.WX
 ///Given a connectionId deletes the given wire
 let deletWire (wModel: Model) (wId: CommonTypes.ConnectionId) = 
     Map.remove wId wModel.WX
@@ -365,6 +394,7 @@ let startDrag (wModel: Model) (wId: CommonTypes.ConnectionId) (pos: XYPos): Map<
 
 
 /// react virtual DOM SVG for one wire
+
 type SegRenderProps =
     { Key: CommonTypes.ConnectionId
       Seg: XYPos list
@@ -372,7 +402,7 @@ type SegRenderProps =
       StrokeWidthP: string }
 type LabelRenderProps =
     { 
-        Key: CommonTypes.ConnectionId
+        Key: CommonTypes.PortId
         Label: string
         ColorLabel: string
         Pos: XYPos
@@ -444,13 +474,14 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
         then
             model.WX
             |> Map.toList
-            |> List.map (fun (wId, w) -> 
+            |> List.fold (fun lst (wId, w) -> [(w.SrcPort, w.SrcLabel, w.WireColor, (posAdd w.WireSegments.[0] (posOf 3.0 (float w.WireWidth + 5.)))); (w.TargetPort, w.TargetLabel, w.WireColor, (posAdd w.WireSegments.[(w.WireSegments.Length)-1] (posOf -3.0 (float w.WireWidth + 5.))))]@lst) []
+            |> List.map (fun (pId, pLabel,c,pos) -> 
                 let labelProps = 
                     {
-                        Key = wId
-                        Label = $"%d{w.WireWidth}"
-                        ColorLabel = w.WireColor.ToString()
-                        Pos = (posAdd (Symbol.portPos model.Symbol w.SrcPort) (posOf 3.0 (float -w.WireWidth-5.)))
+                        Key = pId
+                        Label = pLabel
+                        ColorLabel = c.ToString()
+                        Pos = pos
                     }
                 singleLabelView labelProps)
         else []  
@@ -516,7 +547,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     | StartDragging (wMsgId, wMsgPos) ->
         let oldWX = model.WX
         let wxUpdated = startDrag model wMsgId wMsgPos
-        printf $"{(oldWX <> wxUpdated)}"
         let bb = createBB wxUpdated
 
         { model with

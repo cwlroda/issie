@@ -95,6 +95,7 @@ let boxDef (pos:XYPos) (w:int) (h:int): string =
 
 //-----------------------Skeleton Message type for symbols---------------------//
 let createPorts (sId: CommonTypes.ComponentId) ((nInP, nOutP):int *int) =
+    let rnd = System.Random 0
     let createPort inOut nr =
         let pId  = 
             function
@@ -105,6 +106,7 @@ let createPorts (sId: CommonTypes.ComponentId) ((nInP, nOutP):int *int) =
             CommonTypes.Port.PortNumber = Some nr
             CommonTypes.Port.PortType = inOut
             CommonTypes.Port.HostId = sId.ToString()
+            CommonTypes.Port.PortWidth = Some (rnd.Next(1,3))
         }
 
     let inPortLst = List.map (createPort CommonTypes.PortType.Input) [0..nInP-1]
@@ -139,7 +141,7 @@ let portType (model: Model) (portId: CommonTypes.PortId) : CommonTypes.PortType 
 
 let portWidth (model: Model) (portId: CommonTypes.PortId) : int Option =
     match List.tryPick (fun sym -> (portOpt portId) sym.Ports) model with
-    | Some p -> Some 5
+    | Some port -> port.PortWidth
     | None -> failwithf "Invalid id"
 
 let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos = 
