@@ -44,17 +44,26 @@
             invisibleMenu.visible <- true // false if you want keys but no "Edit" menu
             invisibleMenu.submenu <-
                 [|
-                   makeKeyItem "Delete selected"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
                    makeKeyItem "New symbol" "CmdOrCtrl+N" (fun () -> dispatch KeyboardMsg.CtrlN)
+                   makeKeyItem "Delete selected"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
                    makeKeyItem "Select all" "Alt+A" (fun () -> dispatch KeyboardMsg.CtrlA)
+                   menuSeparator
+                   makeKeyItem "Copy" "Alt+C" (fun () -> dispatch KeyboardMsg.CtrlC)
+                   makeKeyItem "Paste" "Alt+V" (fun () -> dispatch KeyboardMsg.CtrlV)
+                   menuSeparator
+                   makeKeyItem "Decrease grid size" "CmdOrCtrl+Q" (fun () -> dispatch KeyboardMsg.CtrlQ)
+                   makeKeyItem "Increase grid size" "CmdOrCtrl+W" (fun () -> dispatch KeyboardMsg.CtrlW)
+                   makeKeyItem "Toggle show grid" "CmdOrCtrl+F" (fun () -> dispatch KeyboardMsg.CtrlF)
                    makeKeyItem "Toggle snap-to-grid" "CmdOrCtrl+G" (fun () -> dispatch KeyboardMsg.CtrlG)
+                   menuSeparator
+                   makeKeyItem "Zoom in" "CmdOrCtrl+=" (fun () -> dispatch KeyboardMsg.CtrlEquals)
+                   makeKeyItem "Zoom out" "CmdOrCtrl+-" (fun () -> dispatch KeyboardMsg.CtrlMinus)
                    menuSeparator
                    makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch KeyboardMsg.AltShiftZ)
                    makeRoleItem MenuItemRole.ForceReload
                    makeRoleItem MenuItemRole.Reload
                    makeRoleItem MenuItemRole.ToggleDevTools
-                   makeRoleItem MenuItemRole.ZoomIn
-                   makeRoleItem MenuItemRole.ZoomOut|]
+                   |]
                 |> U2.Case1
     
     let attachMenusAndKeyShortcuts dispatch =

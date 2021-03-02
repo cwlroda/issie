@@ -55,7 +55,7 @@ type Msg =
     | Dragging of idLst : CommonTypes.ComponentId list * pagePos: XYPos
     | EndDragging
     | AddSymbol of CommonTypes.ComponentType * XYPos
-    | DeleteSymbol of sId:CommonTypes.ComponentId 
+    | DeleteSymbols of sId:CommonTypes.ComponentId list
     | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
     | SetSelected of CommonTypes.ComponentId list
     | HighlightPort of CommonTypes.PortId list
@@ -84,6 +84,13 @@ let getPortsOfSymbol (symModel : Model) (symId : CommonTypes.ComponentId) : Comm
     ).Ports
     |> List.map (fun p -> p.Id)
 
+let symbolBBox (symModel : Model) (cId : CommonTypes.ComponentId) : BBox =
+    {
+        Pos = (List.find (fun el -> el.Id = cId) symModel).Pos
+        Height = 40.
+        Width = 40.
+    }
+
 let getAllPortsWithSymbol (symModel : Model) = 
     let insertSymToPortList (pl : Port list) (sym : Symbol) =
         pl
@@ -92,6 +99,11 @@ let getAllPortsWithSymbol (symModel : Model) =
     symModel
     |> List.map (fun sym -> (sym, sym.Ports))
     |> List.collect (fun (sym, pl) -> insertSymToPortList pl sym)
+
+let portsInRange (symModel : Model) (pos : XYPos) (range : float) : CommonTypes.PortId list =
+    getAllPortsWithSymbol symModel
+    |> List.filter (fun (p,sym) -> (distanceBetweenPoints (posAdd p.RelPos sym.Pos) pos) <= range)
+    |> List.map (fun (p,_) -> p.Id)
 
 let portPos (symModel : Model) (pId : CommonTypes.PortId) : XYPos =
     let res = 
@@ -192,7 +204,9 @@ let createNewSymbol (pos:XYPos) =
 
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
-    []
+    List.allPairs [1..14] [1..14]
+    |> List.map (fun (x,y) -> {X = float (x*60+20); Y=float (y*60+20)})
+    |> List.map createNewSymbol
     , Cmd.none
 
 /// update function which displays symbols
@@ -200,15 +214,14 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     | AddSymbol (_, pos) -> 
         createNewSymbol pos :: model, Cmd.none
-    | DeleteSymbol sId -> 
-        List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
+    | DeleteSymbols sIds -> 
+        List.filter (fun sym -> not (List.contains sym.Id sIds)) model, Cmd.none
     | StartDragging (sLst, pagePos) ->
         model
         |> List.map (fun sym ->
             if List.contains sym.Id sLst then
                 { sym with
                     LastDragPos = pagePos
-                    //IsDragging = true
                 }
             else
                 sym

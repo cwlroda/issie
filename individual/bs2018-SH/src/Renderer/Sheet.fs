@@ -19,11 +19,11 @@ type Grid = {
     Show: bool
 }
 
-type MouseDown =
+type MouseState =
     | MouseIsUp
-    | FromPort of CommonTypes.PortId * XYPos
+    | FromPort of CommonTypes.PortId * XYPos    //PortId indicates the source port, XYPos indicates the destiantion (mouse end) of the preview wire.
     | FromSymbol
-    | FromEmpty
+    | FromEmpty of SelectionBox
     | FromWire of CommonTypes.ConnectionId
 
 
@@ -31,92 +31,61 @@ type Model = {
     Wire: BusWire.Model
     SelectedSymbols: CommonTypes.ComponentId list
     SelectedWire: CommonTypes.ConnectionId Option
-    MouseState: MouseDown
+    MouseState: MouseState
     LastMousePos: XYPos
-    SelectionBox: SelectionBox
     Grid: Grid
+    ScrollOffset: XYPos
+    Zoom: float
+    Clipboard: CommonTypes.ComponentId list
 }
 
 type KeyboardMsg =
-    | AltShiftZ | DEL | CtrlA | CtrlN | CtrlG
+    | AltShiftZ
+    | DEL
+    | CtrlA
+    | CtrlN
+    | CtrlG
+    | CtrlEquals
+    | CtrlMinus
+    | CtrlQ
+    | CtrlW
+    | CtrlF
+    | CtrlC
+    | CtrlV
 
 type Msg =
     | Wire of BusWire.Msg
     | KeyPress of KeyboardMsg
-    | MouseDown of XYPos * bool
+    | MouseDown of XYPos * bool //bool for if shift is pressed.
     | MouseMove of XYPos
-    | MouseUp of XYPos * bool
+    | MouseUp of XYPos
     | Symbol of Symbol.Msg
+    | Scroll of float * float
+    | SnapToGridMsg
 
-/// Determines top-level zoom, > 1 => magnify.
-/// This should be moved into the model as state
-let zoom = 1.0    
-
-
-
-/// This function zooms an SVG canvas by transforming its content and altering its size.
-/// Currently the zoom expands based on top left corner. Better would be to collect dimensions
-/// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
 let view (model:Model) (dispatch : Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
     let wireSvg = BusWire.view model.Wire wDispatch
-    let selectionBox = model.SelectionBox
     let grid = model.Grid
     let size = 1000.0
-    let sizeInPixels = sprintf "%.2fpx" ((size * zoom))
-    /// Is the mouse button currently down?
-    let mDown (ev:Types.MouseEvent) = 
-        if ev.buttons <> 0. then true else false
-
-    let bodyLst = [wireSvg]
-
-    let bodyLst = if selectionBox.Show then
-                    List.append bodyLst [ 
-                                polygon [
-                                    SVGAttr.Points (polygonPointsString selectionBox.FixedCorner selectionBox.MovingCorner)
-                                    SVGAttr.Fill "LightBlue"
-                                    SVGAttr.Stroke "Blue"
-                                    SVGAttr.FillOpacity 0.5
-                                    SVGAttr.StrokeWidth 1 ] []
-                            ]
-                  else bodyLst
+    let sizeInPixels = sprintf "%.2fpx" ((size * model.Zoom))
     
+    ///list containing all SVG elements to be drawn
     let bodyLst =
-        if grid.Show then
-            [0 .. int (size / grid.Size)]
-            |> List.collect (fun i ->
-                [
-                    line [
-                        X1 0.
-                        X2 size
-                        Y1 ((float i)*grid.Size)
-                        Y2 ((float i)*grid.Size)
-                        SVGAttr.Stroke "grey"
-                        SVGAttr.StrokeWidth 1
-                        SVGAttr.StrokeOpacity 0.3
-                    ] []
-
-                    line [
-                        X1 ((float i)*grid.Size)
-                        X2 ((float i)*grid.Size)
-                        Y1 0.
-                        Y2 size
-                        SVGAttr.Stroke "grey"
-                        SVGAttr.StrokeWidth 1
-                        SVGAttr.StrokeOpacity 0.3
-                    ] []
-                
-                ]
-            )
-            |> List.append bodyLst
-        else
-            bodyLst
-
-    let bodyLst =
+        // add selection box if SelectionBox.Show
+        // or add green dotted wire if MouseState = FromPort(_,_).
         match model.MouseState with
+        | FromEmpty selBox ->
+            [
+                polygon [
+                    SVGAttr.Points (polygonPointsString selBox.FixedCorner selBox.MovingCorner)
+                    SVGAttr.Fill "LightBlue"
+                    SVGAttr.Stroke "Blue"
+                    SVGAttr.FillOpacity 0.5
+                    SVGAttr.StrokeWidth 1 ] []
+            ]
         | FromPort (pId, mousePos) ->
-            bodyLst
-            |> List.append [
+             [
                 let portPos = Symbol.portPos model.Wire.Symbol pId
                 line [
                         X1 portPos.X
@@ -129,29 +98,66 @@ let view (model:Model) (dispatch : Msg -> unit) =
                         SVGAttr.StrokeDasharray "5, 3"
                     ] []
             ]
-        | _ -> bodyLst
+        | _ -> []
+        // add grid lines if Grid.Show
+        |> List.append (
+            if grid.Show then
+                [0 .. int (size / grid.Size)]
+                |> List.collect (fun i ->
+                    let gridLinePos = ((float i)*grid.Size)
+                    let gridLine x1 x2 y1 y2 =
+                        line [
+                            X1 x1; X2 x2; Y1 y1; Y2 y2
+                            SVGAttr.Stroke "grey"
+                            SVGAttr.StrokeWidth 1
+                            SVGAttr.StrokeOpacity 0.3
+                        ] []
+                    [
+                        gridLine 0. size gridLinePos gridLinePos
+                        gridLine gridLinePos gridLinePos 0. size
+                    ]
+                )
+            else []
+        )
+        //add wire svg (wires and symbols)
+        |> List.append [wireSvg]
 
-    /// Dispatch a BusWire MouseMsg message
-    /// the screen mouse coordinates are compensated for the zoom transform
+    // convert mouse click to zoomed + scrolled version
+    let mousePos x y = posOf ((x+model.ScrollOffset.X)/model.Zoom) ((y+model.ScrollOffset.Y)/model.Zoom)
+
     div [ Style 
             [ 
-                // Height "100vh" 
-                // MaxWidth "100vw"
-                // CSSProp.OverflowX OverflowOptions.Auto 
-                // CSSProp.OverflowY OverflowOptions.Auto
-            ] 
+                Height "100vh" 
+                MaxWidth "90%"
+                CSSProp.OverflowX OverflowOptions.Auto 
+                CSSProp.OverflowY OverflowOptions.Auto
+            ]
+          Id "sheetDiv"
+          
+          // update scroll offset when div id scrolled
+          OnScroll (fun _ ->
+            let sDiv = document.getElementById "sheetDiv"
+            Scroll (sDiv.scrollLeft, sDiv.scrollTop)
+            |> dispatch
+          )
+
           OnMouseDown (fun ev -> 
-            MouseDown((posOf ev.pageX ev.pageY), ev.shiftKey)
+            MouseDown(mousePos ev.pageX ev.pageY, ev.shiftKey)
             |> dispatch
           )
 
           OnMouseMove (fun ev -> 
-            MouseMove(posOf ev.pageX ev.pageY)
+            MouseMove(mousePos ev.pageX ev.pageY)
             |> dispatch
           )
           
           OnMouseUp (fun ev -> 
-            MouseUp((posOf ev.pageX ev.pageY), ev.shiftKey)
+            MouseUp(mousePos ev.pageX ev.pageY)
+            |> dispatch
+          )
+
+          OnMouseLeave (fun ev ->
+            MouseUp(mousePos ev.pageX ev.pageY)
             |> dispatch
           )
         ]
@@ -163,13 +169,13 @@ let view (model:Model) (dispatch : Msg -> unit) =
                     Width sizeInPixels           
                 ]
             ]
-            [ g // group list of elements with list of attributes
-                [ Style [Transform (sprintf "scale(%f)" zoom)]] // top-level transform style attribute for zoom
+            [ g 
+                [ Style [ Transform (sprintf "scale(%f)" model.Zoom) ] ] //apply zoom to SVG group
                 bodyLst
             ]
         ]
 
-
+///If the grid is enabled, converts a position to the closest position on the grid.
 let posToGridIfEnabled (grid : Grid) (pos : XYPos) : XYPos =
     if grid.SnapToGrid then
         let leftDist = pos.X % grid.Size
@@ -180,64 +186,143 @@ let posToGridIfEnabled (grid : Grid) (pos : XYPos) : XYPos =
     else
         pos
 
+///Generates commands to highlight the source port and any ports of opposite type within 100px.
+let highlightPorts (model : Model) (pos : XYPos) (fromPid : CommonTypes.PortId) = 
+    let fromPortType = Symbol.portType model.Wire.Symbol fromPid    
+    let portsInRange =
+        Symbol.portsInRange model.Wire.Symbol pos 100.
+        |> List.filter (fun pId -> (Symbol.portType model.Wire.Symbol pId) <> fromPortType) //ensure port types are opposite
+    let ports = List.append portsInRange [fromPid]
 
-let highlightPorts (model : Model) (pos : XYPos) = 
-    
-    match Symbol.getTargetedPort model.Wire.Symbol pos with
-    | Some portId -> [Cmd.ofMsg (Symbol <| Symbol.HighlightPort [portId])]
-    | None -> []
+    [Cmd.ofMsg (Symbol <| Symbol.HighlightPort ports)]
     |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
-    
+    |> Cmd.batch
+
+///Generates commands to snap all symbols to the grid.
+let alignSymbolsToGrid (model : Model) =
+    Symbol.getAllSymbols model.Wire.Symbol
+    |> List.map (fun el -> (Symbol.symbolBBox model.Wire.Symbol el), el)
+    |> List.map (fun (bb,id) -> posToGridIfEnabled {model.Grid with SnapToGrid = true} bb.Pos, bb.Pos, id)
+    |> List.map (fun (dst,src, id) -> (posDiff dst src), id)
+    |> List.map (fun (movement, id) ->
+        [
+            Cmd.ofMsg (Symbol <| Symbol.StartDragging ([id], posOf 0. 0.))
+            Cmd.ofMsg (Symbol <| Symbol.Dragging ([id], movement))
+        ]
+    )
+    |> List.collect id
+    |> Cmd.batch
+
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
+    ///Update scrolling offset in state.
+    | Scroll (x, y) -> {model with ScrollOffset = posOf x y}, Cmd.none
+
+    ///Forward wire messages on.
     | Wire wMsg -> 
         let wModel, wCmd = BusWire.update wMsg model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
+
+    ///Forward symbol messages. This has been edited so that they travel through BusWire
+    ///this is required for symbol deletion - BusWire must catch this message and delete
+    ///any connected wires.
     | Symbol sMsg ->
-        let sModel, sCmd = Symbol.update sMsg model.Wire.Symbol
-        let wModel = {model.Wire with Symbol = sModel}
-        {model with Wire = wModel}, Cmd.map Symbol sCmd
+        let wModel, wCmd = BusWire.update (BusWire.Symbol sMsg) model.Wire
+        {model with Wire = wModel}, Cmd.map Wire wCmd
+
     | KeyPress AltShiftZ -> 
-        printStats() // print and reset the performance statistics in dev tools window
-        model, Cmd.none // do nothing else and return model unchanged
+        printStats()
+        model, Cmd.none
+
+    ///Set all symbols as selected.
     | KeyPress CtrlA ->
         let idLst = Symbol.getAllSymbols model.Wire.Symbol
         {model with SelectedSymbols = idLst},
         Cmd.ofMsg (Symbol <| Symbol.SetSelected idLst)
+    
+    ///Delete all selected symbols and any selected wire.
     | KeyPress DEL ->
         let model, wireCommands = 
             match model.SelectedWire with
             | None -> model, [Cmd.none]
             | Some wId -> {model with SelectedWire = None}, [Cmd.ofMsg (Wire <| BusWire.DeleteWire wId)]
 
-        let symbolCommands =
-            model.SelectedSymbols
-            |> List.map (fun id -> 
-                let deleteWireCommands = 
-                    Symbol.getPortsOfSymbol model.Wire.Symbol id
-                    |> List.map (fun pId -> (Symbol.portPos model.Wire.Symbol pId))
-                    |> List.map (fun pos -> (BusWire.getTargetedWire model.Wire pos))
-                    |> List.filter (fun el -> el <> None)
-                    |> List.map (fun (Some cId) -> Cmd.ofMsg (Wire <| BusWire.DeleteWire cId))
-                
-                List.append deleteWireCommands [Cmd.ofMsg (Symbol <| Symbol.DeleteSymbol id)]
-            )
-            |> List.collect id
-        
+        let symbolCommands = [Cmd.ofMsg (Symbol <| Symbol.DeleteSymbols model.SelectedSymbols)]
         model, Cmd.batch (List.append wireCommands symbolCommands)
 
+    ///Create a new symbol at the last position the mouse was down clicked at.
     | KeyPress CtrlN ->
         let posOnGrid = posToGridIfEnabled model.Grid model.LastMousePos
-            
         model, Cmd.ofMsg (Symbol <| Symbol.AddSymbol (CommonTypes.Not, posOnGrid))
     
+    ///Toggles snap-to-grid.
     | KeyPress CtrlG ->
         {model with
             Grid = {model.Grid with SnapToGrid = (not model.Grid.SnapToGrid)}
-        }, Cmd.none
+        }, if model.Grid.SnapToGrid then Cmd.none else alignSymbolsToGrid model
 
+    ///Zoom in.
+    | KeyPress CtrlEquals ->
+        {model with Zoom = model.Zoom + 0.1},Cmd.none
+
+    ///Zoom out.
+    | KeyPress CtrlMinus ->
+        if model.Zoom > 0.1 then
+            {model with Zoom = model.Zoom - 0.1},Cmd.none
+        else
+            model,Cmd.none
+
+    ///Decrease grid size.
+    | KeyPress CtrlQ ->
+        let newGridSize = if model.Grid.Size > 2. then model.Grid.Size - 2. else model.Grid.Size
+        let newModel =
+            {
+                model with
+                    Grid = {model.Grid with Size = newGridSize}
+            }
+        newModel, if model.Grid.SnapToGrid then alignSymbolsToGrid newModel else Cmd.none
+
+    ///Increase grid size.
+    | KeyPress CtrlW ->
+        let newModel =
+            {
+                model with
+                    Grid = {model.Grid with Size = model.Grid.Size + 2.}
+            }
+        newModel, if model.Grid.SnapToGrid then alignSymbolsToGrid newModel else Cmd.none
+
+    ///Toggle show grid.
+    | KeyPress CtrlF ->
+        {
+            model with
+                Grid = {
+                    model.Grid with
+                        Show = not(model.Grid.Show)
+                }
+        },
+        Cmd.none
+
+    ///Copy
+    | KeyPress CtrlC -> {model with Clipboard = model.SelectedSymbols}, Cmd.none
+
+    ///Paste new symbols shifted 20px right and 20px down from originals.
+    | KeyPress CtrlV ->
+        model,
+        [Cmd.ofMsg SnapToGridMsg]
+        |> List.append (
+            model.Clipboard
+            |> List.map (Symbol.symbolBBox model.Wire.Symbol)
+            |> List.map (fun bb -> Cmd.ofMsg(Symbol <| Symbol.AddSymbol (CommonTypes.Not, (posAdd bb.Pos (posOf 20. 20.)))))
+        )
+        |> Cmd.batch
+
+    ///Snaps all symbols to grid.
+    | SnapToGridMsg -> model, alignSymbolsToGrid model
+
+    ///Processes mouse down events. Click priority: Port -> Symbol -> Wire -> Empty
     | MouseDown (pos, isShift) ->
+        ///Process selected list depending on if symbol is already selected and if shift is pressed.
         let processSelectedSymbols targetedId =
             if List.contains targetedId model.SelectedSymbols then
                 if isShift then
@@ -248,73 +333,43 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                 if isShift then List.append model.SelectedSymbols [targetedId]
                 else [targetedId]
 
-        let mouseState, selectedSymbols, showSelection =
-            let targetedPort = Symbol.getTargetedPort model.Wire.Symbol pos
-            match targetedPort with
-            | Some portId -> FromPort (portId, pos), model.SelectedSymbols, false
+        let mouseState, selectedSymbols, cmds =
+
+            match Symbol.getTargetedPort model.Wire.Symbol pos with
+            | Some portId -> FromPort (portId, pos), model.SelectedSymbols, []  //clicked on port
+
             | None ->
-                let targetedSymbol = Symbol.getTargetedSymbol model.Wire.Symbol pos
-                match targetedSymbol with
-                | Some symbolId -> FromSymbol, processSelectedSymbols symbolId, false
+                match Symbol.getTargetedSymbol model.Wire.Symbol pos with
+                | Some symbolId ->                                              //clicked on symbol; select it and start dragging.
+                    let selSyms = processSelectedSymbols symbolId
+                    FromSymbol, selSyms,
+                    [
+                        Cmd.ofMsg (Symbol <| Symbol.StartDragging (selSyms, (posToGridIfEnabled model.Grid pos)))
+                        Cmd.ofMsg (Symbol <| Symbol.SetSelected selSyms)
+                    ]
+
                 | None -> 
                     match BusWire.getTargetedWire model.Wire pos with
-                        | Some wId -> FromWire wId, model.SelectedSymbols, false
-                        | None -> FromEmpty, [], true
+                        | Some wId -> FromWire wId, model.SelectedSymbols, [Cmd.ofMsg (Wire <| BusWire.StartDrag (wId, pos))]   //clicked on wire; start dragging.
 
-        let wireDragCommands =
-            match mouseState with
-            | FromWire wId -> [Cmd.ofMsg (Wire <| BusWire.StartDrag (wId, pos))]
-            | _ -> []        
-        
+                        | None -> FromEmpty {FixedCorner = pos; MovingCorner = pos; Show = true}, [], []    //clicked on empty space; initialise selection box.
+
         {model with
             MouseState = mouseState;
             SelectedSymbols = selectedSymbols;
-            SelectionBox = {
-                model.SelectionBox with
-                    FixedCorner = pos
-                    MovingCorner = pos
-                    Show = showSelection
-            }
             LastMousePos = pos
         },
-        Cmd.batch(
-            [
-                Cmd.ofMsg (Symbol <| Symbol.StartDragging (selectedSymbols, (posToGridIfEnabled model.Grid pos)));
-                Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols);
-            ]
-            |> List.append wireDragCommands
-        )
-        
-    | MouseUp (pos, isShift) ->
-        let processSelectionBox =
-            let symbolsInSelectionBox =
-                let c1 = model.SelectionBox.FixedCorner
-                let c2 = pos
-                let selectionBBox = bboxFromDiagonals c1 c2
-                Symbol.getSymbolsInTargetArea model.Wire.Symbol selectionBBox
-            if List.length symbolsInSelectionBox > 1 then symbolsInSelectionBox
-            else model.SelectedSymbols
+        Cmd.batch cmds
+    
+    ///Processes mouse up events. Behaviour depends on MouseState (i.e. what was mouse-down'ed on)
+    | MouseUp pos ->
+        let selectedSymbols, selectedWire, cmds =
 
-        let selectedSymbols =
             match model.MouseState with
-            | FromEmpty -> processSelectionBox
-            | _ -> model.SelectedSymbols
-
-        let selectWireCommands, selectedWire =
-            if selectedSymbols = model.SelectedSymbols then
-                match BusWire.getTargetedWire model.Wire pos with
-                | None -> [], None
-                | Some wId -> [Cmd.ofMsg (Wire <| BusWire.SetSelected wId)], Some wId
-            else
-                [], None
-
-        let selectWireCommands = 
-            selectWireCommands
-            |> List.append [Cmd.ofMsg (Wire <| BusWire.UnselectAll)]
-
-        let addWireCommands =
-            match model.MouseState with
+            ///If down click was on a port, create a wire if mouse is currently over a destination port,
+             ///  and unhighlight all ports
             | FromPort (fromPid, toPos) ->
+                model.SelectedSymbols, model.SelectedWire,
                 match Symbol.getTargetedPort model.Wire.Symbol toPos with
                 | Some toPid ->
                     let fromPortType = Symbol.portType model.Wire.Symbol fromPid
@@ -323,76 +378,83 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
                         [Cmd.ofMsg (Wire <| BusWire.AddWire (fromPid, toPid))]
                     else []
                 | None -> []
-            | _ -> []
+                |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
 
-        let cmds = 
-            [
-                Cmd.ofMsg (Symbol <| Symbol.EndDragging)
-                Cmd.ofMsg (Symbol <| Symbol.SetSelected selectedSymbols)
-                Cmd.ofMsg (Wire <| BusWire.EndDrag)
-            ]
-            |> List.append addWireCommands
-            |> List.append selectWireCommands
+            ///If down click was on empty space, set selected symbols to those within the selection box,
+            ///and deselect any selected wire.
+            | FromEmpty sb ->
+                let symbolsInSelectionBox =
+                    let selectionBBox = bboxFromDiagonals sb.FixedCorner pos
+                    Symbol.getSymbolsInTargetArea model.Wire.Symbol selectionBBox
+                symbolsInSelectionBox, None,
+                [
+                    Cmd.ofMsg (Symbol <| Symbol.SetSelected symbolsInSelectionBox)
+                    Cmd.ofMsg (Wire <| BusWire.UnselectAll)
+                ]
+
+            ///If down click was on a wire, select the wire if it's still targeted, and end wire dragging.
+            | FromWire _ -> 
+                match BusWire.getTargetedWire model.Wire pos with
+                | None -> model.SelectedSymbols, None, [Cmd.ofMsg (Wire <| BusWire.EndDrag)]
+                | Some wId -> model.SelectedSymbols, Some wId,
+                                [
+                                    Cmd.ofMsg (Wire <| BusWire.EndDrag)
+                                    Cmd.ofMsg (Wire <| BusWire.UnselectAll)
+                                    Cmd.ofMsg (Wire <| BusWire.SetSelected wId)
+                                ]
+
+            ///If down click was on a symbol, end symbol dragging.
+            | FromSymbol -> model.SelectedSymbols, model.SelectedWire, [Cmd.ofMsg (Symbol <| Symbol.EndDragging)]
+
+            ///Otherwise do nothing.
+            | _ -> model.SelectedSymbols, model.SelectedWire, []
 
         {
             model with
                 SelectedSymbols = selectedSymbols
                 SelectedWire = selectedWire
                 MouseState = MouseIsUp
-                SelectionBox = {
-                    model.SelectionBox with
-                        Show = false
-                }
         }, 
         Cmd.batch cmds
 
-
+    ///Processes mouse down events. Behaviour depends on MouseState (i.e. what was mouse-down'ed on)
     | MouseMove pos ->
-        let highlightCommands = highlightPorts model pos
-        let model, draggingCommands =
-            match model.MouseState with
-            | FromEmpty ->
-                {
-                    model with
-                        SelectionBox = {
-                            model.SelectionBox with
-                                MovingCorner = pos
-                        }
-                },
-                [Cmd.none]
-            | FromSymbol ->
-                model, [Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, (posToGridIfEnabled model.Grid pos)))]
-            | FromPort (pId,_) ->
-                {
-                    model with
-                        MouseState = FromPort (pId, pos)
-                }, [Cmd.none]
-            | FromWire wId -> model, [Cmd.ofMsg (Wire <| BusWire.Dragging (wId, pos))]
-            | _ -> model, [Cmd.none]
+        match model.MouseState with
+
+        ///Update SelectionBox moving corner.
+        | FromEmpty sb -> {model with MouseState = FromEmpty {sb with MovingCorner = pos}}, Cmd.none
+
+        ///Drag symbols with snap-to-grid, if it's enabled.
+        | FromSymbol ->
+            model,
+            Cmd.ofMsg (Symbol <| Symbol.Dragging (model.SelectedSymbols, (posToGridIfEnabled model.Grid pos)))
+
+        ///Update FromPort values to draw preview wire, and highlight relevant ports.
+        | FromPort (pId,_) -> {model with MouseState = FromPort (pId, pos)}, highlightPorts model pos pId
+
+        ///Drag selected wire.
+        | FromWire wId -> model, Cmd.ofMsg (Wire <| BusWire.Dragging (wId, pos))
+
+        ///Otherwise do nothing
+        | _ -> model, Cmd.none
 
 
-        let commands = List.append highlightCommands draggingCommands
-        model, Cmd.batch commands
-
-
-    | _ -> failwithf "Sheet - message not implemented"
-
+///Intialise state
 let init() = 
-    let model,cmds = (BusWire.init 400)()
+    let model,cmds = (BusWire.init)()
     {
         Wire = model
         SelectedSymbols = []
         SelectedWire = None
         MouseState = MouseIsUp
-        SelectionBox = {
-            FixedCorner = posOf 0.0 0.0
-            MovingCorner = posOf 0.0 0.0
-            Show = false
-        }
         Grid = {
             Size = 20.
             SnapToGrid = true
             Show = true
         }
         LastMousePos = posOf 0. 0.
-    }, Cmd.map Wire cmds
+        ScrollOffset = posOf 0. 0.
+        Zoom = 1.
+        Clipboard = []
+    },
+    Cmd.map Wire cmds
