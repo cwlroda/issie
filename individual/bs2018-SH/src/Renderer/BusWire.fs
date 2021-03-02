@@ -136,7 +136,7 @@ let view (model:Model) (dispatch: Dispatch<Msg>)=
 /// dummy init for testing: real init would probably start with no wires.
 /// this initialisation is not realistic - ports are not used
 /// this initialisation depends on details of Symbol.Model type.
-let init n () =
+let init () =
     let symbols, cmd = Symbol.init()
     {WX=[];Symbol=symbols; Color=CommonTypes.Red},Cmd.none
 

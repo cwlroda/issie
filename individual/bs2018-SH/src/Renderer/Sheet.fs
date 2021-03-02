@@ -64,10 +64,6 @@ type Msg =
     | Scroll of float * float
     | SnapToGridMsg
 
-
-/// This function zooms an SVG canvas by transforming its content and altering its size.
-/// Currently the zoom expands based on top left corner. Better would be to collect dimensions
-/// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
 let view (model:Model) (dispatch : Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
     let wireSvg = BusWire.view model.Wire wDispatch
@@ -75,12 +71,10 @@ let view (model:Model) (dispatch : Msg -> unit) =
     let grid = model.Grid
     let size = 1000.0
     let sizeInPixels = sprintf "%.2fpx" ((size * model.Zoom))
-    /// Is the mouse button currently down?
-    let mDown (ev:Types.MouseEvent) = 
-        if ev.buttons <> 0. then true else false
 
     let bodyLst = [wireSvg]
 
+    // add selection box if SelectionBox.Show
     let bodyLst = if selectionBox.Show then
                     List.append bodyLst [ 
                                 polygon [
@@ -92,6 +86,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
                             ]
                   else bodyLst
     
+    // add grid lines if Grid.Show
     let bodyLst =
         if grid.Show then
             [0 .. int (size / grid.Size)]
@@ -123,6 +118,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
         else
             bodyLst
 
+    // add green dotted line if previewing wire
     let bodyLst =
         match model.MouseState with
         | FromPort (pId, mousePos) ->
@@ -142,8 +138,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
             ]
         | _ -> bodyLst
 
-    /// Dispatch a BusWire MouseMsg message
-    /// the screen mouse coordinates are compensated for the zoom transform
+    // convert mouse click to zoomed + scrolled version
     let mousePos x y =
         posOf ((x+model.ScrollOffset.X)/model.Zoom) ((y+model.ScrollOffset.Y)/model.Zoom)
     div [ Style 
@@ -154,7 +149,8 @@ let view (model:Model) (dispatch : Msg -> unit) =
                 CSSProp.OverflowY OverflowOptions.Auto
             ]
           Id "sheetDiv"
-
+          
+          // update scroll offset when div id scrolled
           OnScroll (fun _ ->
             let sDiv = document.getElementById "sheetDiv"
             Scroll (sDiv.scrollLeft, sDiv.scrollTop)
@@ -195,7 +191,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
             ]
         ]
 
-
+///If the grid is enabled, converts a position to the closest position on the grid.
 let posToGridIfEnabled (grid : Grid) (pos : XYPos) : XYPos =
     if grid.SnapToGrid then
         let leftDist = pos.X % grid.Size
@@ -206,7 +202,7 @@ let posToGridIfEnabled (grid : Grid) (pos : XYPos) : XYPos =
     else
         pos
 
-
+///Generates commands to highlight the source port and any ports of opposite type within 100px.
 let highlightPorts (model : Model) (pos : XYPos) (fromPid : CommonTypes.PortId) = 
     let fromPortType = Symbol.portType model.Wire.Symbol fromPid    
     let portsInRange =
@@ -217,6 +213,7 @@ let highlightPorts (model : Model) (pos : XYPos) (fromPid : CommonTypes.PortId) 
     [Cmd.ofMsg (Symbol <| Symbol.HighlightPort ports)]
     |> List.append [Cmd.ofMsg (Symbol <| Symbol.UnhighlightPorts)]
 
+///Generates commands to snap all symbols to the grid.
 let alignSymbolsToGrid (model : Model) =
     Symbol.getAllSymbols model.Wire.Symbol
     |> List.map (fun el -> (Symbol.symbolBBox model.Wire.Symbol el), el)
@@ -234,9 +231,7 @@ let alignSymbolsToGrid (model : Model) =
 
 let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     match msg with
-    | Scroll (x, y) ->
-        {model with ScrollOffset = posOf x y}
-        , Cmd.none
+    | Scroll (x, y) -> {model with ScrollOffset = posOf x y}, Cmd.none
 
     | Wire wMsg -> 
         let wModel, wCmd = BusWire.update wMsg model.Wire
@@ -247,14 +242,16 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         {model with Wire = wModel}, Cmd.map Wire wCmd
 
     | KeyPress AltShiftZ -> 
-        printStats() // print and reset the performance statistics in dev tools window
-        model, Cmd.none // do nothing else and return model unchanged
+        printStats()
+        model, Cmd.none
 
+    ///Set all symbols as selected.
     | KeyPress CtrlA ->
         let idLst = Symbol.getAllSymbols model.Wire.Symbol
         {model with SelectedSymbols = idLst},
         Cmd.ofMsg (Symbol <| Symbol.SetSelected idLst)
-
+    
+    ///Delete all selected symbols and any selected wire.
     | KeyPress DEL ->
         let model, wireCommands = 
             match model.SelectedWire with
@@ -264,24 +261,29 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let symbolCommands = [Cmd.ofMsg (Symbol <| Symbol.DeleteSymbols model.SelectedSymbols)]
         model, Cmd.batch (List.append wireCommands symbolCommands)
 
+    ///Create a new symbol at the last position the mouse was down clicked at.
     | KeyPress CtrlN ->
         let posOnGrid = posToGridIfEnabled model.Grid model.LastMousePos
         model, Cmd.ofMsg (Symbol <| Symbol.AddSymbol (CommonTypes.Not, posOnGrid))
     
+    ///Toggles snap-to-grid.
     | KeyPress CtrlG ->
         {model with
             Grid = {model.Grid with SnapToGrid = (not model.Grid.SnapToGrid)}
         }, if model.Grid.SnapToGrid then Cmd.none else alignSymbolsToGrid model
 
+    ///Zoom in.
     | KeyPress CtrlEquals ->
         {model with Zoom = model.Zoom + 0.1},Cmd.none
 
+    ///Zoom out.
     | KeyPress CtrlMinus ->
         if model.Zoom > 0.1 then
             {model with Zoom = model.Zoom - 0.1},Cmd.none
         else
             model,Cmd.none
 
+    ///Decrease grid size.
     | KeyPress CtrlQ ->
         let newGridSize = if model.Grid.Size > 2. then model.Grid.Size - 2. else model.Grid.Size
         let newModel =
@@ -291,6 +293,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             }
         newModel, if model.Grid.SnapToGrid then alignSymbolsToGrid newModel else Cmd.none
 
+    ///Increase grid size.
     | KeyPress CtrlW ->
         let newModel =
             {
@@ -299,6 +302,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
             }
         newModel, if model.Grid.SnapToGrid then alignSymbolsToGrid newModel else Cmd.none
 
+    ///Toggle show grid.
     | KeyPress CtrlF ->
         {
             model with
@@ -309,8 +313,10 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         },
         Cmd.none
 
+    ///Copy
     | KeyPress CtrlC -> {model with Clipboard = model.SelectedSymbols}, Cmd.none
 
+    ///Paste new symbols shifted 20px right and 20px down from originals.
     | KeyPress CtrlV ->
         model,
         [Cmd.ofMsg SnapToGridMsg]
@@ -321,9 +327,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         )
         |> Cmd.batch
 
-    | SnapToGridMsg ->
-        model,
-        if model.Grid.SnapToGrid then alignSymbolsToGrid model else Cmd.none
+    ///Snaps all symbols to grid.
+    | SnapToGridMsg -> model, alignSymbolsToGrid model
 
     | MouseDown (pos, isShift) ->
         let processSelectedSymbols targetedId =
@@ -462,11 +467,9 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
 
         model, Cmd.batch draggingCommands
 
-
-    | _ -> failwithf "Sheet - message not implemented"
-
+///Intialise state
 let init() = 
-    let model,cmds = (BusWire.init 400)()
+    let model,cmds = (BusWire.init)()
     {
         Wire = model
         SelectedSymbols = []
@@ -486,4 +489,5 @@ let init() =
         ScrollOffset = posOf 0. 0.
         Zoom = 1.
         Clipboard = []
-    }, Cmd.map Wire cmds
+    },
+    Cmd.map Wire cmds
