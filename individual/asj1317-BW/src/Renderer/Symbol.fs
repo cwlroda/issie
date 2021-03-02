@@ -300,12 +300,10 @@ let symbolPos (symModel: Model) (sId: CommonTypes.ComponentId) : XYPos =
     List.find (fun sym -> sym.Id = sId) symModel
     |> (fun sym -> sym.Pos)
 
-let getTargetedBBoxSymbol (symModel: Model) (pos: XYPos) =  
-    let sym = List.tryFind (fun sym ->  ptInBB pos (createBBox sym)) symModel
-    match sym with  
-    | Some sym -> Some (makeBBox sym.Pos (float sym.W)  (float sym.H))
-    | None -> None
-
+let symbolBBox (symModel: Model) (symId: CommonTypes.ComponentId): BBox =  
+    let sym = List.find (fun sym ->  sym.Id = symId) symModel
+    (makeBBox sym.Pos (float sym.W)  (float sym.H))
+    
 let getTargetedSymbol (symModel: Model) (pos: XYPos) =
     List.tryFind (fun sym ->  ptInBB pos (createBBox sym)) symModel
     
@@ -313,6 +311,9 @@ let getPortsOfSymbol (symModel: Model) (symId: CommonTypes.ComponentId) =
     let sym = List.find (fun sym -> sym.Id = symId) symModel
     sym.Ports |> List.map (fun p -> p.Id)
      
+let getHostId (model: Model) (portId: CommonTypes.PortId) : CommonTypes.ComponentId =
+    let sym = List.find (fun (sym:Symbol) -> List.exists (fun (p: CommonTypes.Port) -> p.Id = portId) sym.Ports) model
+    sym.Id
 
 /// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
 let updateSymbolModelWithComponent (symModel: Model) (comp:CommonTypes.Component) =

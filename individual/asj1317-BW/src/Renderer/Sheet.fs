@@ -145,10 +145,10 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | KeyPress CtrlS ->
         let wModel, wCmd = BusWire.update BusWire.UnselectAll model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
-    | KeyPress AltV -> 
+    | KeyPress AltZ -> 
         let wModel, wCmd = BusWire.update BusWire.EndDragging model.Wire    
         {model with Wire = wModel}, Cmd.map Wire wCmd
-    | KeyPress AltZ ->
+    | KeyPress DEL ->
         let wId = 
             Map.toList model.Wire.WX 
             |> List.head
@@ -158,19 +158,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | KeyPress AltC -> 
         let pIdPair = makeRandomPortConnection model.Wire.Symbol
         let wModel, wCmd = BusWire.update (BusWire.AddWire pIdPair) model.Wire
-        {model with Wire = wModel}, Cmd.map Wire wCmd
+        let updatedModel = {model with Wire = wModel}
+        let allErr = BusWire.getErrors updatedModel.Wire
+        printf $"{allErr}"
+        updatedModel, Cmd.map Wire wCmd
     | KeyPress AltV -> 
         let wModel, wCmd = BusWire.update (BusWire.ToggleAnnotations) model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
-    | KeyPress s -> failwithf "Not implemented" // all other keys are turned into SetColor commands
-        (* let c =
-            match s with
-            | AltC -> CommonTypes.Blue
-            | AltV -> CommonTypes.Green
-            | AltZ -> CommonTypes.Red
-            | _ -> CommonTypes.Grey
-        printfn "Key:%A" c
-        model, Cmd.ofMsg (Wire <| BusWire.SetColor c) *)
     
 let init() = 
     let model,cmds = (BusWire.init 400)()

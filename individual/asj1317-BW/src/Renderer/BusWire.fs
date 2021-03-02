@@ -201,6 +201,11 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
 
 
     let wireDir = posDiff endPos startPos
+    (* let endBBox = Symbol.symbolBBox wModel.Symbol (Symbol.getHostId wModel.Symbol endId)
+    let startBBox = Symbol.symbolBBox wModel.Symbol (Symbol.getHostId wModel.Symbol startId)
+
+    let relEndHost = posDiff endBBox.Pos midPos
+    let relStartHost = posDiff startBBox.Pos midPos *)
 
     let initialSegs, finalSegs =
         match wireDir.X with
@@ -209,6 +214,7 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
               { X = midPos.X; Y = startPos.Y } ],
             [ { X = midPos.X; Y = endPos.Y }
               endPos ]
+ 
         | _ ->
             [ startPos
               { X = startPos.X + 5.0; Y = startPos.Y }
@@ -216,7 +222,7 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
             [ { X = endPos.X - 5.0; Y = midPos.Y }
               { X = endPos.X - 5.0; Y = endPos.Y }
               endPos ]
-
+   
 
     initialSegs @ finalSegs
 
@@ -307,12 +313,17 @@ let addWire
     let getWidth pId =
         (Symbol.portWidth wModel.Symbol pId)
 
+    let avaliableInput inputId=
+        Map.forall (fun wId w -> w.TargetPort <> inputId) wModel.WX
+
     let typeValid: Result<CommonTypes.PortId* CommonTypes.PortId, string > =
         match getType port1, getType port2 with
         | pT1, pT2 when pT1 = pT2 -> 
             Error  $"Invalid Port Selection. The Ports cannot be both be {pT1}s."
         | p, _ when p = CommonTypes.PortType.Input -> Ok (port2, port1) 
         | _ ->  Ok (port1, port2)
+
+
 
     let (srcLabel,tgtLabel, widthValid): (string*string*Result<int, string >) =
         match getWidth port1, getWidth port2 with 
@@ -325,12 +336,15 @@ let addWire
 
     let src, tgt, width, colour, err =
         match widthValid, typeValid with
+        |Ok w, Ok (s,t) when (avaliableInput t) -> s,t, w, CommonTypes.HighLightColor.Blue, None
+        |Ok w, Ok (s,t) -> s,t, w, CommonTypes.HighLightColor.Red, Some "Invalid Input port selection. An input port cannot have multiple input wires"
+        | Error errStr , Ok (s, t) when (avaliableInput t) ->s, t , 5, CommonTypes.HighLightColor.Red, Some errStr
+        | Error errStr , Ok (s, t) ->s, t , 5, CommonTypes.HighLightColor.Red, Some "Invalid Input port selection. An input port cannot have multiple input wires"
         | _, Error errType -> port1, port2, 5, CommonTypes.HighLightColor.Red, Some errType
-        | Error errStr , Ok (s, t) ->s, t , 5, CommonTypes.HighLightColor.Red, Some errStr
-        |Ok w, Ok (s,t) -> s,t, w, CommonTypes.HighLightColor.Blue, None
+        
+        
         
     let wSegLst = autoRoute wModel src tgt
-    printf $"{err}"
 
     let newWire = 
         { Id = CommonTypes.ConnectionId(uuid ())
@@ -375,7 +389,7 @@ let setSelectedColor (wModel: Model) (wID: CommonTypes.ConnectionId): Map<Common
 let setUnselectedColor (wModel: Model): Map<CommonTypes.ConnectionId, Wire> =
     Map.map
         (fun wId w ->
-            if w.WireColor <> CommonTypes.HighLightColor.Red then
+            if w.Error <> None then
                 { w with
                       WireColor = CommonTypes.HighLightColor.Blue }
             else
@@ -441,19 +455,6 @@ let createBB wLst =
             @ lst)
         []
 
-type BBoxRenderProps = { Key: string; Box: BBox }
-
-let singleBBox (box: BBoxRenderProps) =
-
-    polygon [ SVGAttr.Points(boxDef box.Box.Pos box.Box.W box.Box.H)
-              SVGAttr.StrokeWidth "1px"
-              SVGAttr.Stroke "Black"
-              SVGAttr.FillOpacity 0.2
-              SVGAttr.Fill "Blue" ] []
-
-
-let private renderBBox =
-    FunctionComponent.Of(fun (props: BBoxRenderProps) -> singleBBox props)
 
 
 let view (model: Model) (dispatch: Dispatch<Msg>) =
@@ -474,24 +475,17 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
         then
             model.WX
             |> Map.toList
-            |> List.fold (fun lst (wId, w) -> [(w.SrcPort, w.SrcLabel, w.WireColor, (posAdd w.WireSegments.[0] (posOf 5.0 (float w.WireWidth - 5.)))); (w.TargetPort, w.TargetLabel, w.WireColor, (posAdd w.WireSegments.[(w.WireSegments.Length)-1] (posOf -10.0 (float w.WireWidth - 5.))))]@lst) []
+            |> List.fold (fun lst (wId, w) -> [(w.SrcPort, w.SrcLabel, w.WireColor, (posAdd w.WireSegments.[0] (posOf 5.0 (float w.WireWidth - 10.)))); (w.TargetPort, w.TargetLabel, w.WireColor, (posAdd w.WireSegments.[(w.WireSegments.Length)-1] (posOf -10.0 (float w.WireWidth - 10.))))]@lst) []
             |> List.map (fun (pId, pLabel,c,pos) -> 
                 let labelProps = 
                     {
                         Key = pId
                         Label = pLabel
-                        ColorLabel = c.ToString()
+                        ColorLabel = "Black"
                         Pos = pos
                     }
                 singleLabelView labelProps)
         else []  
-
-    let bBoxs =
-        model.BB
-        |> List.map
-            (fun bbox ->
-                let propsBB = { Key = Helpers.uuid (); Box = bbox }
-                renderBBox propsBB)
 
     let symbols =
         Symbol.view model.Symbol (fun sMsg -> dispatch (Symbol sMsg))
@@ -499,7 +493,6 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
     g [] [
         (g [] wires)
         (g [] wireAnnotations)
-        (g [] bBoxs)
         symbols
     ]
 
@@ -604,6 +597,16 @@ let getWiresInTargetBBox (wModel: Model) (bbox: BBox): CommonTypes.ConnectionId 
                 lst)
         []
         wModel.WX
+
+let getErrors (wModel: Model) : (string*XYPos) list =
+    let err = 
+        Map.fold (fun lst wId w -> 
+            match w.Error with
+            | Some errStr -> [errStr, (Symbol.portPos wModel.Symbol w.SrcPort)]@lst
+            | None -> lst
+            ) [] wModel.WX
+    printf $"{err}"
+    err
 //----------------------interface to Issie-----------------------//
 let extractWire (wModel: Model) (sId: CommonTypes.ComponentId): CommonTypes.Component = failwithf "Not implemented"
 
