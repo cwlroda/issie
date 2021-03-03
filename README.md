@@ -9,7 +9,14 @@ This is the HLP group project for team 5.
     \- common
        |- interfaces.md
        \- notes.md
-   
+       
+## Interface Definition
+All interface used in the project are defined in the interface.md file found in 
+  <root>   
+  \- common
+        |- interfaces.md.
+In interface.md each type of module is listed with their respective interfaces and messages defined.
+
 ## Project allocation
 ###### Symbol
   * Chizu
