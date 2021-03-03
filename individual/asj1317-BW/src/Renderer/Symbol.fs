@@ -54,34 +54,7 @@ type Msg =
 
 //---------------------------------helper types and functions----------------//
 
-let createBBox (sym: Symbol) =
-    {
-        Pos = sym.Pos
-        W = float sym.W
-        H = float sym.H
-    }
 
-let posDiff a b =
-    {X=a.X-b.X; Y=a.Y-b.Y}
-
-let posAdd a b =
-    {X=a.X+b.X; Y=a.Y+b.Y}
-
-let posOf x y = {X=x;Y=y}
-
-
-
-let ptInBB (pt: XYPos) (bb: BBox): bool =
-    let diffX =  pt.X - bb.Pos.X
-    let diffY =  bb.Pos.Y - pt.Y
-
-    match diffX, diffY with
-    | x, _ when (x > (float bb.W)) ->
-        false
-    | _, y when (y > (float bb.H)) -> 
-        false
-    | _ -> 
-        true
 
 let boxDef (pos:XYPos) (w:int) (h:int): string =
     let tL = pos
@@ -300,19 +273,20 @@ let symbolPos (symModel: Model) (sId: CommonTypes.ComponentId) : XYPos =
     List.find (fun sym -> sym.Id = sId) symModel
     |> (fun sym -> sym.Pos)
 
-let getTargetedBBoxSymbol (symModel: Model) (pos: XYPos) =  
-    let sym = List.tryFind (fun sym ->  ptInBB pos (createBBox sym)) symModel
-    match sym with  
-    | Some sym -> Some (makeBBox sym.Pos (float sym.W)  (float sym.H))
-    | None -> None
-
+let symbolBBox (symModel: Model) (symId: CommonTypes.ComponentId): BBox =  
+    let sym = List.find (fun sym ->  sym.Id = symId) symModel
+    (makeBBox sym.Pos (float sym.W)  (float sym.H))
+    
 let getTargetedSymbol (symModel: Model) (pos: XYPos) =
-    List.tryFind (fun sym ->  ptInBB pos (createBBox sym)) symModel
+    List.tryFind (fun (sym: Symbol) ->  ptInBB pos (makeBBox sym.Pos  (float sym.W) (float sym.H))) symModel
     
 let getPortsOfSymbol (symModel: Model) (symId: CommonTypes.ComponentId) =
     let sym = List.find (fun sym -> sym.Id = symId) symModel
     sym.Ports |> List.map (fun p -> p.Id)
      
+let getHostId (model: Model) (portId: CommonTypes.PortId) : CommonTypes.ComponentId =
+    let sym = List.find (fun (sym:Symbol) -> List.exists (fun (p: CommonTypes.Port) -> p.Id = portId) sym.Ports) model
+    sym.Id
 
 /// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
 let updateSymbolModelWithComponent (symModel: Model) (comp:CommonTypes.Component) =

@@ -49,7 +49,7 @@ type Wire =
       Error: string Option
       }
 
-let BBoxSize = 3.0
+let BBoxSize = 2.0
 
 type Model =
     { Symbol: Symbol.Model
@@ -81,35 +81,11 @@ type Msg =
 
 
 ///--------------------Helpers Functions -------------------------------------///
-/// Useful helper functions
-let posOf x y = { X = x; Y = y }
 
-/// Takes a set of coordinates and returns a new set of cooridantes adjusted according to the adjPos floats given
-/// each in the X and Y respectively
-let posDiff a b = { X = a.X - b.X; Y = a.Y - b.Y }
-
-let posAdd a b = { X = a.X + b.X; Y = a.Y + b.Y }
-
-let midPt (aPos: XYPos) (bPos: XYPos): XYPos =
-    let diff = posDiff bPos aPos
-    posAdd aPos (posOf (diff.X / 2.) (diff.Y / 2.))
 
 ///Takes a point and a BBox and checks if the point are within the bounderies of the box
 /// Returns true if the points is within the bounderires of the BBox
 /// Otherwise returns false
-
-let ptInBB (pt: XYPos) (bb: BBox): bool =
-    let bRCorner = posAdd bb.Pos { X = bb.W; Y = -bb.H }
-
-    match pt.X, pt.Y with
-    | x, _ when x < bb.Pos.X || x > bRCorner.X ->
-        printf "Fails on X"
-        false
-
-    | _, y when y > bb.Pos.Y || y < bRCorner.Y ->
-        printf "Fails on y"
-        false
-    | _ -> true
 
 
 //Calculates the distance between a point and a wire segment
@@ -129,7 +105,6 @@ let distPtToSeg (pt: XYPos) ((startPt, endPt): XYPos * XYPos) = //(wSeg: WireSeg
     abs (crossProd) / magPtAToPtB
 ///Give list of verticies outputs a string that will define a polyline
 let lineDef (verts: XYPos list) =
-    printf $" Verticies: {verts}"
 
     List.map (fun pos -> $"{pos.X},{pos.Y}") verts
 
@@ -152,23 +127,25 @@ let wire (wModel: Model) (wId: CommonTypes.ConnectionId): Wire =
 /// Takes a wire segment and the width of the wire as input and using its oritenation returns the correct BBox
 let createSegBB (wireW: int) ((startPt, endPt): XYPos * XYPos) = // (seg: WireSegment): BBox =
 
-    let posDiff = posDiff startPt endPt
+    let relDiff = posDiff startPt endPt
 
     let adjTopLeft =
-        { X = float -BBoxSize
-          Y = float BBoxSize }
+        { X =  -(BBoxSize + (float wireW)/2.)
+          Y =  (BBoxSize + (float wireW)/2.) }
 
     let wHCalc (diff: float) =
         match abs (diff) < 1.0 with
-        | true -> 2. * BBoxSize
-        | _ -> diff + 2. * BBoxSize
+        | true ->   2.*BBoxSize + (float wireW)
+        | _ -> (abs diff) +  2.*BBoxSize + float (wireW)
 
     let topLeftCorner =
-        match abs (posDiff.X) < abs (posDiff.Y) with
-        | true -> posAdd startPt adjTopLeft
-        | _ -> posAdd endPt adjTopLeft
+        match relDiff.X, relDiff.Y with 
+        | x,y when ((abs y) > (abs x))  && y > 0. -> posAdd startPt adjTopLeft
+        | x,y when ((abs y) > (abs x)) -> posAdd endPt adjTopLeft
+        | x,_ when x > 0. -> posAdd endPt adjTopLeft
+        |_ ,_ -> posAdd startPt adjTopLeft
 
-    makeBBox topLeftCorner (wHCalc posDiff.X) (wHCalc posDiff.Y)
+    makeBBox topLeftCorner (wHCalc relDiff.X) (wHCalc relDiff.Y)
 
 ///Takes as input a wire and a point and checks if the pt is within the BBox of any of the segments
 /// Returns true if it is close to one of the segments
@@ -201,6 +178,11 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
 
 
     let wireDir = posDiff endPos startPos
+    (* let endBBox = Symbol.symbolBBox wModel.Symbol (Symbol.getHostId wModel.Symbol endId)
+    let startBBox = Symbol.symbolBBox wModel.Symbol (Symbol.getHostId wModel.Symbol startId)
+
+    let relEndHost = posDiff endBBox.Pos midPos
+    let relStartHost = posDiff startBBox.Pos midPos *)
 
     let initialSegs, finalSegs =
         match wireDir.X with
@@ -209,6 +191,7 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
               { X = midPos.X; Y = startPos.Y } ],
             [ { X = midPos.X; Y = endPos.Y }
               endPos ]
+ 
         | _ ->
             [ startPos
               { X = startPos.X + 5.0; Y = startPos.Y }
@@ -216,17 +199,24 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
             [ { X = endPos.X - 5.0; Y = midPos.Y }
               { X = endPos.X - 5.0; Y = endPos.Y }
               endPos ]
-
+   
 
     initialSegs @ finalSegs
 
-let updateVerts w (idx1, idx2) move orien =
+let updateConnectionSeg (idx0, idx1) (move:XYPos) (segments: XYPos list) =
+    List.mapi (fun idx vert ->
+        match idx with
+        | idx when idx0 = idx -> posDiff vert move
+        | idx when idx1 = idx -> posDiff vert {X=0.0; Y=move.Y}
+        | _ -> vert
+        ) segments
 
+let updateVerts (idx1, idx2) (move: XYPos) (orien: XYPos) (segments: XYPos list) =
     let relMove =
         match orien.X, orien.Y with
         | x, y when abs (x) < abs (y) -> { X = move.X; Y = 0.0 }
         | _ -> { X = 0.0; Y = move.Y }
-
+        
     List.mapi
         (fun idx vert ->
             match idx with
@@ -235,7 +225,7 @@ let updateVerts w (idx1, idx2) move orien =
             | idx when idx2 = idx ->
                 posDiff vert relMove
             | _ -> vert)
-        w.WireSegments
+        segments
 
 let wiresConnectedToSymbol (wModel: Model) (symId: CommonTypes.ComponentId) : CommonTypes.ConnectionId list =
     let inLst pLst portId=
@@ -246,8 +236,8 @@ let wiresConnectedToSymbol (wModel: Model) (symId: CommonTypes.ComponentId) : Co
     |> List.filter (fun (wId, w) -> (inLst portConnected w.SrcPort) || (inLst portConnected w.TargetPort))
     |> List.map fst 
 
-    ///Takes a position and a wireId, updates the position of the segment closest to the mouse
-let manuelRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos) =
+ ///Takes a position and a wireId, updates the position of the segment closest to the mouse
+let manualRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos) =
     let w = wire wModel wireId
 
     let isTarget wWidth segPts =
@@ -258,18 +248,19 @@ let manuelRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos
     let segIdx =
         List.pairwise w.WireSegments
         |> List.findIndex (isTarget w.WireWidth)
-
     let move = posDiff w.LastPos pos
+    
 
-
-    let updatedWireSegs =
-        match segIdx with
-        | idx when  idx = 0 || idx = (List.length w.WireSegments) -> w.WireSegments
-        | idx ->
-            let orien =
-                posDiff w.WireSegments.[idx] w.WireSegments.[idx + 1]
-
-            updateVerts w (idx, idx + 1) move orien
+    let updatedWireSegs = 
+            match segIdx with
+                | idx when  idx = 0 -> 
+                    updateConnectionSeg (idx, idx+1) move w.WireSegments
+                | idx when idx = (List.length w.WireSegments)-1 ->  
+                    updateConnectionSeg (idx-1, idx) move w.WireSegments
+                | idx -> 
+                    let orien = posDiff w.WireSegments.[idx] w.WireSegments.[idx + 1]
+                    updateVerts (idx, idx+1) move orien w.WireSegments
+                        
 
     Map.add
         wireId
@@ -292,7 +283,8 @@ let updateSelectedWires (wModel: Model) (wIdLst: CommonTypes.ConnectionId list) 
         | None -> wxModel
 
     List.fold foldfunc wModel.WX wIdLst
-
+(* let manualRouting (wModel: Model) (wId: CommonTypes.PortId) (pos: XYPos) =
+    let srcBB = portPos wModel.Symbol  *)
 /// Given two port creates a wire connection and  which it auto routes
 let addWire
     (wModel: Model)
@@ -307,12 +299,17 @@ let addWire
     let getWidth pId =
         (Symbol.portWidth wModel.Symbol pId)
 
+    let avaliableInput inputId=
+        Map.forall (fun wId w -> w.TargetPort <> inputId) wModel.WX
+
     let typeValid: Result<CommonTypes.PortId* CommonTypes.PortId, string > =
         match getType port1, getType port2 with
         | pT1, pT2 when pT1 = pT2 -> 
             Error  $"Invalid Port Selection. The Ports cannot be both be {pT1}s."
         | p, _ when p = CommonTypes.PortType.Input -> Ok (port2, port1) 
         | _ ->  Ok (port1, port2)
+
+
 
     let (srcLabel,tgtLabel, widthValid): (string*string*Result<int, string >) =
         match getWidth port1, getWidth port2 with 
@@ -325,12 +322,15 @@ let addWire
 
     let src, tgt, width, colour, err =
         match widthValid, typeValid with
+        |Ok w, Ok (s,t) when (avaliableInput t) -> s,t, w, CommonTypes.HighLightColor.Blue, None
+        |Ok w, Ok (s,t) -> s,t, w, CommonTypes.HighLightColor.Red, Some "Invalid Input port selection. An input port cannot have multiple input wires"
+        | Error errStr , Ok (s, t) when (avaliableInput t) ->s, t , 5, CommonTypes.HighLightColor.Red, Some errStr
+        | Error errStr , Ok (s, t) ->s, t , 5, CommonTypes.HighLightColor.Red, Some "Invalid Input port selection. An input port cannot have multiple input wires"
         | _, Error errType -> port1, port2, 5, CommonTypes.HighLightColor.Red, Some errType
-        | Error errStr , Ok (s, t) ->s, t , 5, CommonTypes.HighLightColor.Red, Some errStr
-        |Ok w, Ok (s,t) -> s,t, w, CommonTypes.HighLightColor.Blue, None
+        
+        
         
     let wSegLst = autoRoute wModel src tgt
-    printf $"{err}"
 
     let newWire = 
         { Id = CommonTypes.ConnectionId(uuid ())
@@ -368,18 +368,18 @@ let setSelectedColor (wModel: Model) (wID: CommonTypes.ConnectionId): Map<Common
     wModel.WX.Add(
         wID,
         { w with
-              WireColor = CommonTypes.HighLightColor.Blue }
+              WireColor = CommonTypes.HighLightColor.Green }
     )
 
 /// Reset the color of all the wires except those set in red to highlight error
 let setUnselectedColor (wModel: Model): Map<CommonTypes.ConnectionId, Wire> =
     Map.map
         (fun wId w ->
-            if w.WireColor <> CommonTypes.HighLightColor.Red then
+            if w.Error = None then
                 { w with
                       WireColor = CommonTypes.HighLightColor.Blue }
             else
-                w)
+                {w with WireColor = CommonTypes.HighLightColor.Red})
         wModel.WX
 
 let endDrag (wModel: Model): Map<CommonTypes.ConnectionId, Wire> = setUnselectedColor wModel
@@ -407,6 +407,20 @@ type LabelRenderProps =
         ColorLabel: string
         Pos: XYPos
         }
+
+type BBoxRenderProps = { Key: string; Box: BBox }
+
+let singleBBox (box: BBoxRenderProps) =
+
+    polygon [ SVGAttr.Points(boxDef box.Box.Pos box.Box.W box.Box.H)
+              SVGAttr.StrokeWidth "1px"
+              SVGAttr.Stroke "Black"
+              SVGAttr.FillOpacity 0.2
+              SVGAttr.Fill "Blue" ] []
+
+
+let private renderBBox =
+    FunctionComponent.Of(fun (props: BBoxRenderProps) -> singleBBox props)
 
 let singleWireView =
     FunctionComponent.Of
@@ -441,19 +455,6 @@ let createBB wLst =
             @ lst)
         []
 
-type BBoxRenderProps = { Key: string; Box: BBox }
-
-let singleBBox (box: BBoxRenderProps) =
-
-    polygon [ SVGAttr.Points(boxDef box.Box.Pos box.Box.W box.Box.H)
-              SVGAttr.StrokeWidth "1px"
-              SVGAttr.Stroke "Black"
-              SVGAttr.FillOpacity 0.2
-              SVGAttr.Fill "Blue" ] []
-
-
-let private renderBBox =
-    FunctionComponent.Of(fun (props: BBoxRenderProps) -> singleBBox props)
 
 
 let view (model: Model) (dispatch: Dispatch<Msg>) =
@@ -474,23 +475,22 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
         then
             model.WX
             |> Map.toList
-            |> List.fold (fun lst (wId, w) -> [(w.SrcPort, w.SrcLabel, w.WireColor, (posAdd w.WireSegments.[0] (posOf 3.0 (float w.WireWidth + 5.)))); (w.TargetPort, w.TargetLabel, w.WireColor, (posAdd w.WireSegments.[(w.WireSegments.Length)-1] (posOf -3.0 (float w.WireWidth + 5.))))]@lst) []
+            |> List.fold (fun lst (wId, w) -> [(w.SrcPort, w.SrcLabel, w.WireColor, (posAdd w.WireSegments.[0] (posOf 5.0 (float w.WireWidth - 10.)))); (w.TargetPort, w.TargetLabel, w.WireColor, (posAdd w.WireSegments.[(w.WireSegments.Length)-1] (posOf -10.0 (float w.WireWidth - 10.))))]@lst) []
             |> List.map (fun (pId, pLabel,c,pos) -> 
                 let labelProps = 
                     {
                         Key = pId
                         Label = pLabel
-                        ColorLabel = c.ToString()
+                        ColorLabel = "Black"
                         Pos = pos
                     }
                 singleLabelView labelProps)
         else []  
-
     let bBoxs =
-        model.BB
+         createBB model.WX
         |> List.map
-            (fun bbox ->
-                let propsBB = { Key = Helpers.uuid (); Box = bbox }
+            (fun bb ->
+                let propsBB = { Key = Helpers.uuid (); Box = bb }
                 renderBBox propsBB)
 
     let symbols =
@@ -541,17 +541,18 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
               WX = setUnselectedColor model },
         Cmd.none
     | Dragging (wMsgId, wMsgPos) ->
-        let wxUpdated = manuelRouting model wMsgId wMsgPos
+        let wxUpdated = manualRouting model wMsgId wMsgPos
         //let wxUpdated = updateSelectedWires model wMsgId
         { model with WX = wxUpdated }, Cmd.none
     | StartDragging (wMsgId, wMsgPos) ->
         let oldWX = model.WX
         let wxUpdated = startDrag model wMsgId wMsgPos
-        let bb = createBB wxUpdated
+        (* let bb = createBB wxUpdated *)
 
         { model with
               WX = wxUpdated
-              BB = bb },
+              //BB = bb 
+              },
         Cmd.none
     | EndDragging ->
         let wXUpdated = endDrag model
@@ -604,6 +605,16 @@ let getWiresInTargetBBox (wModel: Model) (bbox: BBox): CommonTypes.ConnectionId 
                 lst)
         []
         wModel.WX
+
+let getErrors (wModel: Model) : (string*XYPos) list =
+    let err = 
+        Map.fold (fun lst wId w -> 
+            match w.Error with
+            | Some errStr -> [errStr, (Symbol.portPos wModel.Symbol w.SrcPort)]@lst
+            | None -> lst
+            ) [] wModel.WX
+    printf $"{err}"
+    err
 //----------------------interface to Issie-----------------------//
 let extractWire (wModel: Model) (sId: CommonTypes.ComponentId): CommonTypes.Component = failwithf "Not implemented"
 
