@@ -641,7 +641,7 @@ let init () =
         PanY = 0.
         Zoom = 1.
         Width = 1000.
-        Height = 800.
+        Height = 700.
         UndoList = []
         RedoList = []
     }, Cmd.map Wire cmds
