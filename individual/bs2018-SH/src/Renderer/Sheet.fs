@@ -37,6 +37,7 @@ type Model = {
     ScrollOffset: XYPos
     Zoom: float
     Clipboard: CommonTypes.ComponentId list
+    Errors: (Error * bool) list // bool represents highlighted.
 }
 
 type KeyboardMsg =
@@ -63,6 +64,8 @@ type Msg =
     | Scroll of float * float
     | SnapToGridMsg
     | SelectSymbolsAtPositions of XYPos list
+    | UpdateWireErrors
+    | ToggleErrorHighlight of Error
 
 let view (model:Model) (dispatch : Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
@@ -101,6 +104,24 @@ let view (model:Model) (dispatch : Msg -> unit) =
                     ] []
             ]
         | _ -> []
+        //add error highlights
+        |> List.append (
+            model.Errors
+            |> List.map (fun (e, highlight) ->
+                if highlight then 
+                    [
+                        circle [
+                            Cx e.Pos.X
+                            Cy e.Pos.Y
+                            R 15.
+                            SVGAttr.Fill "red"
+                            SVGAttr.Opacity 0.7
+                        ] []
+                    ]
+                else []
+            )
+            |> List.collect id
+        )
         //add wire svg (wires and symbols)
         |> List.append [wireSvg]
         // add grid lines if Grid.Show
@@ -123,60 +144,106 @@ let view (model:Model) (dispatch : Msg -> unit) =
                 )
             else []
         )
+
+    ///Process errors into their messages to display.
+    let errorMessages =
+        model.Errors
+        |> List.mapi (fun i (e, highlighted) ->
+            li [
+                Style [
+                    CSSProp.BackgroundColor "#ffadad"
+                    CSSProp.Color "#ff3838"
+                    CSSProp.FontSize "14px"
+                    CSSProp.BorderRadius "5px"
+                    Margin "3px"
+                    Padding "3px"
+                    
+                ]
+            ][
+                p [
+                    Style [
+                        CSSProp.Display DisplayOptions.InlineBlock
+                    ]
+                ][
+                    str <| e.Msg
+                ]
+                button [
+                    Style [
+                        CSSProp.Display DisplayOptions.InlineBlock
+                        CSSProp.MarginLeft "5px"
+                    ]
+                    OnClick (fun _ ->
+                        ToggleErrorHighlight e
+                        |> dispatch
+                    )
+                ] [
+                    str <| if highlighted then "Unhighlight" else "Highlight error"
+                ]
+            ]
+        )
         
 
     // convert mouse click to zoomed + scrolled version
     let mousePos x y = posOf ((x+model.ScrollOffset.X)/model.Zoom) ((y+model.ScrollOffset.Y)/model.Zoom)
 
-    div [ Style 
-            [ 
-                Height "100vh" 
-                MaxWidth "90%"
-                CSSProp.OverflowX OverflowOptions.Auto 
-                CSSProp.OverflowY OverflowOptions.Auto
+    div [] [
+        div [ Style 
+                [ 
+                    Height "85vh" 
+                    Width "100%"
+                    CSSProp.OverflowX OverflowOptions.Scroll
+                    CSSProp.OverflowY OverflowOptions.Scroll
+                ]
+              Id "sheetDiv"
+              
+              // update scroll offset when div id scrolled
+              OnScroll (fun _ ->
+                let sDiv = document.getElementById "sheetDiv"
+                Scroll (sDiv.scrollLeft, sDiv.scrollTop)
+                |> dispatch
+              )
+
+              OnMouseDown (fun ev -> 
+                MouseDown(mousePos ev.pageX ev.pageY, ev.shiftKey)
+                |> dispatch
+              )
+
+              OnMouseMove (fun ev -> 
+                MouseMove(mousePos ev.pageX ev.pageY)
+                |> dispatch
+              )
+              
+              OnMouseUp (fun ev -> 
+                MouseUp(mousePos ev.pageX ev.pageY)
+                |> dispatch
+              )
+
+              OnMouseLeave (fun ev ->
+                MouseUp(mousePos ev.pageX ev.pageY)
+                |> dispatch
+              )
             ]
-          Id "sheetDiv"
-          
-          // update scroll offset when div id scrolled
-          OnScroll (fun _ ->
-            let sDiv = document.getElementById "sheetDiv"
-            Scroll (sDiv.scrollLeft, sDiv.scrollTop)
-            |> dispatch
-          )
-
-          OnMouseDown (fun ev -> 
-            MouseDown(mousePos ev.pageX ev.pageY, ev.shiftKey)
-            |> dispatch
-          )
-
-          OnMouseMove (fun ev -> 
-            MouseMove(mousePos ev.pageX ev.pageY)
-            |> dispatch
-          )
-          
-          OnMouseUp (fun ev -> 
-            MouseUp(mousePos ev.pageX ev.pageY)
-            |> dispatch
-          )
-
-          OnMouseLeave (fun ev ->
-            MouseUp(mousePos ev.pageX ev.pageY)
-            |> dispatch
-          )
-        ]
-        [ svg
-            [ Style 
-                [
-                    Border "3px solid green"
-                    Height sizeInPixels
-                    Width sizeInPixels           
+            [ svg
+                [ Style 
+                    [
+                        Border "3px solid green"
+                        Height sizeInPixels
+                        Width sizeInPixels           
+                    ]
+                ]
+                [ g 
+                    [ Style [ Transform (sprintf "scale(%f)" model.Zoom) ] ] //apply zoom to SVG group
+                    bodyLst
                 ]
             ]
-            [ g 
-                [ Style [ Transform (sprintf "scale(%f)" model.Zoom) ] ] //apply zoom to SVG group
-                bodyLst
+        ul [ 
+            Style [
+                Height "15vh"
+                CSSProp.OverflowX OverflowOptions.Auto
+                CSSProp.OverflowY OverflowOptions.Auto
             ]
-        ]
+        ] errorMessages
+    ]
 
 ///If the grid is enabled, converts a position to the closest position on the grid.
 let posToGridIfEnabled (grid : Grid) (pos : XYPos) : XYPos =
@@ -232,7 +299,30 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     ///any connected wires.
     | Symbol sMsg ->
         let wModel, wCmd = BusWire.update (BusWire.Symbol sMsg) model.Wire
-        {model with Wire = wModel}, Cmd.map Wire wCmd
+        {model with Wire = wModel},
+        Cmd.batch [
+            Cmd.map Wire wCmd
+            Cmd.ofMsg UpdateWireErrors
+        ]
+
+    ///Update sheet's error state with any errors from BusWire.
+    | UpdateWireErrors ->
+        {model with Errors = (List.map (fun e -> e,false) (BusWire.getErrors model.Wire))},
+        Cmd.none
+
+    ///Toggle if a paticular error is to be highlighted.
+    | ToggleErrorHighlight e ->
+        {
+            model with Errors = 
+                model.Errors
+                |> List.map (fun (err, highlighted) ->
+                    if e = err then
+                        (err, (not highlighted))
+                    else
+                        (err, highlighted)
+                )
+        },
+        Cmd.none
 
     | KeyPress AltShiftZ -> 
         printStats()
@@ -482,5 +572,6 @@ let init() =
         ScrollOffset = posOf 0. 0.
         Zoom = 1.
         Clipboard = []
+        Errors = []
     },
     Cmd.map Wire cmds

@@ -55,6 +55,16 @@ type Msg =
     | Dragging of CommonTypes.ConnectionId * XYPos
     | EndDrag
 
+let getErrors (model : Model) : Error list =
+    model.WX
+    |> List.map (fun w ->
+        match w.Id with
+        | CommonTypes.ConnectionId id ->
+            {
+                Msg = "Dummy error with wire " + id
+                Pos = Symbol.portPos model.Symbol w.SrcPort
+            }
+    )
 
 let getTargetedWire (wModel : Model) (pos : XYPos) : CommonTypes.ConnectionId Option = 
     let pointOnWire (wire : Wire) (point : XYPos) : bool =
