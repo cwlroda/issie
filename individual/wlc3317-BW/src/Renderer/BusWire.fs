@@ -373,10 +373,12 @@ let findOffset (wModel: Model) (sym: Symbol.Symbol) (axis: Direction) (offset: f
         | true, true -> symBBox.Corner.X + symBBox.W - offset + 10.
         | _, _ -> 0.
 
+// advanced autorouting with collision detection (not implemented)
 let aggOffset (wModel: Model) (offset: float) (axis: Direction) : float =
     wModel.Symbol
     |> List.fold (fun acc sym -> acc + (findOffset wModel sym axis acc)) offset
 
+// advanced autorouting with collision detection (not implemented)
 let autoRoute (wModel: Model) (wire: Wire) (segMap: Map<WireSegId, WireSegment>): Map<WireSegId, WireSegment> =
     segMap
     |> Map.map (fun _ v ->
@@ -530,18 +532,41 @@ let singleWireView (wModel: Model) =
 
                     let color = v.Color.Text()
 
-                    line 
-                        (Seq.append [
-                            X1 (srcX + renderOffset);
-                            Y1 (srcY + renderOffset);
-                            X2 (tgtX + renderOffset);
-                            Y2 (tgtY + renderOffset);
-                            // Qualify these props to avoid name collision with CSSProp
-                            SVGAttr.Stroke color
-                            SVGAttr.FillOpacity 0
-                            SVGAttr.StrokeWidth props.StrokeWidthP
-                            SVGAttr.StrokeLinecap "round"
-                        ] viewWireStaticConnection) []
+                    let segBBox = generateSegmentBBox v.StartPos v.EndPos
+
+                    g [] [
+                            rect
+                                (Seq.append [
+                                    X segBBox.Corner.X
+                                    Y segBBox.Corner.Y
+                                    Rx 5.
+                                    Ry 5.
+                                    SVGAttr.Width segBBox.W
+                                    SVGAttr.Height segBBox.H
+
+                                    match v.Selected with
+                                    | true -> SVGAttr.StrokeWidth "1px"
+                                    | false -> SVGAttr.StrokeWidth "0px"
+                                    
+                                    SVGAttr.Stroke "Black"
+                                    SVGAttr.FillOpacity 0
+                                ] viewWireStaticConnection) []
+                                
+                            line 
+                                (Seq.append [
+                                    X1 (srcX + renderOffset);
+                                    Y1 (srcY + renderOffset);
+                                    X2 (tgtX + renderOffset);
+                                    Y2 (tgtY + renderOffset);
+                                    // Qualify these props to avoid name collision with CSSProp
+                                    SVGAttr.Stroke color
+                                    SVGAttr.FillOpacity 0
+                                    SVGAttr.StrokeWidth props.StrokeWidthP
+                                    SVGAttr.StrokeLinecap "round"
+                                ] viewWireStaticConnection) []
+
+                            
+                        ]
                 )
                 |> Map.toList
                 |> List.map snd
