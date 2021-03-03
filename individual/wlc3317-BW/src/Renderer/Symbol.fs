@@ -173,7 +173,16 @@ let isSelected (symModel: Model) : Symbol list =
     // let relativePortPosition = foundPort.PortPos
     // posAdd {X=foundSymbol.Component.X;Y=foundSymbol.Component.Y} relativePortPosition
 
-    
+let symbolBBox (model: Model) (compId: ComponentId) : BBox =
+    let foundSymbol = 
+        model
+        |>List.find (fun sym -> sym.Id = compId)
+
+    {
+        Corner = {X=foundSymbol.Component.X; Y=foundSymbol.Component.Y}
+        W = foundSymbol.Component.W
+        H = foundSymbol.Component.H
+    }
 
 
 // let getPortPosition (port:Port) (model:Model) : XYPos =
