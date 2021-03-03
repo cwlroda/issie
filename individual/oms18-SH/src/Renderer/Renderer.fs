@@ -46,10 +46,10 @@
             // this option isn't working
             invisibleMenu.visible <- false // false if you want keys but no "Edit" menu
             invisibleMenu.submenu <-
-                [| makeKeyInput "Space" (fun () -> dispatch KeyboardMsg.Space)
-                   makeKeyInput "Escape" (fun () -> dispatch KeyboardMsg.Escape)
+                [| makeKeyInput "Escape" (fun () -> dispatch KeyboardMsg.Escape)
                    makeKeyInput "Alt+A" (fun () -> dispatch KeyboardMsg.AltA)
                    makeKeyInput "Ctrl+Shift+=" (fun () -> dispatch KeyboardMsg.CtrlShiftEqual)
+                   makeKeyInput "Ctrl+=" (fun () -> dispatch KeyboardMsg.CtrlEqual)
                    makeKeyInput "Ctrl+-" (fun () -> dispatch KeyboardMsg.CtrlMinus)
                 |]
                 |> U2.Case1
@@ -60,8 +60,7 @@
             invisibleMenu.label <- "Edit"
             invisibleMenu.visible <- true // false if you want keys but no "Edit" menu
             invisibleMenu.submenu <-
-                [| makeKeyItem "Default" "CmdOrCtrl+S" (fun () -> dispatch KeyboardMsg.CtrlS)
-                   makeKeyItem "Blue" "Alt+C" (fun () -> dispatch KeyboardMsg.AltC)
+                [| makeKeyItem "Blue" "Alt+C" (fun () -> dispatch KeyboardMsg.AltC)
                    makeKeyItem "Green" "Alt+V" (fun () -> dispatch KeyboardMsg.AltV)
                    makeKeyItem "Default"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
                    makeKeyItem "Red" "Alt+Z" (fun () -> dispatch KeyboardMsg.AltZ)

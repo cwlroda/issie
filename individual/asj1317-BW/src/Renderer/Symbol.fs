@@ -54,34 +54,7 @@ type Msg =
 
 //---------------------------------helper types and functions----------------//
 
-let createBBox (sym: Symbol) =
-    {
-        Pos = sym.Pos
-        W = float sym.W
-        H = float sym.H
-    }
 
-let posDiff a b =
-    {X=a.X-b.X; Y=a.Y-b.Y}
-
-let posAdd a b =
-    {X=a.X+b.X; Y=a.Y+b.Y}
-
-let posOf x y = {X=x;Y=y}
-
-
-
-let ptInBB (pt: XYPos) (bb: BBox): bool =
-    let diffX =  pt.X - bb.Pos.X
-    let diffY =  bb.Pos.Y - pt.Y
-
-    match diffX, diffY with
-    | x, _ when (x > (float bb.W)) ->
-        false
-    | _, y when (y > (float bb.H)) -> 
-        false
-    | _ -> 
-        true
 
 let boxDef (pos:XYPos) (w:int) (h:int): string =
     let tL = pos
@@ -95,6 +68,7 @@ let boxDef (pos:XYPos) (w:int) (h:int): string =
 
 //-----------------------Skeleton Message type for symbols---------------------//
 let createPorts (sId: CommonTypes.ComponentId) ((nInP, nOutP):int *int) =
+    let rnd = System.Random 0
     let createPort inOut nr =
         let pId  = 
             function
@@ -105,6 +79,7 @@ let createPorts (sId: CommonTypes.ComponentId) ((nInP, nOutP):int *int) =
             CommonTypes.Port.PortNumber = Some nr
             CommonTypes.Port.PortType = inOut
             CommonTypes.Port.HostId = sId.ToString()
+            CommonTypes.Port.PortWidth = Some (rnd.Next(1,3))
         }
 
     let inPortLst = List.map (createPort CommonTypes.PortType.Input) [0..nInP-1]
@@ -139,7 +114,7 @@ let portType (model: Model) (portId: CommonTypes.PortId) : CommonTypes.PortType 
 
 let portWidth (model: Model) (portId: CommonTypes.PortId) : int Option =
     match List.tryPick (fun sym -> (portOpt portId) sym.Ports) model with
-    | Some p -> Some 5
+    | Some port -> port.PortWidth
     | None -> failwithf "Invalid id"
 
 let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos = 
@@ -153,7 +128,31 @@ let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos =
     match List.tryPick (fun sym -> (portOpt pId) sym.Ports) model with
     | Some p -> getPos p.PortType p.HostId p.PortNumber
     | None -> failwithf "Invalid Id"
-    
+
+
+let portsInRange (model: Model) (pos: XYPos) (range: float) =
+    let portBBox = 
+        let tpPos = posAdd {X = (-range)/2.; Y = range/2.} pos
+        makeBBox tpPos range range
+    List.fold (fun lst sym -> sym.Ports@lst) [] model
+    |> List.filter (fun p -> ptInBB (portPos model p.Id) portBBox )
+    |> List.map (fun p -> p.Id) 
+
+let endDrag (model: Model) =
+    let adj pt =
+        match (int pt)%5 with
+        | 0 -> 0.0
+        | v when v > 3 ->  5.0 - float v
+        | v -> float -v
+        |> (+) pt
+
+    let adjPos pt =
+        posOf (adj pt.X) (adj pt.Y)
+        
+       
+
+    List.map (fun (sym: Symbol) -> {sym with Pos = adjPos (sym.Pos)}) model
+
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
     List.allPairs [1..2] [1..2]
@@ -298,19 +297,20 @@ let symbolPos (symModel: Model) (sId: CommonTypes.ComponentId) : XYPos =
     List.find (fun sym -> sym.Id = sId) symModel
     |> (fun sym -> sym.Pos)
 
-let getTargetedBBoxSymbol (symModel: Model) (pos: XYPos) =  
-    let sym = List.tryFind (fun sym ->  ptInBB pos (createBBox sym)) symModel
-    match sym with  
-    | Some sym -> Some (makeBBox sym.Pos (float sym.W)  (float sym.H))
-    | None -> None
-
+let symbolBBox (symModel: Model) (symId: CommonTypes.ComponentId): BBox =  
+    let sym = List.find (fun sym ->  sym.Id = symId) symModel
+    (makeBBox sym.Pos (float sym.W)  (float sym.H))
+    
 let getTargetedSymbol (symModel: Model) (pos: XYPos) =
-    List.tryFind (fun sym ->  ptInBB pos (createBBox sym)) symModel
+    List.tryFind (fun (sym: Symbol) ->  ptInBB pos (makeBBox sym.Pos  (float sym.W) (float sym.H))) symModel
     
 let getPortsOfSymbol (symModel: Model) (symId: CommonTypes.ComponentId) =
     let sym = List.find (fun sym -> sym.Id = symId) symModel
     sym.Ports |> List.map (fun p -> p.Id)
      
+let getHostId (model: Model) (portId: CommonTypes.PortId) : CommonTypes.ComponentId =
+    let sym = List.find (fun (sym:Symbol) -> List.exists (fun (p: CommonTypes.Port) -> p.Id = portId) sym.Ports) model
+    sym.Id
 
 /// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
 let updateSymbolModelWithComponent (symModel: Model) (comp:CommonTypes.Component) =

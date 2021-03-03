@@ -28,6 +28,7 @@ module CommonTypes
         PortNumber : int option
         PortType : PortType
         HostId : string
+        PortWidth : int option
     }
 
     /// Name identified the LoadedComponent used.
