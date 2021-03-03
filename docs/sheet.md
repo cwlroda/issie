@@ -37,6 +37,7 @@
 * StartDrag of ConnectionId * XYPos
 * Dragging of ConnectionId * XYPos
 * EndDrag
+* ToggleLabels
 
 ##### Sent to Symbol
 * AddSymbol of ComponentType * XYPos 

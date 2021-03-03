@@ -27,6 +27,7 @@
 * Dragging of ConnectionId * XYPos
 * EndDrag
 * Symbol.EndDrag
+* ToggleLabels
 
 #### Messages used by BusWire
 
