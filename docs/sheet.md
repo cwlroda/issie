@@ -21,7 +21,7 @@
 
 ##### From BusWire
 * getTargetedWire: Model -> XYPos -> ConnectionId Option
-* getErrors: Model -> Error Option
+* getErrors: Model -> Error list
 
 ## Messages
 #### Messages provided by Sheet:

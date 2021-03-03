@@ -4,7 +4,7 @@
 
 #### Interface funtions provided by BusWire
 * getTargetedWire: Model -> XYPos -> ConnectionId option
-* getErrors: Model -> Error option
+* getErrors: Model -> Error list
 
 #### Interface functions used by BusWire (from Symbol)
 * getPortsOfSymbol: Model -> ComponentId -> PortId list
