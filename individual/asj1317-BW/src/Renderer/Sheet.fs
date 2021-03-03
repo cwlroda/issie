@@ -142,7 +142,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let wModel, wCmd = BusWire.update BusWire.UnselectAll model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress AltZ -> 
-        let wModel, wCmd = BusWire.update BusWire.EndDragging model.Wire    
+        let wModel, wCmd = BusWire.update BusWire.EndDragging model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress DEL ->
         //takes the id the first wire in the model

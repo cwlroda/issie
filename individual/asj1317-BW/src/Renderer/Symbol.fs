@@ -55,7 +55,7 @@ type Msg =
 //---------------------------------helper types and functions----------------//
 
 
-
+/// Stub helper to output polygon verticies defintion in correct format
 let boxDef (pos:XYPos) (w:int) (h:int): string =
     let tL = pos
     let tR = posOf (pos.X+(float w)) (pos.Y)
@@ -67,6 +67,8 @@ let boxDef (pos:XYPos) (w:int) (h:int): string =
 //-----------------------------Skeleton Model Type for symbols----------------//
 
 //-----------------------Skeleton Message type for symbols---------------------//
+
+/// Creates dummy ports list with random portWidth
 let createPorts (sId: CommonTypes.ComponentId) ((nInP, nOutP):int *int) =
     let rnd = System.Random 0
     let createPort inOut nr =
@@ -87,8 +89,8 @@ let createPorts (sId: CommonTypes.ComponentId) ((nInP, nOutP):int *int) =
     inPortLst@outPortLst
 
 /// Symbol creation: a unique Id is given to the symbol, found from uuid.
-/// The parameters of this function must be enough to specify the symbol completely
-/// in its initial form. This is called by the AddSymbol message and need not be exposed.
+
+/// Creates dummy symbols with set width and height depending on number of ports
 let createNewSymbol (pos:XYPos)  (label: string)  (nInP, nOutP)  =
     let sId =  CommonTypes.ComponentId (Helpers.uuid())
     let lenLabel = Seq.length label
@@ -104,19 +106,23 @@ let createNewSymbol (pos:XYPos)  (label: string)  (nInP, nOutP)  =
         H = 10*(nrPorts + 2)   
     }
 
+/// Helper to code snubs defined below  
 let portOpt (pId: CommonTypes.PortId) (pLst: CommonTypes.Port list) = 
-    List.tryFind (fun (p:CommonTypes.Port) -> p.Id = pId) pLst  
+    List.tryFind (fun (p:CommonTypes.Port) -> p.Id = pId) pLst
 
+/// Code snub to allow BusWire to get portType
 let portType (model: Model) (portId: CommonTypes.PortId) : CommonTypes.PortType =
     match List.tryPick (fun sym -> (portOpt portId) sym.Ports) model with
     | Some p -> p.PortType
     | None -> failwithf "Invalid id"
 
+/// Code snub to allow BusWire to get portWidth 
 let portWidth (model: Model) (portId: CommonTypes.PortId) : int Option =
     match List.tryPick (fun sym -> (portOpt portId) sym.Ports) model with
     | Some port -> port.PortWidth
     | None -> failwithf "Invalid id"
 
+/// Code snub to allow BusWire to get portPos 
 let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos = 
     let getPos (pType) (symId) (pNr) =
         let sym = List.find (fun sym -> sym.Id.ToString() = symId) model
@@ -138,6 +144,7 @@ let portsInRange (model: Model) (pos: XYPos) (range: float) =
     |> List.filter (fun p -> ptInBB (portPos model p.Id) portBBox )
     |> List.map (fun p -> p.Id) 
 
+/// Added to ensure dummy ports sit in correct grid locations
 let endDrag (model: Model) =
     let adj pt =
         match (int pt)%5 with
@@ -153,7 +160,8 @@ let endDrag (model: Model) =
 
     List.map (fun (sym: Symbol) -> {sym with Pos = adjPos (sym.Pos)}) model
 
-/// Dummy function for test. The real init would probably have no symbols.
+/// Dummy function for test. 
+    /// Creates 4 dummy symbols 
 let init () =
     List.allPairs [1..2] [1..2]
     |> List.map (fun (x,y) -> ({X = float (x*100+30); Y=float (y*100+30)}, x,y))
