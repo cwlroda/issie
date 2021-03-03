@@ -33,12 +33,11 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
     /// Dispatch a BusWire MouseMsg message
     /// the screen mouse coordinates are compensated for the zoom transform
     let mouseOp op (ev:Types.MouseEvent) =
-        dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.clientX / zoom ; Y = ev.clientY / zoom}})
+        //dispatch <| Wire (BusWire.MouseMsg {Op = op ; Pos = { X = ev.clientX / zoom ; Y = ev.clientY / zoom}})
         match op with
         | Down ->  
             match BusWire.getTargetedWire model.Wire {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some w -> 
-                printf $"Selected a wire"
                 dispatch <| Wire (BusWire.SetSelected w) 
                 dispatch <| Wire (BusWire.StartDragging (w,  {X =  ev.clientX / zoom; Y = ev.clientY / zoom}))
             | None ->   
@@ -59,10 +58,10 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
         | Move -> ()  
         | Up ->
             dispatch <| Wire (BusWire.EndDragging)
-           (*  match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
+            match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some s ->  dispatch <| Wire (BusWire.Symbol ( Symbol.EndDragging s.Id))
             | None -> ()
- *)
+
 
         
         
@@ -91,13 +90,6 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
                    
 
                     svgReact // the application code
-
-                    (* polygon [ // a demo svg polygon triangle written on top of the application
-                        SVGAttr.Points "10,10 900,900 10,900"
-                        SVGAttr.StrokeWidth "5px"
-                        SVGAttr.Stroke "Black"
-                        SVGAttr.FillOpacity 0.1
-                        SVGAttr.Fill "Blue"] [] *)
                 ]
             ]
         ]
@@ -109,7 +101,9 @@ let view (model:Model) (dispatch : Msg -> unit) =
     let wDispatch wMsg = dispatch (Wire wMsg)
     let wireSvg = BusWire.view model.Wire wDispatch
     displaySvgWithZoom model zoom wireSvg dispatch
-       
+
+/// Selects two random ports from different symbols and returns two ids
+    /// Based on the skeleton given for the assignement in BusWire       
 let makeRandomPortConnection (symbols)=
     let symIds =
         List.map (fun (sym: Symbol.Symbol) -> sym.Id) symbols
@@ -151,6 +145,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let wModel, wCmd = BusWire.update BusWire.EndDragging model.Wire    
         {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress DEL ->
+        //takes the id the first wire in the model
         let wId = 
             Map.toList model.Wire.WX 
             |> List.head
@@ -158,6 +153,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let wModel, wCmd = BusWire.update (BusWire.DeleteWire wId) model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress AltC -> 
+        //Sends addWire msg with two random port connections
         let pIdPair = makeRandomPortConnection model.Wire.Symbol
         let wModel, wCmd = BusWire.update (BusWire.AddWire pIdPair) model.Wire
         let updatedModel = {model with Wire = wModel}
@@ -167,7 +163,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     | KeyPress AltV -> 
         let wModel, wCmd = BusWire.update (BusWire.ToggleAnnotations) model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
-    
+//Initialize the model    
 let init() = 
     let model,cmds = (BusWire.init 400)()
     {

@@ -56,19 +56,20 @@ let midPt (aPos: XYPos) (bPos: XYPos): XYPos =
     let diff = posDiff bPos aPos
     posAdd aPos (posOf (diff.X / 2.) (diff.Y / 2.))
 
+
 let makeBBox (pos: XYPos) (width: float) (height: float) =
     {Pos = pos; W =  width; H = height}
 
+
+///Takes a point and a BBox and checks if the point are within the bounderies of the box
+/// Returns true if the points is within the bounderires of the BBox. Otherwise returns false
 let ptInBB (pt: XYPos) (bb: BBox): bool =
     let bRCorner = posAdd bb.Pos { X = bb.W; Y = -bb.H }
-    printf $"{bb.W},{bb.H}"
     match pt.X, pt.Y with
     | x, _ when (x < bb.Pos.X) || (x > bRCorner.X) ->
-        printf $"Fails on X: {x},{bb.Pos.X}, {bRCorner.X}"
         false
 
     | _, y when (y > bb.Pos.Y) || (y < bRCorner.Y) ->
-        printf $"Fails on Y: {y}, {bb.Pos.Y}, {bRCorner.Y}"
         false
     | _ -> true
 
