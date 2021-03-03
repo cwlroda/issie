@@ -72,6 +72,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
     let sizeInPixels = sprintf "%.2fpx" ((size * model.Zoom))
     
     ///list containing all SVG elements to be drawn
+    ///NB: layering order is selBox on top etc. due to the List.append pipeline having a reversing effect.
     let bodyLst =
         // add selection box if SelectionBox.Show
         // or add green dotted wire if MouseState = FromPort(_,_).
@@ -100,6 +101,8 @@ let view (model:Model) (dispatch : Msg -> unit) =
                     ] []
             ]
         | _ -> []
+        //add wire svg (wires and symbols)
+        |> List.append [wireSvg]
         // add grid lines if Grid.Show
         |> List.append (
             if grid.Show then
@@ -120,8 +123,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
                 )
             else []
         )
-        //add wire svg (wires and symbols)
-        |> List.append [wireSvg]
+        
 
     // convert mouse click to zoomed + scrolled version
     let mousePos x y = posOf ((x+model.ScrollOffset.X)/model.Zoom) ((y+model.ScrollOffset.Y)/model.Zoom)
@@ -310,19 +312,20 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
     ///Paste new symbols shifted 20px right and 20px down from originals
     ///and select new symbols.
     | KeyPress CtrlV ->
-        let newPosLst =
+        let newSymLst =
             model.Clipboard
-            |> List.map (Symbol.symbolBBox model.Wire.Symbol)
-            |> List.map (fun bb -> posAdd bb.Pos (posOf 20. 20.))
+            |> List.map (fun sId -> (Symbol.symbolBBox model.Wire.Symbol sId), (Symbol.symbolType model.Wire.Symbol sId))
+            |> List.map (fun (bb,typ) -> (posAdd bb.Pos (posOf 20. 20.)),typ)
 
         model,
         [Cmd.ofMsg SnapToGridMsg]
         |> List.append [
-            Cmd.ofMsg (SelectSymbolsAtPositions newPosLst)
+            let posLst = newSymLst |> List.map fst
+            Cmd.ofMsg (SelectSymbolsAtPositions posLst)
         ]
         |> List.append (
-            newPosLst
-            |> List.map (fun p -> Cmd.ofMsg(Symbol <| Symbol.AddSymbol (CommonTypes.Not, p)))
+            newSymLst
+            |> List.map (fun (p,typ) -> Cmd.ofMsg(Symbol <| Symbol.AddSymbol (typ, p)))
         )
         |> Cmd.batch
 

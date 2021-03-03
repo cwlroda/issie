@@ -119,6 +119,11 @@ let portType (symModel : Model) (pId : CommonTypes.PortId) : CommonTypes.PortTyp
         |> List.find (fun p -> p.Id = pId)
     ).Type
     
+let symbolType (model : Model) (cId : CommonTypes.ComponentId) : CommonTypes.ComponentType =
+    (
+        model
+        |> List.find (fun el -> el.Id = cId)
+    ).Component.Type
 
 let getTargetedPort (symModel : Model) (pos : XYPos) : CommonTypes.PortId Option = 
     let posInPort (sym: Symbol) (port : Port) : bool =
