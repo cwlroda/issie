@@ -50,6 +50,7 @@
                    makeKeyItem "Insert"  "insert" (fun () -> dispatch KeyboardMsg.INS)
                    makeKeyItem "Delete"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
                    makeKeyItem "Select All"  "CmdOrCtrl+A" (fun () -> dispatch KeyboardMsg.CtrlA)
+                   makeKeyItem "Deselect All"  "CmdOrCtrl+D" (fun () -> dispatch KeyboardMsg.CtrlD)
                    makeKeyItem "Decrease Wire Width"  "CmdOrCtrl+Q" (fun () -> dispatch KeyboardMsg.CtrlQ)
                    makeKeyItem "Increase Wire Width"  "CmdOrCtrl+E" (fun () -> dispatch KeyboardMsg.CtrlE)
                    menuSeparator
