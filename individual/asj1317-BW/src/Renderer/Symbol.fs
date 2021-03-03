@@ -128,7 +128,31 @@ let portPos (model: Model) (pId: CommonTypes.PortId) : XYPos =
     match List.tryPick (fun sym -> (portOpt pId) sym.Ports) model with
     | Some p -> getPos p.PortType p.HostId p.PortNumber
     | None -> failwithf "Invalid Id"
-    
+
+
+let portsInRange (model: Model) (pos: XYPos) (range: float) =
+    let portBBox = 
+        let tpPos = posAdd {X = (-range)/2.; Y = range/2.} pos
+        makeBBox tpPos range range
+    List.fold (fun lst sym -> sym.Ports@lst) [] model
+    |> List.filter (fun p -> ptInBB (portPos model p.Id) portBBox )
+    |> List.map (fun p -> p.Id) 
+
+let endDrag (model: Model) =
+    let adj pt =
+        match (int pt)%5 with
+        | 0 -> 0.0
+        | v when v > 3 ->  5.0 - float v
+        | v -> float -v
+        |> (+) pt
+
+    let adjPos pt =
+        posOf (adj pt.X) (adj pt.Y)
+        
+       
+
+    List.map (fun (sym: Symbol) -> {sym with Pos = adjPos (sym.Pos)}) model
+
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
     List.allPairs [1..2] [1..2]
