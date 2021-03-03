@@ -27,17 +27,17 @@
 #### Interfaces
 ##### Interface funtions provided by Symbol:
 
-* getAllSymbols : Model -> ComponentId List
-* getTargetedSymbol: Model -> XYPos -> ComponentId Option
-* getSymbolsInTargetArea: Model -> BBox -> ComponentId List
-* getTargetedPort: Model -> XYPos -> PortId Option
+* getAllSymbols : Model -> ComponentId list
+* getTargetedSymbol: Model -> XYPos -> ComponentId option
+* getSymbolsInTargetArea: Model -> BBox -> ComponentId list
+* getTargetedPort: Model -> XYPos -> PortId option
 * getPortsOfSymbol: Model -> ComponentId -> PortId list
 * portPos: Model -> PortId -> XYPos
 * portType: Model -> PortId -> PortType
 * portWidth: Model -> PortId -> PortWidth
 * symbolBBox: Model -> ComponentId -> BBox
 * portsInRange: Model -> XYPos -> (range : float) -> PortId list
-* getHostId: Model -> PortId -> ComponenetId
+* getHostId: Model -> PortId -> ComponentId
 * symbolType: Model -> ComponentId -> ComponentType
 
 ##### Interface funtions used by Symbol:
@@ -54,12 +54,12 @@
 * HighlightPorts of PortId list
 * UnhighlightPorts
 
-### BusWire
+## BusWire
 
 #### Interfaces
 #### Interface funtions provided by BusWire:
-* getTargetedWire: Model -> XYPos -> ConnectionId Option
-* getErrors: Model -> Error Option
+* getTargetedWire: Model -> XYPos -> ConnectionId option
+* getErrors: Model -> Error option
 
 #### Interface functions used by BusWire:
 * getPortsOfSymbol: Model -> ComponentId -> PortId list
@@ -67,9 +67,8 @@
 * portType: Model -> PortId -> PortType
 * portWidth: Model -> PortId -> PortWidth
 * symbolBBox: Model -> ComponentId -> BBox
-* getHostId: Model -> PortId -> ComponenetId
+* getHostId: Model -> PortId -> ComponentId
 * portsInRange: Model -> XYPos -> (range : float) -> PortId list
-	- Potentially used to manually reroute wire from one port to another (Not implemented at indivdual stage)
 
 
 #### Messages
@@ -85,7 +84,7 @@
 ##### Sent to Symbol:
 Passes all messages from Sheet to Symbol.
 
-### Sheet
+## Sheet
 
 #### Interfaces
 ##### Interface funtions provided by Sheet:
@@ -99,12 +98,18 @@ Passes all messages from Sheet to Symbol.
 * getTargetedPort: Model -> XYPos -> PortId Option
 * getPortsOfSymbol: Model -> ComponentId -> PortId list
 * portsInRange: Model -> XYPos -> (range : float) -> PortId list
-* getHostId: Model -> PortId -> ComponenetId
+* getHostId: Model -> PortId -> ComponentId
+* portPos: Model -> PortId -> XYPos
+* symbolBBox: Model -> ComponentId -> BBox
+* symbolType: Model -> ComponentId -> ComponentType
 ###### From BuwsWire
 * getTargetedWire: Model -> XYPos -> ConnectionId Option
 * getErrors: Model -> Error Option
 
 #### Messages
+##### Messages provided by Sheet:
+-
+
 ##### Message used by Sheet:
 ###### Sent to BuwsWire:
 * AddWire of PortId * PortId
