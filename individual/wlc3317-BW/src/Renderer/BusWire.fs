@@ -57,6 +57,7 @@ type WireError = {
 type Model = {
     Symbol: Symbol.Model
     WX: Wire list
+    Errors: WireError list
 }
 
 //----------------------------Message Type-----------------------------------//
@@ -295,9 +296,9 @@ let makeWireSegment (wire : Wire) x1 y1 x2 y2 =
 
 // basic autorouting to initialise wires based on relative symbol positions
 let initRouting (wire: Wire) (srcPos: XYPos) (tgtPos: XYPos) : Map<WireSegId, WireSegment> =
-    let srcX = srcPos.X
+    let srcX = srcPos.X + 20.
     let srcY = srcPos.Y
-    let tgtX = tgtPos.X
+    let tgtX = tgtPos.X - 20.
     let tgtY = tgtPos.Y
     let midX = (midPt srcPos tgtPos).X
     let midY = (midPt srcPos tgtPos).Y
@@ -597,6 +598,7 @@ let init n () =
             {
                 WX = wires
                 Symbol = symbols
+                Errors = []
             }, Cmd.none
         )
 
@@ -697,6 +699,7 @@ let selectAll (wModel: Model) : Wire list =
         {w with Segments = segMap}
     )
 
+// decrease wire stroke width
 let decreaseWidth (wModel: Model) =
     let wList =
         getSelectedSegments wModel
@@ -715,6 +718,7 @@ let decreaseWidth (wModel: Model) =
         | false -> w
     )
 
+// increase wire stroke width
 let increaseWidth (wModel: Model) =
     let wList =
         getSelectedSegments wModel
@@ -872,6 +876,12 @@ let endDragging (wModel: Model) (pagePos: XYPos) : Wire list =
 
         {w with Segments = segMap}
     )
+
+// returns all wire errors
+let getWireErrors (wModel: Model) : WireError list option =
+    match List.isEmpty wModel.Errors with
+    | false -> Some wModel.Errors
+    | true -> None
 
 let update (msg: Msg) (wModel: Model) : Model * Cmd<Msg> =
     match msg with
