@@ -268,29 +268,14 @@ let manualRouting (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XYPos
               WireSegments = updatedWireSegs
               LastPos = pos }
         wModel.WX
-/// Updates the wire routing to adjust for any movement in symbols location, i.e. ports have moved 
-let updateSelectedWires (wModel: Model) (wIdLst: CommonTypes.ConnectionId list) =
-    let updateModel wId w =
-        Map.add
-            wId
-            { w with
-                  WireSegments = autoRoute wModel w.SrcPort w.TargetPort }
-            wModel.WX
 
-    let foldfunc wxModel wId =
-        match Map.tryFind wId wxModel with
-        | Some w -> updateModel wId w
-        | None -> wxModel
-
-    List.fold foldfunc wModel.WX wIdLst
-(* let manualRouting (wModel: Model) (wId: CommonTypes.PortId) (pos: XYPos) =
-    let srcBB = portPos wModel.Symbol  *)
 /// Given two port creates a wire connection and  which it auto routes
-let addWire
+let createWire
     (wModel: Model)
     (port1: CommonTypes.PortId)
     (port2: CommonTypes.PortId)
-    : Map<CommonTypes.ConnectionId, Wire> =
+    (conId: CommonTypes.ConnectionId Option) 
+    : Wire =
     let getPortType = Symbol.portType wModel.Symbol
 
     let getType pId =
@@ -322,30 +307,76 @@ let addWire
 
     let src, tgt, width, colour, err =
         match widthValid, typeValid with
-        |Ok w, Ok (s,t) when (avaliableInput t) -> s,t, w, CommonTypes.HighLightColor.Blue, None
-        |Ok w, Ok (s,t) -> s,t, w, CommonTypes.HighLightColor.Red, Some "Invalid Input port selection. An input port cannot have multiple input wires"
-        | Error errStr , Ok (s, t) when (avaliableInput t) ->s, t , 5, CommonTypes.HighLightColor.Red, Some errStr
+        |Ok w, Ok (s,t) when (avaliableInput t) && w<2-> s,t, w, CommonTypes.HighLightColor.Grey, None
+        |Ok w, Ok (s,t) when (avaliableInput t) -> s,t, 3, CommonTypes.HighLightColor.Blue, None
+        |Ok w, Ok (s,t) -> s,t, 5, CommonTypes.HighLightColor.Red, Some "Invalid Input port selection. An input port cannot have multiple input wires"
+        | Error errStr , Ok (s, t) when (avaliableInput t) ->s, t ,5, CommonTypes.HighLightColor.Red, Some errStr
         | Error errStr , Ok (s, t) ->s, t , 5, CommonTypes.HighLightColor.Red, Some "Invalid Input port selection. An input port cannot have multiple input wires"
         | _, Error errType -> port1, port2, 5, CommonTypes.HighLightColor.Red, Some errType
         
-        
+    let wId = 
+        function | Some s -> s | None ->  CommonTypes.ConnectionId(uuid ())   
         
     let wSegLst = autoRoute wModel src tgt
+ 
+    { Id = wId conId
+      SrcPort = src
+      SrcLabel = srcLabel
+      TargetPort = tgt
+      TargetLabel = tgtLabel
+      WireSegments = []
+      LastPos = wSegLst.[0]
+      WireColor = colour
+      WireWidth = width
+      Error = err
+      }
 
-    let newWire = 
-        { Id = CommonTypes.ConnectionId(uuid ())
-          SrcPort = src
-          SrcLabel = srcLabel
-          TargetPort = tgt
-          TargetLabel = tgtLabel
-          WireSegments = wSegLst
-          LastPos = wSegLst.[0]
-          WireColor = colour
-          WireWidth = width
-          Error = err
-          }
 
-    Map.add newWire.Id newWire wModel.WX
+
+/// Updates the wire routing to adjust for any movement in symbols location, i.e. ports have moved 
+let updateSelectedWires (wModel: Model) (wIdLst: CommonTypes.ConnectionId list) =
+    let updateModel wId w =
+        Map.add
+            wId
+            { w with
+                  WireSegments = autoRoute wModel w.SrcPort w.TargetPort }
+            wModel.WX
+
+    let foldfunc wxModel wId =
+        match Map.tryFind wId wxModel with
+        | Some w -> updateModel wId w
+        | None -> wxModel
+
+    List.fold foldfunc wModel.WX wIdLst
+
+let fitToGrid (wModel: Model) =
+    let adj pt =
+        
+        match (int pt)%5 with
+        | 0 -> 0.
+        | v when v > 3 ->  5.0 - (float v)
+        | v -> - float v
+        |> (+) pt
+    let fitwire vertLst =
+        List.map (fun pt -> posOf (adj pt.X) (adj pt.Y)) vertLst
+       
+
+    Map.map (fun wIdd w -> {w with WireSegments = (fitwire w.WireSegments)}) wModel.WX
+
+    
+
+
+
+let addWire (wModel: Model)
+    (port1: CommonTypes.PortId)
+    (port2: CommonTypes.PortId) = 
+    let w = createWire wModel port1 port2 None 
+
+    let wSegLst = autoRoute wModel w.SrcPort w.TargetPort
+
+    Map.add w.Id {w with WireSegments = wSegLst} wModel.WX
+
+    
 ///Given a connectionId deletes the given wire
 let deletWire (wModel: Model) (wId: CommonTypes.ConnectionId) = 
     Map.remove wId wModel.WX
@@ -382,7 +413,13 @@ let setUnselectedColor (wModel: Model): Map<CommonTypes.ConnectionId, Wire> =
                 {w with WireColor = CommonTypes.HighLightColor.Red})
         wModel.WX
 
-let endDrag (wModel: Model): Map<CommonTypes.ConnectionId, Wire> = setUnselectedColor wModel
+let endDrag  (wModel: Model): Map<CommonTypes.ConnectionId, Wire> =   
+    let wxUpdate = 
+        
+        fitToGrid  wModel
+
+    let modelUpdate = { wModel with WX = wxUpdate}
+    setUnselectedColor modelUpdate
 
 let startDrag (wModel: Model) (wId: CommonTypes.ConnectionId) (pos: XYPos): Map<CommonTypes.ConnectionId, Wire> =
     let wx =
@@ -554,11 +591,11 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
               //BB = bb 
               },
         Cmd.none
-    | EndDragging ->
-        let wXUpdated = endDrag model
-        (* let wxModel = updateSelectedWires model (Map.toList model.WX |> List.map (fun (a,b)-> a) *)
+    | EndDragging->
+        let wxUpdated = endDrag model
+        printf $"{wxUpdated}"
         { model with
-              WX = wXUpdated},
+              WX = wxUpdated},
         Cmd.none
     | SetColor c-> 
         (Map.fold (fun wModel wId w -> {wModel with WX = (setColor wModel c wId)}) model model.WX), Cmd.none
