@@ -6,16 +6,15 @@ This is the HLP group project for team 5.
     |- individual
     |  \ <login>-<module>
     |    \ <individual project code>
-    \- common
-       |- interfaces.md
-       \- notes.md
+    \- docs
+       |- buswire.md
+       |- common_types.md
+       |- notes.md
+       |- sheet.md
+       \- symbol.md
        
 ## Interface Definition
-All interface used in the project are defined in the interface.md file found in 
-  <root>   
-  \- common
-        |- interfaces.md.
-In interface.md each type of module is listed with their respective interfaces and messages defined.
+All interface used in the project are defined in the interface.md file found in `docs/`, a file for each module. There are also two other files, `common_types.md` and `notes.md`. `common_types.md` contains all the new type definitions we had to agree on, and `notes.md` contains notes on our design decisions.
 
 ## Project allocation
 ###### Symbol
