@@ -63,6 +63,7 @@ type Msg =
     | KeyPress of KeyboardMsg
     | MouseMsg of MouseT * Modifier
 
+/// Constants that will be turned into settings at a later date
 let gridSize = 5
 let undoHistorySize = 50
 let portHighlightRange = 100.
@@ -71,9 +72,6 @@ let discretizeToGrid v =
     let fGridSize = float gridSize
     (fGridSize * (floor (v / (float fGridSize))))
 
-/// This function zooms an SVG canvas by transforming its content and altering its size.
-/// Currently the zoom expands based on top left corner. Better would be to collect dimensions
-/// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
 let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
     let borderSize = 3.
     let widthInPixels = sprintf "%.2fpx" ((model.Width))
@@ -96,6 +94,8 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                          | 2. -> MouseButton.Right
                          | _ -> MouseButton.Unknown
                 Op = op
+                /// Have to adjust the mouse position because of the border
+                /// to ensure that the top left is (0, 0) for the mouse
                 Pos =
                     { X = (ev.clientX - borderSize - panX) / model.Zoom
                       Y = (ev.clientY - borderSize - panY) / model.Zoom } },
@@ -131,6 +131,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                 SVGAttr.StrokeWidth "1px"
                 SVGAttr.StrokeOpacity opacity
             ] []
+
         let createHalfGrid size offset lineFun =
             getGridCoords size
             |> List.map (lineFun >> (fun f -> f offset))
@@ -143,7 +144,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
             |> List.concat
         )
 
-    let overlay =
+    let actionOverlay =
         match model.DragState with
         | AreaSelect (p1, p2, additive) ->
             let area = pointsToBBox p1 p2
@@ -207,14 +208,17 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
             )
         )
 
-    div [ Style [ Height heightInPixels
+    div [ Style [
+              Height heightInPixels
+              Width widthInPixels
+              Border (sprintf "%fpx solid green" borderSize)
+              CSSProp.OverflowX OverflowOptions.Hidden
+              CSSProp.OverflowY OverflowOptions.Hidden
+          ]
+    ] [ svg [ Style [
+                  Height heightInPixels
                   Width widthInPixels
-                  Border (sprintf "%fpx solid green" borderSize)
-                  CSSProp.OverflowX OverflowOptions.Hidden
-                  CSSProp.OverflowY OverflowOptions.Hidden
-                ]
-    ] [ svg [ Style [ Height heightInPixels
-                      Width widthInPixels ]
+              ]
               OnMouseDown(fun ev -> (mouseOp Down ev))
               OnMouseUp(fun ev -> (mouseOp Up ev))
               OnMouseMove(fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
@@ -222,11 +226,11 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
             g [ Style [ Transform (sprintf "translate(%fpx,%fpx) scale(%f)" model.PanX model.PanY model.Zoom) ] ] [  // top-level transform style attribute for zoom
                     gridlines
                     svgReact
-                    overlay
+                    actionOverlay
                     errorOverlay
             ]
-        ] // top-level transform style attribute for zoom
-    ] // top-level transform style attribute for zoom
+        ]
+    ]
 
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
@@ -485,16 +489,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 }
                 , highlightingAfterUndoAndRedoCmd model
 
-    match msg with
-    | SaveState savedWire ->
-        let undoList = List.truncate undoHistorySize <| savedWire :: model.UndoList
-        { model with UndoList=undoList;RedoList=[] }, Cmd.none
-    | Wire wMsg ->
-        let wModel, wCmd = BusWire.update wMsg model.Wire
-        { model with Wire = wModel }
-        , Cmd.map Wire wCmd
-    | KeyPress k -> handleKeyPress k
-    | MouseMsg (mT, modifier) ->
+    let handleMouseMsg mT modifier =
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, mods) ->
             let discardSelectionsCmd =
@@ -621,6 +616,20 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | (Move, p, _) ->
             { model with MousePosition=p}
             , highlightPortsNearCmd p
+
+    match msg with
+    | SaveState savedWire ->
+        { model with
+            UndoList=List.truncate undoHistorySize <| savedWire :: model.UndoList
+            RedoList=[]
+        }, Cmd.none
+    | Wire wMsg ->
+        let wModel, wCmd = BusWire.update wMsg model.Wire
+
+        { model with Wire = wModel }
+        , Cmd.map Wire wCmd
+    | KeyPress k -> handleKeyPress k
+    | MouseMsg (mT, modifier) -> handleMouseMsg mT modifier
 
 
 let view (model: Model) (dispatch: Msg -> unit) =
