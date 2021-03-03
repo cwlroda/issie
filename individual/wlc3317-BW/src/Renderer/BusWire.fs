@@ -300,8 +300,8 @@ let initRouting (wire: Wire) (srcPos: XYPos) (tgtPos: XYPos) : Map<WireSegId, Wi
     let srcY = srcPos.Y
     let tgtX = tgtPos.X - 20.
     let tgtY = tgtPos.Y
-    let midX = (midPt srcPos tgtPos).X
-    let midY = (midPt srcPos tgtPos).Y
+    let midX = snapToGrid (midPt srcPos tgtPos).X
+    let midY = snapToGrid (midPt srcPos tgtPos).Y
 
     let offset = 100.
     let (segList: WireSegment List) = []
@@ -795,11 +795,11 @@ let addWire (wModel: Model) (srcPort: PortId) (tgtPort: PortId) : Wire list =
 // delete selected wire(s)
 let deleteWires (wModel: Model) : Wire list =
     wModel.WX
-    |> List.fold (fun acc w ->
+    |> List.filter (fun w ->
         match Map.tryFindKey (fun _ v -> v.Selected) w.Segments with
-        | Some _ -> acc
-        | None -> acc @ [w]
-    ) []
+        | Some _ -> false
+        | None -> true
+    )
 
 // begin dragging of wire segment
 let startDragging (wModel: Model) (pagePos: XYPos) : Wire list =
@@ -895,7 +895,18 @@ let endDragging (wModel: Model) (pagePos: XYPos) : Wire list =
             |> Map.map (fun _ v ->
                 {
                     v with
+                        StartPos =
+                            {
+                                X = snapToGrid v.StartPos.X
+                                Y = v.StartPos.Y
+                            }
+                        EndPos =
+                            {
+                                X = snapToGrid v.EndPos.X
+                                Y = v.EndPos.Y
+                            }
                         IsDragging = false
+                        LastDragPos = pagePos
                 }
             )
 
@@ -929,7 +940,7 @@ let update (msg: Msg) (wModel: Model) : Model * Cmd<Msg> =
         | Symbol.Msg.Dragging _ ->
             updateSymWires {wModel with Symbol = sm}, Cmd.map Symbol sCmd
         | Symbol.Msg.EndDragging _ ->
-            {wModel with Symbol = sm}, Cmd.map Symbol sCmd
+            updateSymWires {wModel with Symbol = sm}, Cmd.map Symbol sCmd
         | _ -> {wModel with Symbol = sm}, Cmd.map Symbol sCmd
     | AddWire ->
         let (srcPort, tgtPort) = addDummyPorts wModel

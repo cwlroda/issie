@@ -38,6 +38,12 @@ type MouseT = {
 let uuid():string = import "v4" "uuid"
 
 
+// snaps wire segments to grid (variable grid size)
+let snapToGrid (pos: float) : float =
+    let gridSize = 5.
+    if pos % gridSize <> 0. then (pos - (pos % gridSize)) else pos
+
+
 //-----------------Code to record and print execution time statistics-------//
 
 let timeNowInMicroS() = 

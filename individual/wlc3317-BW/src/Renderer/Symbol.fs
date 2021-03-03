@@ -678,6 +678,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
             if sym.Selected then
                 {sym with 
                     IsDragging = false
+                    Component=
+                        {sym.Component with 
+                            X = snapToGrid sym.Component.X
+                            Y = snapToGrid sym.Component.Y
+                        }
                 }
             else
                 sym
