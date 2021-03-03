@@ -36,7 +36,7 @@
     getTargetedSymbol:
         Model -> XYPos -> ComponentId Option
 
-    getTargedSymbolsInTargetArea:
+    getSymbolsInTargetArea:
         Model -> BBox -> ComponentId list
 
     getTargetedPort:
@@ -59,6 +59,21 @@
 
     getSymbolFromSymbolId:
         Model -> ComponentId -> Symbol
+    
+    getHostId:
+        Model -> PortId -> ComponenetId
+
+    symbolType:
+        Model -> ComponentId -> ComponentType
+
+    symbolBBox:
+        Model -> ComponentId -> BBox
+    
+    portsInRange:
+        Model -> XYPos -> (range : float) -> PortId list
+
+    mulOfFive:
+        (input : float) -> float
 
 ## Messages
     StartDragging(Dummy)

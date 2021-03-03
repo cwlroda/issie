@@ -93,6 +93,7 @@ let getPortsOfSymbol (symModel:Model) (symId:ComponentId) : PortId list =
 let getAllSymbols (symModel:Model) : ComponentId list =
     symModel
     |> List.map (fun sym->sym.Id)
+    
 
 let allPortsInModel (symModel:Model) : Port list = 
     symModel
@@ -119,7 +120,7 @@ let getTargetedSymbol (symModel: Model) (pos:XYPos) : ComponentId Option =
         | Some sym -> (Some sym.Id)
         | None -> None
 
-let getTargetedSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
+let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     symModel
     |> List.filter
         (fun (sym:Symbol) ->
@@ -182,22 +183,37 @@ let getSymbolFromSymbolId (symModel:Model) (symId:ComponentId) : Symbol =
         fun sym -> sym.Id = symId
     )
 
-    // let foundSymbol = List.find (fun sym -> sym.Id = sId) symModel
-    // let checkInput = Option.toList (List.tryFind (fun (x:Port)-> x.PortId = portId) (foundSymbol.Component.InputPorts))
-    // let checkOutput = Option.toList (List.tryFind (fun (x:Port)-> x.PortId = portId) (foundSymbol.Component.OutputPorts))
-    // let foundPort = List.head (checkInput @ checkOutput)
-    // let relativePortPosition = foundPort.PortPos
-    // posAdd {X=foundSymbol.Component.X;Y=foundSymbol.Component.Y} relativePortPosition
+let getHostId (model:Model) (portId:PortId) : ComponentId = 
+    (findPort model portId).HostId
 
-    
+let symbolType (model:Model) (compId:ComponentId) : ComponentType = 
+    (model
+    |>List.find (fun sym -> sym.Id = compId)
+    ).Component.Type
 
 
-// let getPortPosition (port:Port) (model:Model) : XYPos =
-//     let parentSymbol = 
-//         List.filter (fun x->x.Id = port.HostId) model
-//         |>List.head
-//     match port.PortType with
-//     |PortType.Input -> 
+let symbolBBoxx (model:Model) (compId:ComponentId) : BBox =
+    let foundSymbol = 
+        model
+        |>List.find (fun sym -> sym.Id = compId)
+
+    {
+        Point = {X=foundSymbol.Component.X; Y=foundSymbol.Component.Y}
+        Width = foundSymbol.Component.W
+        Height = foundSymbol.Component.H
+    }
+
+let portsInRange (model:Model) (mousePos:XYPos) (range:float) : PortId list =
+    model
+    |> List.fold (fun (acc:PortId list) (elem:Symbol) ->
+        combinedPortsList elem
+        |> List.map
+            (fun port -> port.PortId)
+        |> List.append acc
+    ) []
+
+let mulOfFive (input:float)  : float = 
+    5. * float (int (input / 5.))
     
 //-----------------------------Skeleton Model Type for symbols----------------//
 
@@ -208,19 +224,19 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
     let compX,compY,compW,compH =
         match compType with 
-        | Not | And | Or | Xor | Nand | Nor | Xnor -> position.X, position.Y,60.,105.
-        | DFF | DFFE -> position.X, position.Y,100.,105.
-        | Mux2 | Demux2 | DFF | DFFE -> position.X, position.Y,100.,120.
-        | NbitsAdder _ -> position.X, position.Y,150.,130.
-        | Input _ | Output _ | Constant _->  position.X, position.Y,100.,30.
-        | RAM _ | RegisterE _-> position.X, position.Y,200.,150.
-        | ROM _ | Register _ -> position.X, position.Y,200.,90.
-        | AsyncROM _ -> position.X, position.Y,200.,110.
-        | Decode4 -> position.X, position.Y, 100.,150.
-        | IOLabel -> position.X, position.Y, 100.,30.
-        | MergeWires | SplitWire _ -> position.X, position.Y, 100.,100.
-        | BusSelection _ -> position.X, position.Y, 200., 90.
-        |_ ->  position.X, position.Y,60.,100.
+        | Not | And | Or | Xor | Nand | Nor | Xnor -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 60.,mulOfFive 105.
+        | DFF | DFFE -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 105.
+        | Mux2 | Demux2 | DFF | DFFE -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 120.
+        | NbitsAdder _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 150.,mulOfFive 130.
+        | Input _ | Output _ | Constant _->  mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 30.
+        | RAM _ | RegisterE _-> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 150.
+        | ROM _ | Register _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 90.
+        | AsyncROM _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 110.
+        | Decode4 -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 150.
+        | IOLabel -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 30.
+        | MergeWires | SplitWire _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 100.
+        | BusSelection _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 200., mulOfFive 90.
+        |_ ->  mulOfFive position.X, mulOfFive position.Y,mulOfFive 60.,mulOfFive 100.
     let portTemplate (portNumber:int) (portType: PortType) (portPos:float) (portWidth:PortWidth)=
         let offset = 
             match portType with 
@@ -230,7 +246,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             PortId = PortId (uuid())
             PortNumber =  Some (PortNumber (portNumber))
             PortType = portType
-            PortPos = {X=offset; Y = float ( int (20. + ((float portNumber) + 1.) * portPos )) }
+            PortPos = {X=offset; Y = mulOfFive (20. + ((float portNumber) + 1.) * portPos ) }
             HostId = hostID
             Hover = PortHover false
             Width = portWidth
@@ -246,7 +262,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber = Some (PortNumber (0))
                         PortType = PortType.Input
-                        PortPos = {X=0.; Y = float (int (compH/2.))}
+                        PortPos = {X=0.; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
@@ -256,7 +272,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber = Some (PortNumber (0))
                         PortType = PortType.Output
-                        PortPos = {X=compW; Y = float (int (compH/2.))}
+                        PortPos = {X=compW; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
@@ -270,7 +286,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber =  None
                         PortType = PortType.Output
-                        PortPos = {X=float (int (compW/2.)); Y = compH}
+                        PortPos = {X = mulOfFive (compW/2.); Y = compH}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
@@ -288,7 +304,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber =  None
                         PortType = PortType.Input
-                        PortPos = {X= float (int (compW/2.)); Y = compH}
+                        PortPos = {X= mulOfFive (compW/2.); Y = compH}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
@@ -426,7 +442,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber =  None
                         PortType = PortType.Output
-                        PortPos = {X=float (int (compW/2.)); Y = compH}
+                        PortPos = {X=mulOfFive (compW/2.); Y = compH}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
@@ -728,6 +744,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
             if sym.IsDragging then
                 {sym with
                     IsDragging = false
+                    Component=
+                        {sym.Component with 
+                            X = mulOfFive sym.Component.X
+                            Y = mulOfFive sym.Component.Y
+                        }
                 }
             else sym
         ), Cmd.none
