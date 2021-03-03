@@ -39,7 +39,7 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
             match BusWire.getTargetedWire model.Wire {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some w -> 
                 dispatch <| Wire (BusWire.SetSelected w) 
-                dispatch <| Wire (BusWire.StartDragging (w,  {X =  ev.clientX / zoom; Y = ev.clientY / zoom}))
+                dispatch <| Wire (BusWire.StartDrag (w,  {X =  ev.clientX / zoom; Y = ev.clientY / zoom}))
             | None ->   
                 match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
                 | Some s ->  dispatch <| Wire (BusWire.Symbol (Symbol.StartDragging (s.Id, {X =  ev.clientX / zoom; Y = ev.clientY / zoom})))
@@ -57,7 +57,7 @@ let displaySvgWithZoom (model: Model) (zoom:float) (svgReact: ReactElement) (dis
 
         | Move -> ()  
         | Up ->
-            dispatch <| Wire (BusWire.EndDragging)
+            dispatch <| Wire (BusWire.EndDrag)
             match Symbol.getTargetedSymbol model.Wire.Symbol {X =  ev.clientX / zoom; Y = ev.clientY / zoom} with
             | Some s ->  dispatch <| Wire (BusWire.Symbol ( Symbol.EndDragging s.Id))
             | None -> ()
@@ -142,7 +142,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         let wModel, wCmd = BusWire.update BusWire.UnselectAll model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress AltZ -> 
-        let wModel, wCmd = BusWire.update BusWire.EndDragging model.Wire
+        let wModel, wCmd = BusWire.update BusWire.EndDrag model.Wire
         {model with Wire = wModel}, Cmd.map Wire wCmd
     | KeyPress DEL ->
         //takes the id the first wire in the model

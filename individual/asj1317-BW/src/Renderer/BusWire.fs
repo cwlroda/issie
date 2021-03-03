@@ -11,15 +11,6 @@ open Helpers
 //------------------------------------------------------------------------//
 //------------------------------BusWire Types-----------------------------//
 //------------------------------------------------------------------------//
-
-
-
-(* type ConnectedPorts =
-    {
-        SrcPort: CommonTypes.PortId list
-        TargetPort: CommonTypes.PortId list
-    }
- *)
 type Wire =
     { Id: CommonTypes.ConnectionId
       SrcPort: CommonTypes.PortId
@@ -32,7 +23,7 @@ type Wire =
       WireWidth: int
       Error: string Option }
 
-let BBOXSIZE = 2.0
+
 
 type Model =
     { Symbol: Symbol.Model
@@ -53,15 +44,16 @@ type Msg =
     | SetSelected of CommonTypes.ConnectionId
     | DeleteWire of CommonTypes.ConnectionId
     | UnselectAll
-    | StartDragging of wId: CommonTypes.ConnectionId * pos: XYPos
+    | StartDrag of wId: CommonTypes.ConnectionId * pos: XYPos
     | Dragging of wId: CommonTypes.ConnectionId * pos: XYPos
-    | EndDragging
+    | EndDrag
     | SetColor of color: CommonTypes.HighLightColor
     | MouseMsg of MouseT // Not used but left for compatibility with supplied skeleton code
     | ToggleAnnotations // Used to show ability to turn on and off wire annotation
 
 
 ///--------------------Helpers Functions -------------------------------------///
+let BBOXSIZE = 2.0
 
 let inLst v lst = List.exists (fun el -> v = el) lst
 
@@ -90,14 +82,6 @@ let lineDef (verts: XYPos list) =
     List.map (fun pos -> $"{pos.X},{pos.Y}") verts
 
     |> List.fold (fun outstr str -> outstr + " " + str) ""
-
-/// Give list of string which is string that defines polygon of input BBox
-let boxDef (pos: XYPos) (w: float) (h: float): string =
-    let tL = pos
-    let tR = posOf (pos.X + w) (pos.Y)
-    let bR = posOf (pos.X + w) (pos.Y - h)
-    let bL = posOf (pos.X) (pos.Y - (float h))
-    $"{bL.X},{bL.Y} {tL.X},{tL.Y} {tR.X},{tR.Y} {bR.X},{bR.Y}"
 
 
 /// look up wire in WireModel
@@ -138,7 +122,6 @@ let isTargetWire (pt: XYPos) (wire: Wire) =
     List.pairwise wire.WireSegments
     |> List.exists ptCloseToSeg
 
-
 let distPtToWire (pt: XYPos) (wire: Wire) =
     List.pairwise wire.WireSegments
     |> List.map (fun verts -> distPtToSeg pt verts)
@@ -164,9 +147,6 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
 
         posDiff symBB.Pos (Symbol.portPos wModel.Symbol portId), symBB.Pos, symBB.H
 
-
-    let relStart, startSym, startH = getRelSymInfo startId
-    let relEnd, endSym, endH = getRelSymInfo endId
 
     let defSeg pos wAdj hAdj =
         match wireDir.X with
@@ -335,17 +315,16 @@ let getWireColor (w: Wire): CommonTypes.HighLightColor =
     (match w with
      | w when w.Error <> None -> CommonTypes.HighLightColor.Red
      | w when w.WireWidth > 1 -> CommonTypes.HighLightColor.Blue
-     | w -> CommonTypes.HighLightColor.Blue)
+     | w -> CommonTypes.HighLightColor.Grey)
 
 let updatePortConnection (wModel: Model) (wId: CommonTypes.ConnectionId)=    
     let findNewPort pos =
-        match Symbol.portsInRange wModel.Symbol pos 4. with
+        match Symbol.portsInRange wModel.Symbol pos 6. with
         | [] -> None
         | [pId] -> Some pId
         | lst -> failwithf "Should not happen due to port spacing"      
     let w = wire wModel wId
-    let oldPos pId = 
-        Symbol.portPos wModel.Symbol pId
+   
 
        
     
@@ -353,7 +332,9 @@ let updatePortConnection (wModel: Model) (wId: CommonTypes.ConnectionId)=
     | Some srcPId, Some tgtPId when srcPId = w.SrcPort && tgtPId = w.TargetPort -> {w with WireSegments = w.WireSegments}
     | Some pId, Some tgtPId when tgtPId = w.TargetPort ->
         createWire wModel pId w.TargetPort (Some w.Id)  (autoRoute wModel pId w.TargetPort)
-    | Some srcPId, Some pId ->  createWire wModel w.SrcPort pId (Some w.Id)  (autoRoute wModel w.SrcPort pId)
+    | Some srcPId, Some pId ->  
+        let updatedModel = {wModel with WX = Map.remove wId wModel.WX}
+        createWire updatedModel w.SrcPort pId (Some w.Id)  (autoRoute updatedModel w.SrcPort pId)
     | None, _ | _ , None -> {w with WireSegments = (autoRoute wModel w.SrcPort w.TargetPort)}
     | _ -> failwithf "This shoulnt happen"
 
@@ -431,8 +412,8 @@ let setUnselectedColor (wModel: Model): Map<CommonTypes.ConnectionId, Wire> =
 
 let endDrag (wModel: Model): Map<CommonTypes.ConnectionId, Wire> =
     let wxUpdate =
-        {wModel with WX = ensureConnections wModel}
-        |> fitToGrid
+        {wModel with WX = fitToGrid wModel}
+        |> ensureConnections
 
     let modelUpdate = { wModel with WX = wxUpdate }
     setUnselectedColor modelUpdate
@@ -458,19 +439,6 @@ type LabelRenderProps =
       Label: string
       ColorLabel: string
       Pos: XYPos }
-
-type BBoxRenderProps = { Key: string; Box: BBox }
-
-
-
-let private renderBBox =
-    FunctionComponent.Of
-        (fun (props: BBoxRenderProps) ->
-            polygon [ SVGAttr.Points(boxDef props.Box.Pos props.Box.W props.Box.H)
-                      SVGAttr.StrokeWidth "1px"
-                      SVGAttr.Stroke "Black"
-                      SVGAttr.FillOpacity 0.2
-                      SVGAttr.Fill "Blue" ] [])
 
 let singleWireView =
     FunctionComponent.Of
@@ -547,12 +515,6 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
         else
             []
 
-    let bBoxs =
-        createBB model.WX
-        |> List.map
-            (fun bb ->
-                let propsBB = { Key = Helpers.uuid (); Box = bb }
-                renderBBox propsBB)
 
     let symbols =
         Symbol.view model.Symbol (fun sMsg -> dispatch (Symbol sMsg))
@@ -560,7 +522,6 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
     g [] [
         (g [] wires)
         (g [] wireAnnotations)
-        (g [] bBoxs)
         symbols
     ]
 ///Dummy function to initialize for demo
@@ -604,10 +565,10 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     | Dragging (wMsgId, wMsgPos) ->
         let wxUpdated = manualRoutingAdj model wMsgId wMsgPos
         { model with WX = wxUpdated }, Cmd.none
-    | StartDragging (wMsgId, wMsgPos) ->
+    | StartDrag (wMsgId, wMsgPos) ->
         let wxUpdated = startDrag model wMsgId wMsgPos
         { model with WX = wxUpdated }, Cmd.none
-    | EndDragging ->
+    | EndDrag ->
         let wxUpdated = endDrag model
         printf $"{wxUpdated}"
         { model with WX = wxUpdated }, Cmd.none
