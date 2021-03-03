@@ -148,7 +148,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
     ///Process errors into their messages to display.
     let errorMessages =
         model.Errors
-        |> List.mapi (fun i (e, highlighted) ->
+        |> List.map (fun (e, highlighted) ->
             li [
                 Style [
                     CSSProp.BackgroundColor "#ffadad"

@@ -62,7 +62,7 @@ let getErrors (model : Model) : Error list =
         | CommonTypes.ConnectionId id ->
             {
                 Msg = "Dummy error with wire " + id
-                Pos = Symbol.portPos model.Symbol w.SrcPort
+                Pos = Symbol.portPos model.Symbol w.TargetPort
             }
     )
 
