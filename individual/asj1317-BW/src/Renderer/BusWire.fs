@@ -11,6 +11,10 @@ open Helpers
 //------------------------------------------------------------------------//
 //------------------------------BusWire Types-----------------------------//
 //------------------------------------------------------------------------//
+type Error = 
+    { Msg: string; Pos: XYPos }
+
+
 type Wire =
     { Id: CommonTypes.ConnectionId
       SrcPort: CommonTypes.PortId
@@ -155,8 +159,6 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
             [ pos
               { X = pos.X + hAdj; Y = pos.Y }
               { X = pos.X + hAdj; Y = wAdj } ]
-
-
 
     let initialSegs, finalSegs =
         defSeg startPos (midPos.Y) 5., List.rev (defSeg endPos (midPos.Y) -5.)
@@ -323,23 +325,19 @@ let updatePortConnection (wModel: Model) (wId: CommonTypes.ConnectionId)=
         | [] -> None
         | [pId] -> Some pId
         | lst -> failwithf "Should not happen due to port spacing"      
-    let w = wire wModel wId
-   
-
-       
+    let w = wire wModel wId 
     
     match findNewPort w.WireSegments.[0]  , findNewPort (List.last w.WireSegments)with
     | Some srcPId, Some tgtPId when srcPId = w.SrcPort && tgtPId = w.TargetPort -> {w with WireSegments = w.WireSegments}
     | Some pId, Some tgtPId when tgtPId = w.TargetPort ->
-        createWire wModel pId w.TargetPort (Some w.Id)  (autoRoute wModel pId w.TargetPort)
+        let updatedModel = {wModel with WX = Map.remove wId wModel.WX}
+        createWire updatedModel pId w.TargetPort (Some w.Id)  (autoRoute updatedModel pId w.TargetPort)
     | Some srcPId, Some pId ->  
         let updatedModel = {wModel with WX = Map.remove wId wModel.WX}
         createWire updatedModel w.SrcPort pId (Some w.Id)  (autoRoute updatedModel w.SrcPort pId)
     | None, _ | _ , None -> {w with WireSegments = (autoRoute wModel w.SrcPort w.TargetPort)}
     | _ -> failwithf "This shoulnt happen"
 
-    
-    
 
 let ensureConnections (wModel:Model) =
     Map.map (fun wId w -> updatePortConnection wModel wId ) wModel.WX
@@ -605,12 +603,12 @@ let getTargetedWire (wModel: Model) (pos: XYPos): CommonTypes.ConnectionId Optio
     | lst -> Some(closestWire lst)
 
 
-let getErrors (wModel: Model): (string * XYPos) list =
+let getErrors (wModel: Model): Error list =
     Map.fold
         (fun lst wId w ->
             match w.Error with
             | Some errStr ->
-                [ errStr, (Symbol.portPos wModel.Symbol w.SrcPort) ]
+                [{ Msg = errStr; Pos = (Symbol.portPos wModel.Symbol w.SrcPort)} ]
                 @ lst
             | None -> lst)
         []
