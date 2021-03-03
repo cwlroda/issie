@@ -82,8 +82,7 @@ let distPtToSeg (pt: XYPos) ((startPt, endPt): XYPos * XYPos) = //(wSeg: WireSeg
     abs (crossProd) / magPtAToPtB
 
 /// Takes as input a relative position between two points and outputs true if the two original points are horzontal and false otherwise
-let isVertical (relPos: XYPos) : bool =
-    abs(relPos.X)<abs(relPos.Y) 
+let isVertical (relPos: XYPos): bool = abs (relPos.X) < abs (relPos.Y)
 
 ///Give list of verticies outputs a string that will define a polyline
 let lineDef (verts: XYPos list) =
@@ -149,12 +148,6 @@ let isTargetSeg wWidth pos segVerts =
     segVerts |> (createSegBB wWidth) |> (ptInBB pos)
 
 
-    
-/// Routing
-(* let roundSym (startPt: XYPos) (relShift: XYPos) (endPt: XYPos) =
-    let midVert = posAdd startPt relShift
-    [ startPt; midVert; endPt ] *)
-
 ///Creates the wireSegement list which represents the verticies of the wire between the two points
 let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.PortId) =
     let startPos = Symbol.portPos wModel.Symbol startId
@@ -163,26 +156,30 @@ let autoRoute (wModel: Model) (startId: CommonTypes.PortId) (endId: CommonTypes.
 
 
     let wireDir = posDiff endPos startPos
-    let getRelSymInfo portId  =
-        let symBB = 
+
+    let getRelSymInfo portId =
+        let symBB =
             Symbol.getHostId wModel.Symbol portId
             |> Symbol.symbolBBox wModel.Symbol
-            
+
         posDiff symBB.Pos (Symbol.portPos wModel.Symbol portId), symBB.Pos, symBB.H
 
 
-    let relStart,startSym, startH =  getRelSymInfo startId
-    let relEnd,endSym, endH = getRelSymInfo endId
-    
-    let defSeg  pos wAdj hAdj=
-        match wireDir.X with 
+    let relStart, startSym, startH = getRelSymInfo startId
+    let relEnd, endSym, endH = getRelSymInfo endId
+
+    let defSeg pos wAdj hAdj =
+        match wireDir.X with
         | x when x > 0. -> [ pos; { X = midPos.X; Y = pos.Y } ]
-        | _ -> [ pos; { X = pos.X + hAdj; Y = pos.Y }; { X = pos.X + hAdj; Y =  wAdj  } ]
-    
-        
+        | _ ->
+            [ pos
+              { X = pos.X + hAdj; Y = pos.Y }
+              { X = pos.X + hAdj; Y = wAdj } ]
+
+
 
     let initialSegs, finalSegs =
-        defSeg  startPos (midPos.Y) 5., List.rev (defSeg endPos (midPos.Y) -5.) 
+        defSeg startPos (midPos.Y) 5., List.rev (defSeg endPos (midPos.Y) -5.)
 
     initialSegs @ finalSegs
 
@@ -197,8 +194,10 @@ let movePortConnectionSeg (idx0, idx1) (move: XYPos) (segments: XYPos list) =
 
 let moveSegment (idx1, idx2) (move: XYPos) (orien: XYPos) (segments: XYPos list) =
     let relMove =
-        if isVertical orien then { X = move.X; Y = 0.0 }
-        else { X = 0.0; Y = move.Y }
+        if isVertical orien then
+            { X = move.X; Y = 0.0 }
+        else
+            { X = 0.0; Y = move.Y }
 
 
     List.mapi
@@ -233,10 +232,10 @@ let manualRoutingAdj (wModel: Model) (wireId: CommonTypes.ConnectionId) (pos: XY
 
     let updatedWireSegs =
         match segIdx with
-        | Some idx when idx = 0 -> w.WireSegments
-        //updateConnectionSeg (idx, idx+1) move w.WireSegments
-        | Some idx when idx = (List.length w.WireSegments) - 2 -> w.WireSegments
-        //updateConnectionSeg (idx-1, idx) move w.WireSegments
+        | Some idx when idx = 0 -> //w.WireSegments
+            movePortConnectionSeg  (idx, idx+1) move w.WireSegments
+        | Some idx when idx = (List.length w.WireSegments) - 2 -> //w.WireSegments
+            movePortConnectionSeg  (idx+1, idx) move w.WireSegments
         | Some idx ->
             let orien =
                 posDiff w.WireSegments.[idx] w.WireSegments.[idx + 1]
@@ -338,7 +337,31 @@ let getWireColor (w: Wire): CommonTypes.HighLightColor =
      | w when w.WireWidth > 1 -> CommonTypes.HighLightColor.Blue
      | w -> CommonTypes.HighLightColor.Blue)
 
+let updatePortConnection (wModel: Model) (wId: CommonTypes.ConnectionId)=    
+    let findNewPort pos =
+        match Symbol.portsInRange wModel.Symbol pos 4. with
+        | [] -> None
+        | [pId] -> Some pId
+        | lst -> failwithf "Should not happen due to port spacing"      
+    let w = wire wModel wId
+    let oldPos pId = 
+        Symbol.portPos wModel.Symbol pId
 
+       
+    
+    match findNewPort w.WireSegments.[0]  , findNewPort (List.last w.WireSegments)with
+    | Some srcPId, Some tgtPId when srcPId = w.SrcPort && tgtPId = w.TargetPort -> {w with WireSegments = w.WireSegments}
+    | Some pId, Some tgtPId when tgtPId = w.TargetPort ->
+        createWire wModel pId w.TargetPort (Some w.Id)  (autoRoute wModel pId w.TargetPort)
+    | Some srcPId, Some pId ->  createWire wModel w.SrcPort pId (Some w.Id)  (autoRoute wModel w.SrcPort pId)
+    | None, _ | _ , None -> {w with WireSegments = (autoRoute wModel w.SrcPort w.TargetPort)}
+    | _ -> failwithf "This shoulnt happen"
+
+    
+    
+
+let ensureConnections (wModel:Model) =
+    Map.map (fun wId w -> updatePortConnection wModel wId ) wModel.WX
 
 /// Updates the wire routing to adjust for any movement in symbols location, i.e. ports have moved
 let updateSelectedWires (wModel: Model) (wIdLst: CommonTypes.ConnectionId list) =
@@ -407,7 +430,9 @@ let setUnselectedColor (wModel: Model): Map<CommonTypes.ConnectionId, Wire> =
     Map.map (fun wId w -> getWireColor w |> setWireColor wModel wId) wModel.WX
 
 let endDrag (wModel: Model): Map<CommonTypes.ConnectionId, Wire> =
-    let wxUpdate = fitToGrid wModel
+    let wxUpdate =
+        {wModel with WX = ensureConnections wModel}
+        |> fitToGrid
 
     let modelUpdate = { wModel with WX = wxUpdate }
     setUnselectedColor modelUpdate
