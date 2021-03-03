@@ -153,7 +153,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
                 Style [
                     CSSProp.BackgroundColor "#ffadad"
                     CSSProp.Color "#ff3838"
-                    CSSProp.FontSize "14px"
+                    CSSProp.FontSize "10px"
                     CSSProp.BorderRadius "5px"
                     Margin "3px"
                     Padding "3px"
@@ -171,6 +171,7 @@ let view (model:Model) (dispatch : Msg -> unit) =
                     Style [
                         CSSProp.Display DisplayOptions.InlineBlock
                         CSSProp.MarginLeft "5px"
+                        CSSProp.FontSize "10px"
                     ]
                     OnClick (fun _ ->
                         ToggleErrorHighlight e
