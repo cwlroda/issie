@@ -231,7 +231,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         posOf (discretizeToGrid p.X) (discretizeToGrid p.Y)
 
     let deselectSymbolsCmd =
-        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select [])))
+        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.SetSelected [])))
 
     let highlightPortsNearCmd p =
         let portsNearMouse = Symbol.portsInRange model.Wire.Symbol p portHighlightRange
@@ -303,7 +303,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 Selection = Symbols selectedSymbols
                 DragState = DragState.Symbol (false, model.Wire)
             }, Cmd.batch [
-                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
+                Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.SetSelected selectedSymbols)))
                 Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.StartDragging (selectedSymbols, snapToGrid p))))
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
@@ -337,7 +337,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 match model.Selection with
                 | Symbols sIdLst ->
                     Cmd.batch [
-                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select sIdLst)))
+                        Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.SetSelected sIdLst)))
                         Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     ]
                 | SelectionState.Wire wId ->
@@ -357,7 +357,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             let selectedSymbols = Symbol.getAllSymbols model.Wire.Symbol
 
             { model with Selection = Symbols selectedSymbols }
-            , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
+            , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.SetSelected selectedSymbols)))
         | Escape ->
             match model.DragState with
             | NotDragging ->
@@ -583,7 +583,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         targetedSymbols
 
                 { newModel with Selection = Symbols selectedSymbols }
-                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.Select selectedSymbols)))
+                , Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.SetSelected selectedSymbols)))
             | DragState.Wire (didDrag, prevWireModel) ->
                 newModel, Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.EndDrag))
