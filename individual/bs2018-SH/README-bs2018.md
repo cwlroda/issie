@@ -27,3 +27,44 @@
 * **Zoom and scrolling**
     * **SVG zoom** - use `Ctrl+=` and `Ctrl+-` to zoom in and out. The zoom is a SVG transformation rather than a web zoom, which allows other elements of the UI to be independent of this zoom.
     * **Scrolling** - the canvas `div` scrolls independently of the rest of the page. Similarly to above, this allows for other static elements on screen.
+
+## Interface funtions used
+
+### From Symbol
+* getAllSymbols : Model -> ComponentId List
+* getTargetedSymbol: Model -> XYPos -> ComponentId Option
+* getSymbolsInTargetArea: Model -> BBox -> ComponentId List
+* getTargetedPort: Model -> XYPos -> PortId Option
+* getPortsOfSymbol: Model -> ComponentId -> PortId list
+* portsInRange: Model -> XYPos -> (range : float) -> PortId list
+* portPos: Model -> PortId -> XYPos
+* symbolBBox: Model -> ComponentId -> BBox
+* symbolType: Model -> ComponentId -> ComponentType
+
+### From BusWire
+* getTargetedWire: Model -> XYPos -> ConnectionId Option
+* getErrors: Model -> Error list
+
+### Messages used by Sheet
+
+### Sent to BusWire
+* AddWire of PortId * PortId
+* DeleteWire of ConnectionId
+* SetSelected of ConnectionId
+* UnselectAll
+* StartDrag of ConnectionId * XYPos
+* Dragging of ConnectionId * XYPos
+* EndDrag
+* ToggleLabels
+
+##### Sent to Symbol
+* AddSymbol of ComponentType * XYPos 
+* DeleteSymbols of ComponentId list
+* StartDraging of ComponentId list * XYPos
+* Dragging of ComponentId list * XYPos
+* EndDragging 
+* SetSelected of ComponentId list
+* HighlightPorts of PortId list
+* UnhighlightPorts
+
+
