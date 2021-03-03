@@ -35,7 +35,8 @@ type Model = {
     PanX: float
     PanY: float
     Zoom: float
-    Size: float
+    Width: float
+    Height: float
     UndoList: BusWire.Model list
     RedoList: BusWire.Model list
 }
@@ -75,7 +76,8 @@ let discretizeToGrid v =
 /// current scroll position, and chnage scroll position to keep centre of screen a fixed point.
 let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
     let borderSize = 3.
-    let sizeInPixels = sprintf "%.2fpx" ((model.Size))
+    let widthInPixels = sprintf "%.2fpx" ((model.Width))
+    let heightInPixels = sprintf "%.2fpx" ((model.Height))
     let mDown (ev: Types.MouseEvent) = ev.buttons <> 0.
 
     let mouseOp op (ev: Types.MouseEvent) =
@@ -106,9 +108,10 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
     let gridlines =
         let panX = int (discretizeToGrid (model.PanX / model.Zoom))
         let panY = int (discretizeToGrid (model.PanY / model.Zoom))
-        let size = int (ceil (model.Size / model.Zoom))
+        let width = int (ceil (model.Width / model.Zoom))
+        let height = int (ceil (model.Height / model.Zoom))
 
-        let getGridCoords =
+        let getGridCoords size =
             [0..gridSize..size]
 
         let getColorAndOpacity gc offset =
@@ -128,14 +131,14 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                 SVGAttr.StrokeWidth "1px"
                 SVGAttr.StrokeOpacity opacity
             ] []
-        let createHalfGrid offset lineFun =
-            getGridCoords
+        let createHalfGrid size offset lineFun =
+            getGridCoords size
             |> List.map (lineFun >> (fun f -> f offset))
 
         g [] (
             [
-                createHalfGrid panX (fun x -> makeLine x -gridSize x size <| getColorAndOpacity x)
-                createHalfGrid panY (fun y -> makeLine -gridSize y size y <| getColorAndOpacity y)
+                createHalfGrid width panX (fun x -> makeLine x -gridSize x height <| getColorAndOpacity x)
+                createHalfGrid height panY (fun y -> makeLine -gridSize y width y <| getColorAndOpacity y)
             ]
             |> List.concat
         )
@@ -204,14 +207,14 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
             )
         )
 
-    div [ Style [ Height sizeInPixels
-                  MaxWidth sizeInPixels
+    div [ Style [ Height heightInPixels
+                  Width widthInPixels
                   Border (sprintf "%fpx solid green" borderSize)
                   CSSProp.OverflowX OverflowOptions.Hidden
                   CSSProp.OverflowY OverflowOptions.Hidden
                 ]
-    ] [ svg [ Style [ Height sizeInPixels
-                      Width sizeInPixels ]
+    ] [ svg [ Style [ Height heightInPixels
+                      Width widthInPixels ]
               OnMouseDown(fun ev -> (mouseOp Down ev))
               OnMouseUp(fun ev -> (mouseOp Up ev))
               OnMouseMove(fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
@@ -637,7 +640,8 @@ let init () =
         PanX = 0.
         PanY = 0.
         Zoom = 1.
-        Size = 1000.
+        Width = 1000.
+        Height = 800.
         UndoList = []
         RedoList = []
     }, Cmd.map Wire cmds
