@@ -49,6 +49,9 @@
                    makeKeyItem "Red" "Alt+Z" (fun () -> dispatch KeyboardMsg.AltZ)
                    makeKeyItem "Insert"  "insert" (fun () -> dispatch KeyboardMsg.INS)
                    makeKeyItem "Delete"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
+                   makeKeyItem "Select All"  "CmdOrCtrl+A" (fun () -> dispatch KeyboardMsg.CtrlA)
+                   makeKeyItem "Decrease Wire Width"  "CmdOrCtrl+Q" (fun () -> dispatch KeyboardMsg.CtrlQ)
+                   makeKeyItem "Increase Wire Width"  "CmdOrCtrl+E" (fun () -> dispatch KeyboardMsg.CtrlE)
                    menuSeparator
                    makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch KeyboardMsg.AltShiftZ)
                    makeRoleItem MenuItemRole.ForceReload

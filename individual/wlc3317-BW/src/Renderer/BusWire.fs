@@ -46,7 +46,7 @@ type Wire = {
     TargetPort: PortId
     Segments: Map<WireSegId, WireSegment>
     Color: HighLightColor
-    Width: PortWidth
+    Width: float
 }
 
 type WireError = {
@@ -74,6 +74,8 @@ type Msg =
     | SelectSegment of pagePos : XYPos
     | SelectAll
     | DeselectSegments
+    | DecreaseWidth
+    | IncreaseWidth
     | MouseMsg of MouseT
     | StartDragging of pagePos : XYPos
     | Dragging of pagePos: XYPos
@@ -293,9 +295,9 @@ let makeWireSegment (wire : Wire) x1 y1 x2 y2 =
 
 // basic autorouting to initialise wires based on relative symbol positions
 let initRouting (wire: Wire) (srcPos: XYPos) (tgtPos: XYPos) : Map<WireSegId, WireSegment> =
-    let srcX = srcPos.X + 20.
+    let srcX = srcPos.X
     let srcY = srcPos.Y
-    let tgtX = tgtPos.X - 20.
+    let tgtX = tgtPos.X
     let tgtY = tgtPos.Y
     let midX = (midPt srcPos tgtPos).X
     let midY = (midPt srcPos tgtPos).Y
@@ -357,73 +359,62 @@ let initRouting (wire: Wire) (srcPos: XYPos) (tgtPos: XYPos) : Map<WireSegId, Wi
             |> Map.ofList
 
 // advanced autorouting with collision detection (not implemented)
-let autoRoute (wModel: Model) : Wire list =
-    // match wire type cases based on port positions
-    // pathfind by incrementing in intervals of 5px
-    // check if next increment will hit bounding box of symbol
-    // make a turn that will decrease distance to output port
-    // returns wire with updated segments
-    let offsetSymbol (sym: Symbol.Symbol) (axis: Direction) (offset: float) : float =
-        let leftSym = sym.Component.X
-        let rightSym = sym.Component.X + sym.Component.W
-        let topSym = sym.Component.Y
-        let botSym = sym.Component.Y + sym.Component.H
+let findOffset (wModel: Model) (sym: Symbol.Symbol) (axis: Direction) (offset: float) : float =
+    let symBBox = Symbol.symbolBBox wModel.Symbol sym.Id
 
-        match axis with
-        | Horizontal -> 
-            match (topSym - 10. <= offset), (offset <= botSym + 10.) with
-            | true, true -> botSym - offset + 10.
-            | _, _ -> 0.
-        | Vertical ->
-            match (leftSym - 10. <= offset), (offset <= rightSym + 10.) with
-            | true, true -> rightSym - offset + 10.
-            | _, _ -> 0.
+    match axis with
+    | Horizontal -> 
+        match (symBBox.Corner.Y <= offset), (offset <= symBBox.Corner.Y + symBBox.H) with
+        | true, true -> symBBox.Corner.Y + symBBox.H - offset + 10.
+        | _, _ -> 0.
+    | Vertical ->
+        match (symBBox.Corner.X <= offset), (offset <= symBBox.Corner.X + symBBox.W) with
+        | true, true -> symBBox.Corner.X + symBBox.W - offset + 10.
+        | _, _ -> 0.
 
-    let calcOffset (offset: float) (axis: Direction) : float = 
-        wModel.Symbol
-        |> List.fold (fun acc sym -> acc + (offsetSymbol sym axis acc)) offset
+let aggOffset (wModel: Model) (offset: float) (axis: Direction) : float =
+    wModel.Symbol
+    |> List.fold (fun acc sym -> acc + (findOffset wModel sym axis acc)) offset
 
-    wModel.WX
-    |> List.map (fun w ->
-        let segMap =
-            w.Segments
-            |> Map.map (fun _ v ->
-                match v.Direction with
-                | Horizontal ->
-                    let offset = calcOffset v.StartPos.Y v.Direction
+let autoRoute (wModel: Model) (wire: Wire) (segMap: Map<WireSegId, WireSegment>): Map<WireSegId, WireSegment> =
+    segMap
+    |> Map.map (fun _ v ->
+        match isFirstOrLastSegment wModel wire v with
+        | false -> 
+            match v.Direction with
+            | Horizontal ->
+                let offset = aggOffset wModel v.StartPos.Y v.Direction
 
-                    {
-                        v with
-                            StartPos =
-                                {
-                                    X = v.StartPos.X
-                                    Y = v.StartPos.Y + offset
-                                }
-                            EndPos =
-                                {
-                                    X = v.StartPos.X
-                                    Y = v.StartPos.Y + offset
-                                }
-                    }
-                | Vertical ->
-                    let offset = calcOffset v.StartPos.X v.Direction
+                {
+                    v with
+                        StartPos =
+                            {
+                                X = v.StartPos.X
+                                Y = v.StartPos.Y + offset
+                            }
+                        EndPos =
+                            {
+                                X = v.StartPos.X
+                                Y = v.StartPos.Y + offset
+                            }
+                }
+            | Vertical ->
+                let offset = aggOffset wModel v.StartPos.X v.Direction
 
-                    {
-                        v with
-                            StartPos =
-                                {
-                                    X = v.StartPos.X + offset
-                                    Y = v.StartPos.Y
-                                }
-                            EndPos =
-                                {
-                                    X = v.StartPos.X + offset
-                                    Y = v.StartPos.Y
-                                }
-                    }
-            )
-
-        {w with Segments = segMap}
+                {
+                    v with
+                        StartPos =
+                            {
+                                X = v.StartPos.X + offset
+                                Y = v.StartPos.Y
+                            }
+                        EndPos =
+                            {
+                                X = v.StartPos.X + offset
+                                Y = v.StartPos.Y
+                            }
+                }
+        | true -> v
     )
 
 // reconnects the two ends of an updated wire segment to its original neighbours
@@ -458,6 +449,7 @@ let updateSingleWire (wModel: Model) (w: Wire) : Wire =
         | false -> Red
     
     let wire = {w with Color = color}
+
     {wire with Segments = initRouting wire srcPos tgtPos}
 
 // general wire update
@@ -547,6 +539,7 @@ let singleWireView (wModel: Model) =
                             SVGAttr.Stroke color
                             SVGAttr.FillOpacity 0
                             SVGAttr.StrokeWidth props.StrokeWidthP
+                            SVGAttr.StrokeLinecap "round"
                         ] viewWireStaticConnection) []
                 )
                 |> Map.toList
@@ -564,7 +557,7 @@ let view (wModel:Model) (dispatch: Dispatch<Msg>) =
                 WireP = w
                 SrcP = Symbol.portPos wModel.Symbol w.SrcPort 
                 TgtP = Symbol.portPos wModel.Symbol w.TargetPort 
-                StrokeWidthP = "3px"
+                StrokeWidthP = sprintf "%fpx" w.Width
                 Dispatch = dispatch}
             singleWireView wModel props)
     let symbols = Symbol.view wModel.Symbol (fun sMsg -> dispatch (Symbol sMsg))
@@ -595,7 +588,7 @@ let init n () =
             TargetPort = tgtPort
             Segments = [] |> Map.ofList
             Color = Grey
-            Width = (List.head s1.Component.OutputPorts).Width
+            Width = 3.
         }
     
     List.map (fun i -> makeRandomWire()) [1..n]
@@ -698,10 +691,46 @@ let selectAll (wModel: Model) : Wire list =
                 {
                     v with
                         Color = Blue
-                        //Selected = true
+                        Selected = true
                 }
             )
         {w with Segments = segMap}
+    )
+
+let decreaseWidth (wModel: Model) =
+    let wList =
+        getSelectedSegments wModel
+        |> List.map fst
+    
+    wModel.WX
+    |> List.map (fun w -> 
+        match List.contains w.Id wList with
+        | true -> 
+            match checkPortWidths wModel w.SrcPort w.TargetPort with
+            | true ->
+                match w.Width with
+                | x when x <= 1. -> w
+                | _ -> {w with Width = w.Width - 1.}
+            | false -> w
+        | false -> w
+    )
+
+let increaseWidth (wModel: Model) =
+    let wList =
+        getSelectedSegments wModel
+        |> List.map fst
+    
+    wModel.WX
+    |> List.map (fun w -> 
+        match List.contains w.Id wList with
+        | true -> 
+            match checkPortWidths wModel w.SrcPort w.TargetPort with
+            | true ->
+                match w.Width with
+                | x when x >= 10. -> w
+                | _ -> {w with Width = w.Width + 1.}
+            | false -> w
+        | false -> w
     )
 
 // dummy code to generate input and output port
@@ -730,7 +759,7 @@ let addWire (wModel: Model) (srcPort: PortId) (tgtPort: PortId) : Wire list =
             TargetPort = tgtPort
             Segments = [] |> Map.ofList
             Color = Grey
-            Width = Symbol.portWidth wModel.Symbol srcPort
+            Width = 3.
         }
     ]
 
@@ -880,6 +909,10 @@ let update (msg: Msg) (wModel: Model) : Model * Cmd<Msg> =
         { wModel with WX = selectAll wModel }, Cmd.none
     | DeselectSegments ->
         { wModel with WX = deselectSegments wModel }, Cmd.none
+    | DecreaseWidth ->
+        { wModel with WX = decreaseWidth wModel }, Cmd.none
+    | IncreaseWidth ->
+        { wModel with WX = increaseWidth wModel }, Cmd.none
     | MouseMsg mMsg ->
         wModel, Cmd.ofMsg (Symbol (Symbol.MouseMsg mMsg))
     | StartDragging pos ->
