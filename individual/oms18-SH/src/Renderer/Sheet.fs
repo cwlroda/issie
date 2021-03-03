@@ -37,7 +37,7 @@ type Model = {
     Zoom: float
     Size: float
     UndoList: BusWire.Model list
-    UndoLocation: int
+    RedoList: BusWire.Model list
 }
 
 type KeyboardMsg =
@@ -295,7 +295,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
 
-    let getHighlightingAfterUndoAndRedo model =
+    let highlightingAfterUndoAndRedoCmd model =
         match model.Selection with
         | Symbols sIdLst ->
             Cmd.batch [
@@ -413,70 +413,40 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                   )
               | Uninitialized -> Cmd.none
         | AltZ ->
-            match model.UndoLocation with
-            | 0 when model.UndoList.Length > 0 ->
+            match model.UndoList with
+            | [] -> model, Cmd.none
+            | newWire :: undoList ->
                 let portsNearMouse = Symbol.portsInRange model.Wire.Symbol model.MousePosition 100.
-                let newWire = List.head model.UndoList
+
+                { model with
+                    Wire=newWire
+                    UndoList=undoList
+                    RedoList= model.Wire :: model.RedoList
+                }
+                , Cmd.batch [
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
+                    highlightingAfterUndoAndRedoCmd model
+                ]
+        | AltShiftZ ->
+            match model.RedoList with
+            | [] -> model, Cmd.none
+            | newWire :: redoList ->
+                let portsNearMouse = Symbol.portsInRange model.Wire.Symbol model.MousePosition 100.
 
                 { model with
                     Wire=newWire
                     UndoList=model.Wire :: model.UndoList
-                    UndoLocation=1
+                    RedoList=redoList
                 }
                 , Cmd.batch [
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
-                    getHighlightingAfterUndoAndRedo model
-                ]
-            | loc when loc + 1 < model.UndoList.Length ->
-                let portsNearMouse = Symbol.portsInRange model.Wire.Symbol model.MousePosition 100.
-                let newWire = List.item (loc + 1) model.UndoList
-
-                { model with
-                    Wire=newWire
-                    UndoLocation=loc + 1
-                }
-                , Cmd.batch [
-                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
-                    getHighlightingAfterUndoAndRedo model
-                ]
-            | _ -> model, Cmd.none
-        | AltShiftZ ->
-            match model.UndoLocation with
-            | 0 -> model, Cmd.none
-            | 1 ->
-                let portsNearMouse = Symbol.portsInRange model.Wire.Symbol model.MousePosition 100.
-                let newWire = List.head model.UndoList
-
-                { model with
-                    Wire=newWire
-                    UndoList=List.tail model.UndoList
-                    UndoLocation=0
-                }
-                , Cmd.batch [
-                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
-                    getHighlightingAfterUndoAndRedo model
-                ]
-            | loc ->
-                let portsNearMouse = Symbol.portsInRange model.Wire.Symbol model.MousePosition 100.
-                let newWire = List.item (loc - 1) model.UndoList
-
-                { model with
-                    Wire=newWire
-                    UndoLocation=loc - 1
-                }
-                , Cmd.batch [
-                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse))) 
-                    getHighlightingAfterUndoAndRedo model
+                    highlightingAfterUndoAndRedoCmd model
                 ]
 
     match msg with
     | SaveState savedWire ->
-        printfn "Saved state"
-        let undoList = savedWire :: match model.UndoLocation with
-                                    | 0 -> model.UndoList
-                                    | loc -> List.skip (loc + 1) model.UndoList
-        let undoList = List.truncate undoHistorySize undoList
-        { model with UndoList=undoList;UndoLocation=0 }, Cmd.none
+        let undoList = List.truncate undoHistorySize <| savedWire :: model.UndoList
+        { model with UndoList=undoList;RedoList=[] }, Cmd.none
     | Wire wMsg ->
         let wModel, wCmd = BusWire.update wMsg model.Wire
         { model with Wire = wModel }
@@ -668,5 +638,5 @@ let init () =
         Zoom = 1.
         Size = 1000.
         UndoList = []
-        UndoLocation = 0
+        RedoList = []
     }, Cmd.map Wire cmds
