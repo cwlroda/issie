@@ -12,7 +12,7 @@ type Model = {
     }
 
 type KeyboardMsg =
-    | CtrlS | AltC | AltV | AltZ | AltD | AltShiftZ | INS | DEL | CtrlShiftA
+    | CtrlS | AltC | AltV | AltZ | AltShiftZ | INS | DEL | CtrlA | CtrlD | CtrlQ | CtrlE
 
 type Msg =
     | Wire of BusWire.Msg
@@ -101,8 +101,14 @@ let update (msg : Msg) (model : Model): Model*Cmd<Msg> =
         model, Cmd.ofMsg (Wire <| BusWire.AddWire)
     | KeyPress DEL ->
         model, Cmd.ofMsg (Wire <| BusWire.DeleteWires)
-    | KeyPress CtrlShiftA ->
+    | KeyPress CtrlA ->
         model, Cmd.ofMsg (Wire <| BusWire.SelectAll)
+    | KeyPress CtrlD ->
+        model, Cmd.ofMsg (Wire <| BusWire.DeselectSegments)
+    | KeyPress CtrlQ ->
+        model, Cmd.ofMsg (Wire <| BusWire.DecreaseWidth)
+    | KeyPress CtrlE ->
+        model, Cmd.ofMsg (Wire <| BusWire.IncreaseWidth)
     | KeyPress s -> // all other keys are turned into SetColor commands
         let c =
             match s with

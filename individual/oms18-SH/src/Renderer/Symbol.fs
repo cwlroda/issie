@@ -1,7 +1,6 @@
 ﻿module Symbol
 open Fable.React
 open Fable.React.Props
-open Browser
 open Elmish
 open Elmish.React
 open Helpers
@@ -42,17 +41,14 @@ type Model = Symbol list
 /// a production system, where we need to drag groups of symbols as well,
 /// and also select and deselect symbols, and specify real symbols, not circles
 type Msg =
-    /// Mouse info with coords adjusted form top-level zoom
-    | MouseMsg of MouseT
     /// coords not adjusted for top-level zoom
     | AddSymbol of CommonTypes.ComponentType * XYPos
-    | Select of CommonTypes.ComponentId list
+    | SetSelected of CommonTypes.ComponentId list
     | StartDragging of CommonTypes.ComponentId list * XYPos
     /// coords not adjusted for top-level zoom
     | Dragging of CommonTypes.ComponentId list * XYPos
     | EndDragging
     | DeleteSymbols of sId:CommonTypes.ComponentId list
-    | UpdateSymbolModelWithComponent of CommonTypes.Component // Issie interface
     | HighlightPorts of CommonTypes.PortId list
 
 
@@ -62,7 +58,7 @@ type Msg =
 
 //---------------Other interface functions--------------------//
 
-// internal to setup
+// internal
 let getAllPorts (model: Model) : CommonTypes.PortId list * CommonTypes.PortId list =
     model
     |> List.map (fun sym -> (sym.InputPort, sym.OutputPort))
@@ -200,7 +196,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     | DeleteSymbols sIdLst -> 
         let sIdSet = Set.ofList sIdLst
         List.filter (fun sym -> not <| Set.contains sym.Id sIdSet) model, Cmd.none
-    | Select sIdLst ->
+    | SetSelected sIdLst ->
         let sIdSet = Set.ofList sIdLst
 
         model
@@ -245,18 +241,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
             { sym with IsDragging = false }
         )
         , Cmd.none
-    | MouseMsg mT -> 
-        match (mT.Op, mT.Pos) with
-        | (Down, p) ->
-            model
-            |> List.map (fun sym ->
-                let bb = symbolToBBox sym
-                if containsPoint p bb then
-                    { sym with IsSelected = true }
-                else
-                    sym
-            ), Cmd.none
-        | _ -> model, Cmd.none
     | HighlightPorts pIdList ->
         let portIdSet = Set.ofList pIdList
             
@@ -269,7 +253,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 HighlightOutputPort=highlightOutputPort
             }
         ), Cmd.none
-    | _ -> failwithf "Not implemented"
 
 //----------------------------View Function for Symbols----------------------------//
 
