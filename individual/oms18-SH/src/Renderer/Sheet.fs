@@ -514,6 +514,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     cmds
                     discardSelectionsCmd
                     Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition))))
+                    Cmd.ofMsg (SaveState model.Wire)
                 ]
             | MouseButton.Middle ->
                 { model with DragState = Pan (posOf model.PanX model.PanY, p, p) }
