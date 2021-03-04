@@ -10,11 +10,11 @@
 6. Change wire color
 7. Change wire width
 8. Port width inference
-
+9. Created wire bounding boxes
 
 ## Interfaces
 
-1. Symbol (borrowed some dummy code from Marcus)
+1. Symbol (borrowed dummy code from Marcus)
  - getTargetedSymbol:
         Model -> XYPos -> ComponentId Option
  - getTargetedPort:
