@@ -1,4 +1,49 @@
-#Intro
+
+#Order of Demo
+keypress CtrlZ:
+  Adds a symbol by sending a message to Symbol.fs
+  
+keypress CtrlD:
+  Deletes that Symbol by sending message to Symbol.fs
+
+keypress CtrlS:
+  Select symbols within specific bounding box and all selected symbols will be highlighted 
+  
+Keypress CtrlShiftS:
+  De-selects symbols 
+  
+
+Keypress CtrlC:
+  Dehighlights 
+
+Keypress CtrlP:
+  This tests out ports related interface functions one by one and prints the information in the console to show that the functions are working
+  -Gets id of all ports (with dummy function put in place only for the demo)
+  -Gets single ID from the list
+  -Gets the ID of the target port in a given xy position 
+  -Gets port position with a given ID
+  -States the type of port for specific ID
+  -States the width of port for given ID
+  -Using a range and an x y position, it tells you all the ports in that range 
+  -Gets the component host ID associated with a particular port 
+  -Gets the type of the component associated with ID 
+  -Gets the bounding box of a symbol using an ID
+  
+
+Keypress CtrlShiftS
+
+Keypress CtrlShiftS
+ 
+ 
+
+
+
+
+
+
+
+
+#Intro to project 
 My Symbol.fs file is divided into the following sections:
 Types (line 15):
   The main types added are the record type Label,the type TempRecord that will be used in a record deconstruction function (line 341)and 
