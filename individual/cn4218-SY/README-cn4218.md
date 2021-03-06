@@ -11,9 +11,11 @@ keypress CtrlS:
   
 Keypress CtrlShiftS:
   De-selects symbols 
-  
-
+ 
 Keypress CtrlC:
+  Highlights specific ports of a particular symbol
+  
+Keypress CtrlShiftC:
   Dehighlights 
 
 Keypress CtrlP:
@@ -29,18 +31,6 @@ Keypress CtrlP:
   - Gets the type of the component associated with ID 
   - Gets the bounding box of a symbol using an ID
   
-
-Keypress CtrlShiftS
-
-Keypress CtrlShiftS
- 
- 
-
-
-
-
-
-
 
 
 # Intro to project 
