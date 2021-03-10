@@ -64,13 +64,14 @@ type Msg =
     | MouseMsg of MouseT * Modifier
 
 /// Constants that will be turned into settings at a later date
-let gridSize = 5
+let gridSize = 10
 let undoHistorySize = 50
 let portHighlightRange = 100.
 
 let discretizeToGrid v =
-    let fGridSize = float gridSize
-    (fGridSize * (floor (v / (float fGridSize))))
+    let gridSize = float gridSize
+    let leftDist = v % gridSize
+    if leftDist < gridSize - leftDist then v - leftDist else v + gridSize - leftDist
 
 let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
     let borderSize = 3.
@@ -168,8 +169,10 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                 Y1 portPos.Y
                 X2 p.X
                 Y2 p.Y
-                SVGAttr.Stroke "Purple"
+                SVGAttr.Stroke "green"
                 SVGAttr.StrokeWidth "3px"
+                SVGAttr.StrokeOpacity 1
+                SVGAttr.StrokeDasharray "5, 3"
             ] []
         | _ -> g [] []
 
@@ -241,7 +244,17 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.SetSelected [])))
 
     let highlightPortsNearCmd p =
-        let portsNearMouse = Symbol.portsInRange model.Wire.Symbol p portHighlightRange
+        let currentType = 
+                match model.DragState with
+                | WireCreation (pId, _) -> Some <| Symbol.portType model.Wire.Symbol pId
+                | _ -> None
+        let portsNearMouse =
+            Symbol.portsInRange model.Wire.Symbol p portHighlightRange
+            |> List.filter (fun pId ->
+                match currentType with
+                | Some pType -> pType <> Symbol.portType model.Wire.Symbol pId
+                | None -> true
+            )
         Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.HighlightPorts portsNearMouse)))
 
     let saveStateIfDraggedCmd didDrag prevWireModel =
@@ -463,7 +476,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
               | Copied sIdLst ->
                   Cmd.batch (
                       List.map (fun (sType, p) ->
-                          Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (sType, posAdd p model.MousePosition))))
+                          Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition)))))
                       ) sIdLst
                       @ [Cmd.ofMsg (SaveState model.Wire)]
                   )
