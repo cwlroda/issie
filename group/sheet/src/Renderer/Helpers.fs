@@ -30,6 +30,10 @@ let posLength p =
 let posDist a b =
     posLength <| posDiff a b
 
+let midPt (aPos: XYPos) (bPos: XYPos): XYPos =
+    let diff = posDiff bPos aPos
+    posAdd aPos (posOf (diff.X / 2.) (diff.Y / 2.))
+
 type BBox = {
     Pos: XYPos
     Width: float

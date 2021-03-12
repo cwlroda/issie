@@ -175,9 +175,10 @@ let portType (symModel: Model) (portId: PortId) : PortType =
     let foundPort = findPort symModel portId
     foundPort.PortType
 
-let portWidth (symModel: Model) (portId: PortId) : PortWidth = 
+let portWidth (symModel: Model) (portId: PortId) : int option = 
     let foundPort = findPort symModel portId
-    foundPort.Width
+    match foundPort.Width with
+    | PortWidth x -> Some x
 
 let getSymbolFromSymbolId (symModel:Model) (symId:ComponentId) : Symbol = 
     symModel

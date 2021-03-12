@@ -332,7 +332,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 DragState = DragState.Wire (false, model.Wire)
             }, Cmd.batch [
                 deselectSymbolsCmd
-                Cmd.ofMsg (Wire (BusWire.Select wId))
+                Cmd.ofMsg (Wire (BusWire.SetSelected wId))
                 Cmd.ofMsg (Wire (BusWire.StartDrag (wId, snapToGrid p)))
             ]
         | (None, None, None, Control) ->
@@ -362,7 +362,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 | SelectionState.Wire wId ->
                     Cmd.batch [
                         deselectSymbolsCmd
-                        Cmd.ofMsg (Wire (BusWire.Select wId))
+                        Cmd.ofMsg (Wire (BusWire.SetSelected wId))
                     ]
                 | SelectionState.Empty ->
                     Cmd.batch [
@@ -435,7 +435,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             , match model.Selection with
               | SelectionState.Wire wId ->
                   Cmd.batch [
-                      Cmd.ofMsg (Wire (BusWire.Delete wId))
+                      Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
                       Cmd.ofMsg <| SaveState model.Wire
                   ]
               | Symbols sIdLst ->
