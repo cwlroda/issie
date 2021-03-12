@@ -237,7 +237,9 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | MergeWires | SplitWire _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 100.
         | BusSelection _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 200., mulOfFive 90.
         |_ ->  mulOfFive position.X, mulOfFive position.Y,mulOfFive 60.,mulOfFive 100.
-    let portTemplate (portNumber:int) (portType: PortType) (portPos:float) (portWidth:PortWidth)=
+
+
+    let portTemplate (portNumber:int) (portType: PortType) (portPos:float) (portWidth:PortWidth) :Port=
         let offset = 
             match portType with 
             |PortType.Input -> 0.
@@ -769,9 +771,14 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                                         InputPorts =
                                             sym.Component.InputPorts
                                                 |>List.map (fun checkPort ->
-                                                    {checkPort with
-                                                        Hover = PortHover false
-                                                    }
+                                                    if checkPort = elem then
+                                                        {checkPort with
+                                                            Hover = PortHover true
+                                                        }
+                                                    else
+                                                        {checkPort with
+                                                            Hover = PortHover false
+                                                        }
                                                 )           
                                     }
                             }
@@ -782,9 +789,14 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                                         OutputPorts =
                                             sym.Component.OutputPorts
                                                 |>List.map (fun checkPort ->
-                                                    {checkPort with
-                                                        Hover = PortHover false
-                                                    }
+                                                    if checkPort = elem then
+                                                        {checkPort with
+                                                            Hover = PortHover true
+                                                        }
+                                                    else
+                                                        {checkPort with
+                                                            Hover = PortHover false
+                                                        }
                                                 )       
                                     }
                             }
