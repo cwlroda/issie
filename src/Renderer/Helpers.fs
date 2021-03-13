@@ -78,6 +78,14 @@ let overlaps (b1: BBox) (b2: BBox): bool =
         || isLeftOf b2 b1
     )
 
+// snaps wire segments to grid (variable grid size)
+let snapToGrid (pos: XYPos) : XYPos =
+    let gridSize = 10.
+    {
+        X = (pos.X - (pos.X % gridSize))
+        Y = (pos.Y - (pos.Y % gridSize))
+    }
+
 type MouseOp = 
     /// button up
     | Up
