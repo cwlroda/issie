@@ -79,12 +79,6 @@ type LabelRenderProps =
         Pos: XYPos
     }
 
-let makeBBox (pos: XYPos) (width: float) (height: float) : BBox =
-    {
-        Pos = pos
-        Width = width
-        Height = height
-    }
 
 /// Takes as input a relative position between two points and outputs true if the two original points are horzontal and false otherwise
 let isVertical (relPos: XYPos): bool =
@@ -94,19 +88,19 @@ let createSegBB (startPos: XYPos) (endPos: XYPos) : BBox =
     match posDiff endPos startPos with
     // left to right
     | x when x.X > 0. ->
-        makeBBox (posOf startPos.X (startPos.Y - 5.)) (abs x.X) 10.
+        toBBox startPos.X (startPos.Y - 5.) (abs x.X) 10.
     // right to left
     | x when x.X < 0. ->
-        makeBBox (posOf endPos.X (endPos.Y - 5.)) (abs x.X) 10.
+       toBBox endPos.X (endPos.Y - 5.) (abs x.X) 10.
     // top to bottom
     | x when x.Y > 0. ->
-        makeBBox (posOf (startPos.X - 5.) startPos.Y) 10. (abs x.Y)
+        toBBox  (startPos.X - 5.) startPos.Y 10. (abs x.Y)
     // bottom to top
     | x when x.Y < 0. ->
-        makeBBox (posOf (endPos.X - 5.) endPos.Y) 10. (abs x.Y)
+        toBBox (endPos.X - 5.) endPos.Y 10. (abs x.Y)
     // failsafe case with no bounding box
     | _ ->
-        makeBBox (posOf 0. 0.) 0. 0.
+        toBBox 0. 0. 0. 0.
 
 let inBBox (point: XYPos) (bbox: BBox) : bool =
     let x = point.X - bbox.Pos.X
