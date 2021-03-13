@@ -387,6 +387,20 @@ let getWireColor (w: Wire): HighLightColor =
     | w when w.WireWidth > 1 -> Blue
     | _ -> Grey
 
+
+let nearestGridPt (pt: XYPos) =
+// Rounds to the floor of the dividsion
+    posOf (5.* float(int (pt.X/5.))) (5. * float (int (pt.Y/5.)))
+
+let fitSeg (wSegs: Map<WireSegId, WireSegment>) = 
+        Map.map (fun _ (s: WireSegment) -> {s with StartPos = nearestGridPt s.StartPos; EndPos = nearestGridPt s.EndPos}) wSegs
+
+
+///Updates all the vertices positions to sit 5px gird
+let fitToGrid (wireMap: Map<ConnectionId, Wire>) =
+    
+    Map.map (fun _ (w:Wire)-> {w with Segments = (fitSeg w.Segments)}) wireMap
+
 /// Reset the color of all the wires except those set in red to highlight error
 let setUnselectedColor (wModel: Model): Map<ConnectionId, Wire> =
     Map.map (fun wId w ->
@@ -403,12 +417,10 @@ let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId
         } wModel.WX
 
 let endDrag (wModel: Model): Map<ConnectionId, Wire> =
-    // let wxUpdate =
-    //     {wModel with WX = fitToGrid wModel}
-
-    // let modelUpdate = { wModel with WX = wxUpdate }
+    let wxUpdate =
+         {wModel with WX = fitToGrid wModel.WX}
     // setUnselectedColor modelUpdate
-    setUnselectedColor wModel
+    setUnselectedColor wxUpdate
 
 let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId, Wire> =
     let wire = findWire wModel wId
