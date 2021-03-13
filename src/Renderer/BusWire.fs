@@ -102,17 +102,6 @@ let createSegBB (startPos: XYPos) (endPos: XYPos) : BBox =
     | _ ->
         toBBox 0. 0. 0. 0.
 
-let inBBox (point: XYPos) (bbox: BBox) : bool =
-    let x = point.X - bbox.Pos.X
-    let y = point.Y - bbox.Pos.Y
-    
-    match x, y with
-    | x, y when x <= bbox.Width
-            && x >= 0.
-            && y <= bbox.Height
-            && y >= 0. 
-            -> true
-    | _, _ -> false
 
 let checkPortWidths (wModel: Model) (srcPort: PortId) (tgtPort: PortId) : Result<int, string> =
     let getWidth pId = Symbol.portWidth wModel.Symbol pId
@@ -157,7 +146,7 @@ let isFirstOrLastSegment (wModel: Model) (wire: Wire) (seg: WireSegment) : bool 
     | _ -> false
 
 let isTargetSeg pos startPos endPos =
-    (createSegBB startPos endPos) |> (inBBox pos)
+    (createSegBB startPos endPos) |> (containsPoint pos)
 
 // finds closest wire segment to mouse position
 let findClosestSegment (wire: Wire) (pos: XYPos) : WireSegId option =
@@ -554,7 +543,7 @@ let distPtToWire (pt: XYPos) (wire: Wire) =
 
 let isTargetWire (pt: XYPos) (wire: Wire) =
     let ptCloseToSeg (startPt: XYPos) (endPt: XYPos): bool =
-        createSegBB startPt endPt |> (inBBox pt)
+        createSegBB startPt endPt |> (containsPoint pt)
 
     let res =
         wire.Segments
