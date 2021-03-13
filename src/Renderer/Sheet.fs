@@ -65,7 +65,7 @@ type Msg =
 /// Constants that will be turned into settings at a later date
 let gridSize = 10
 let undoHistorySize = 50
-let portHighlightRange = 100.
+let portHighlightRange = 50.
 
 let discretizeToGrid v =
     let gridSize = float gridSize
