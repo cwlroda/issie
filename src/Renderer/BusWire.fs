@@ -121,19 +121,22 @@ let findWire (wModel: Model) (wId: ConnectionId): Wire =
     | Some vWire -> vWire
     | None -> failwithf "Invalid Id passed"
 
+
 // find previous segment connected to current segment
-let findPrevSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) : WireSegId option =
+let findPrevSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) (segDirection: Direction) : WireSegId option =
     let wire = findWire wModel wId
     
     wire.Segments
-    |> Map.tryFindKey (fun _ v -> v.EndPos = pos)
+    |> Map.filter (fun _ v -> v.EndPos = pos)
+    |> Map.tryFindKey (fun _ s -> s.Direction <> segDirection)
 
 // find next segment connected to current segment
-let findNextSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) : WireSegId option =
+let findNextSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) (segDirection: Direction) : WireSegId option =
     let wire = findWire wModel wId
 
     wire.Segments
-    |> Map.tryFindKey (fun _ v -> v.StartPos = pos)
+    |> Map.filter (fun _ v -> v.StartPos = pos)
+    |> Map.tryFindKey (fun _ s -> s.Direction <> segDirection)
 
 // checks if segment is connected directly to either input or output port
 let isFirstOrLastSegment (wModel: Model) (wire: Wire) (seg: WireSegment) : bool =
@@ -213,7 +216,7 @@ let autoConnect
     let seg = segMap.[sId]
 
     let updatePrev =
-        match findPrevSegment wModel wId startPos with
+        match findPrevSegment wModel wId startPos seg.Direction with
         | Some x ->
             Map.add x {
                 segMap.[x] with EndPos = seg.StartPos
@@ -221,7 +224,7 @@ let autoConnect
         | None ->
             segMap
 
-    match findNextSegment wModel wId endPos with
+    match findNextSegment wModel wId endPos seg.Direction with
     | Some x ->
         Map.add x {
             segMap.[x] with StartPos = seg.EndPos
@@ -395,10 +398,8 @@ let nearestGridPt (pt: XYPos) =
 let fitSeg (wSegs: Map<WireSegId, WireSegment>) = 
         Map.map (fun _ (s: WireSegment) -> {s with StartPos = nearestGridPt s.StartPos; EndPos = nearestGridPt s.EndPos}) wSegs
 
-
 ///Updates all the vertices positions to sit 5px gird
 let fitToGrid (wireMap: Map<ConnectionId, Wire>) =
-    
     Map.map (fun _ (w:Wire)-> {w with Segments = (fitSeg w.Segments)}) wireMap
 
 /// Reset the color of all the wires except those set in red to highlight error
@@ -432,32 +433,48 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId,
         | None -> failwithf "This shouldn't happen!"
 
     let seg = wire.Segments.[selectedId]
+    let origStartPos = seg.StartPos
+    let origEndPos = seg.EndPos
 
-    match isFirstOrLastSegment wModel wire seg with
-    | false ->
-        let origStartPos = seg.StartPos
-        let origEndPos = seg.EndPos
-
-        let offset =
+    let offset =
             match seg.Direction with
             | Horizontal -> posOf 0. diff.Y
             | Vertical -> posOf diff.X 0.
 
-        let updatedSegs =
+    let isSrcConnection = findPrevSegment wModel wId seg.StartPos seg.Direction
+    let istgtConnection = findNextSegment wModel wId seg.EndPos seg.Direction
+    //match isFirstOrLastSegment wModel wire seg with
+
+    let updatedSegs =
+        match isSrcConnection, istgtConnection with
+        
+        | Some segId, _ -> 
+            Map.add seg.Id {
+                seg with
+                    StartPos = posAdd seg.StartPos offset
+                    EndPos = posAdd seg.EndPos diff 
+            } wire.Segments
+        | _, Some segId  -> 
+            Map.add seg.Id {
+                    seg with
+                        StartPos = posAdd seg.StartPos diff
+                        EndPos = posAdd seg.EndPos offset
+                } wire.Segments
+        | _ -> 
             Map.add seg.Id {
                 seg with
                     StartPos = posAdd seg.StartPos offset
                     EndPos = posAdd seg.EndPos offset
             } wire.Segments
 
-        wModel.WX
+    wModel.WX
         |> Map.add wId {
             wire with
                 Segments = autoConnect wModel wire.Id origStartPos origEndPos seg.Id updatedSegs
                 LastDragPos = pos
         }
-    | true ->
-        wModel.WX
+        
+        
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     match msg with
