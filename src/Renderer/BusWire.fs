@@ -181,7 +181,7 @@ let autoRoute (wModel: Model) (wire: Wire) : Map<WireSegId, WireSegment> =
     let defSeg pos wAdj hAdj =
         match wireDir.X, wireDir.Y with
         // case 1
-        | x, y when x > 0. && y = 0. -> [pos]
+        //| x, y when x > 0. && y = 0. -> [pos] // Makes it impossible for manual port changes
         // cases 2 & 3
         | x, _ when x > 0. ->
             [
@@ -402,6 +402,38 @@ let fitSeg (wSegs: Map<WireSegId, WireSegment>) =
 let fitToGrid (wireMap: Map<ConnectionId, Wire>) =
     Map.map (fun _ (w:Wire)-> {w with Segments = (fitSeg w.Segments)}) wireMap
 
+let checkPortConnections (wModel: Model) (wire: Wire) =
+    let srcSeg =
+        Map.pick (fun _ (s: WireSegment)->  findPrevSegment wModel wire.Id s.StartPos s.Direction) wire.Segments
+    let tgtSeg = Map.pick (fun _ (s:WireSegment)-> findNextSegment wModel wire.Id s.EndPos s.Direction) wire.Segments
+
+    let rec findClosestPort pos n =
+        match Symbol.portsInRange wModel.Symbol pos n with
+        | [] -> None
+        | [pId] -> Some pId
+        | lst -> findClosestPort pos (n-1.)
+
+
+    match findClosestPort (wire.Segments.[srcSeg]).StartPos 5., findClosestPort (wire.Segments.[tgtSeg]).EndPos 5. with
+    | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort -> wire
+    | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
+        let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX}
+        let updatedWire = createWire updatedModel pId wire.TargetPort (Some wire.Id)  
+        {updatedWire with Segments = wire.Segments}
+    | Some srcPId, Some pId ->  
+        let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} // to not trigger double input warning
+        let updatedWire = createWire updatedModel wire.SrcPort pId (Some wire.Id)
+        {updatedWire with Segments = wire.Segments}
+
+    | None, _ | _ , None -> {wire with Segments = autoRoute wModel wire}
+    | _ -> failwithf "This shoulnt happen"
+
+    
+    
+
+let updateConnections (wModel: Model): Map<ConnectionId, Wire> =
+    Map.map (fun _ w -> checkPortConnections wModel w) wModel.WX
+
 /// Reset the color of all the wires except those set in red to highlight error
 let setUnselectedColor (wModel: Model): Map<ConnectionId, Wire> =
     Map.map (fun wId w ->
@@ -417,11 +449,7 @@ let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId
             LastDragPos = pos
         } wModel.WX
 
-let endDrag (wModel: Model): Map<ConnectionId, Wire> =
-    let wxUpdate =
-         {wModel with WX = fitToGrid wModel.WX}
-    // setUnselectedColor modelUpdate
-    setUnselectedColor wxUpdate
+
 
 let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId, Wire> =
     let wire = findWire wModel wId
@@ -443,7 +471,6 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId,
 
     let isSrcConnection = findPrevSegment wModel wId seg.StartPos seg.Direction
     let istgtConnection = findNextSegment wModel wId seg.EndPos seg.Direction
-    //match isFirstOrLastSegment wModel wire seg with
 
     let updatedSegs =
         match isSrcConnection, istgtConnection with
@@ -474,7 +501,11 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId,
                 LastDragPos = pos
         }
         
-        
+let endDrag (wModel: Model): Map<ConnectionId, Wire> =
+    let wxUpdate =
+         {wModel with WX = fitToGrid wModel.WX}
+
+    setUnselectedColor {wxUpdate with WX = updateConnections wxUpdate}
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     match msg with
