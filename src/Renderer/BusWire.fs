@@ -180,19 +180,16 @@ let autoRoute (wModel: Model) (wire: Wire) : Map<WireSegId, WireSegment> =
 
     let defSeg pos wAdj hAdj =
         match wireDir.X, wireDir.Y with
-        // case 1
-        //| x, y when x > 0. && y = 0. -> [pos] // Makes it impossible for manual port changes
-        // cases 2 & 3
         | x, _ when x > 0. ->
             [
-                pos
-                { X = midPos.X; Y = pos.Y }
+                snapToGrid pos
+                snapToGrid { X = midPos.X; Y = pos.Y }
             ]
         | _ ->
             [
-                pos
-                { X = pos.X + hAdj; Y = pos.Y }
-                { X = pos.X + hAdj; Y = wAdj }
+                snapToGrid pos
+                snapToGrid { X = pos.X + hAdj; Y = pos.Y }
+                snapToGrid { X = pos.X + hAdj; Y = wAdj }
             ]
 
     let initialSegs, finalSegs =
@@ -305,18 +302,18 @@ let singleSegView =
             let segBBox = createSegBB props.StartPos props.EndPos
 
             g [] [
-                rect
-                    [
-                        X segBBox.Pos.X
-                        Y segBBox.Pos.Y
-                        Rx 5.
-                        Ry 5.
-                        SVGAttr.Width segBBox.Width
-                        SVGAttr.Height segBBox.Height
-                        SVGAttr.StrokeWidth "1px"
-                        SVGAttr.Stroke "Black"
-                        SVGAttr.FillOpacity 0
-                    ] []
+                // rect
+                //     [
+                //         X segBBox.Pos.X
+                //         Y segBBox.Pos.Y
+                //         Rx 5.
+                //         Ry 5.
+                //         SVGAttr.Width segBBox.Width
+                //         SVGAttr.Height segBBox.Height
+                //         SVGAttr.StrokeWidth "1px"
+                //         SVGAttr.Stroke "Black"
+                //         SVGAttr.FillOpacity 0
+                //     ] []
 
                 line 
                     [
@@ -551,8 +548,10 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 let init n () =
     let symbols, cmd = Symbol.init ()
 
-    let pLst = Symbol.allPortsInModel symbols
-               |> List.map (fun p -> p.PortId)
+    let pLst =
+        Symbol.allPortsInModel symbols
+        |> List.map (fun p -> p.PortId)
+
     let rng = System.Random 0
 
     let model = {
@@ -568,7 +567,7 @@ let init n () =
             pLst.[rng.Next(0, n - 1)], pLst.[rng.Next(0, n - 1)]
 
         { model with
-          WX = addWire model p1 p2
+            WX = addWire model p1 p2
         }
 
     let model = makeRandomWire()
