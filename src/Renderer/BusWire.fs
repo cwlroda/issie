@@ -79,12 +79,6 @@ type LabelRenderProps =
         Pos: XYPos
     }
 
-let makeBBox (pos: XYPos) (width: float) (height: float) : BBox =
-    {
-        Pos = pos
-        Width = width
-        Height = height
-    }
 
 /// Takes as input a relative position between two points and outputs true if the two original points are horzontal and false otherwise
 let isVertical (relPos: XYPos): bool =
@@ -94,31 +88,20 @@ let createSegBB (startPos: XYPos) (endPos: XYPos) : BBox =
     match posDiff endPos startPos with
     // left to right
     | x when x.X > 0. ->
-        makeBBox (posOf startPos.X (startPos.Y - 5.)) (abs x.X) 10.
+        toBBox startPos.X (startPos.Y - 5.) (abs x.X) 10.
     // right to left
     | x when x.X < 0. ->
-        makeBBox (posOf endPos.X (endPos.Y - 5.)) (abs x.X) 10.
+       toBBox endPos.X (endPos.Y - 5.) (abs x.X) 10.
     // top to bottom
     | x when x.Y > 0. ->
-        makeBBox (posOf (startPos.X - 5.) startPos.Y) 10. (abs x.Y)
+        toBBox  (startPos.X - 5.) startPos.Y 10. (abs x.Y)
     // bottom to top
     | x when x.Y < 0. ->
-        makeBBox (posOf (endPos.X - 5.) endPos.Y) 10. (abs x.Y)
+        toBBox (endPos.X - 5.) endPos.Y 10. (abs x.Y)
     // failsafe case with no bounding box
     | _ ->
-        makeBBox (posOf 0. 0.) 0. 0.
+        toBBox 0. 0. 0. 0.
 
-let inBBox (point: XYPos) (bbox: BBox) : bool =
-    let x = point.X - bbox.Pos.X
-    let y = point.Y - bbox.Pos.Y
-    
-    match x, y with
-    | x, y when x <= bbox.Width
-            && x >= 0.
-            && y <= bbox.Height
-            && y >= 0. 
-            -> true
-    | _, _ -> false
 
 let checkPortWidths (wModel: Model) (srcPort: PortId) (tgtPort: PortId) : Result<int, string> =
     let getWidth pId = Symbol.portWidth wModel.Symbol pId
@@ -138,19 +121,22 @@ let findWire (wModel: Model) (wId: ConnectionId): Wire =
     | Some vWire -> vWire
     | None -> failwithf "Invalid Id passed"
 
+
 // find previous segment connected to current segment
-let findPrevSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) : WireSegId option =
+let findPrevSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) (segDirection: Direction) : WireSegId option =
     let wire = findWire wModel wId
     
     wire.Segments
-    |> Map.tryFindKey (fun _ v -> v.EndPos = pos)
+    |> Map.filter (fun _ v -> v.EndPos = pos)
+    |> Map.tryFindKey (fun _ s -> s.Direction <> segDirection)
 
 // find next segment connected to current segment
-let findNextSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) : WireSegId option =
+let findNextSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) (segDirection: Direction) : WireSegId option =
     let wire = findWire wModel wId
 
     wire.Segments
-    |> Map.tryFindKey (fun _ v -> v.StartPos = pos)
+    |> Map.filter (fun _ v -> v.StartPos = pos)
+    |> Map.tryFindKey (fun _ s -> s.Direction <> segDirection)
 
 // checks if segment is connected directly to either input or output port
 let isFirstOrLastSegment (wModel: Model) (wire: Wire) (seg: WireSegment) : bool =
@@ -163,7 +149,7 @@ let isFirstOrLastSegment (wModel: Model) (wire: Wire) (seg: WireSegment) : bool 
     | _ -> false
 
 let isTargetSeg pos startPos endPos =
-    (createSegBB startPos endPos) |> (inBBox pos)
+    (createSegBB startPos endPos) |> (containsPoint pos)
 
 // finds closest wire segment to mouse position
 let findClosestSegment (wire: Wire) (pos: XYPos) : WireSegId option =
@@ -194,9 +180,6 @@ let autoRoute (wModel: Model) (wire: Wire) : Map<WireSegId, WireSegment> =
 
     let defSeg pos wAdj hAdj =
         match wireDir.X, wireDir.Y with
-        // case 1
-        | x, y when x > 0. && y = 0. -> [snapToGrid pos]
-        // cases 2 & 3
         | x, _ when x > 0. ->
             [
                 snapToGrid pos
@@ -230,7 +213,7 @@ let autoConnect
     let seg = segMap.[sId]
 
     let updatePrev =
-        match findPrevSegment wModel wId startPos with
+        match findPrevSegment wModel wId startPos seg.Direction with
         | Some x ->
             Map.add x {
                 segMap.[x] with EndPos = seg.StartPos
@@ -238,7 +221,7 @@ let autoConnect
         | None ->
             segMap
 
-    match findNextSegment wModel wId endPos with
+    match findNextSegment wModel wId endPos seg.Direction with
     | Some x ->
         Map.add x {
             segMap.[x] with StartPos = seg.EndPos
@@ -404,6 +387,50 @@ let getWireColor (w: Wire): HighLightColor =
     | w when w.WireWidth > 1 -> Blue
     | _ -> Grey
 
+
+let nearestGridPt (pt: XYPos) =
+// Rounds to the floor of the dividsion
+    posOf (5.* float(int (pt.X/5.))) (5. * float (int (pt.Y/5.)))
+
+let fitSeg (wSegs: Map<WireSegId, WireSegment>) = 
+        Map.map (fun _ (s: WireSegment) -> {s with StartPos = nearestGridPt s.StartPos; EndPos = nearestGridPt s.EndPos}) wSegs
+
+///Updates all the vertices positions to sit 5px gird
+let fitToGrid (wireMap: Map<ConnectionId, Wire>) =
+    Map.map (fun _ (w:Wire)-> {w with Segments = (fitSeg w.Segments)}) wireMap
+
+let checkPortConnections (wModel: Model) (wire: Wire) =
+    let srcSeg =
+        Map.pick (fun _ (s: WireSegment)->  findPrevSegment wModel wire.Id s.StartPos s.Direction) wire.Segments
+    let tgtSeg = Map.pick (fun _ (s:WireSegment)-> findNextSegment wModel wire.Id s.EndPos s.Direction) wire.Segments
+
+    let rec findClosestPort pos n =
+        match Symbol.portsInRange wModel.Symbol pos n with
+        | [] -> None
+        | [pId] -> Some pId
+        | lst -> findClosestPort pos (n-1.)
+
+
+    match findClosestPort (wire.Segments.[srcSeg]).StartPos 5., findClosestPort (wire.Segments.[tgtSeg]).EndPos 5. with
+    | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort -> wire
+    | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
+        let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX}
+        let updatedWire = createWire updatedModel pId wire.TargetPort (Some wire.Id)  
+        {updatedWire with Segments = wire.Segments}
+    | Some srcPId, Some pId ->  
+        let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} // to not trigger double input warning
+        let updatedWire = createWire updatedModel wire.SrcPort pId (Some wire.Id)
+        {updatedWire with Segments = wire.Segments}
+
+    | None, _ | _ , None -> {wire with Segments = autoRoute wModel wire}
+    | _ -> failwithf "This shoulnt happen"
+
+    
+    
+
+let updateConnections (wModel: Model): Map<ConnectionId, Wire> =
+    Map.map (fun _ w -> checkPortConnections wModel w) wModel.WX
+
 /// Reset the color of all the wires except those set in red to highlight error
 let setUnselectedColor (wModel: Model): Map<ConnectionId, Wire> =
     Map.map (fun wId w ->
@@ -419,13 +446,7 @@ let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId
             LastDragPos = pos
         } wModel.WX
 
-let endDrag (wModel: Model): Map<ConnectionId, Wire> =
-    // let wxUpdate =
-    //     {wModel with WX = fitToGrid wModel}
 
-    // let modelUpdate = { wModel with WX = wxUpdate }
-    // setUnselectedColor modelUpdate
-    setUnselectedColor wModel
 
 let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId, Wire> =
     let wire = findWire wModel wId
@@ -437,32 +458,51 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId,
         | None -> failwithf "This shouldn't happen!"
 
     let seg = wire.Segments.[selectedId]
+    let origStartPos = seg.StartPos
+    let origEndPos = seg.EndPos
 
-    match isFirstOrLastSegment wModel wire seg with
-    | false ->
-        let origStartPos = seg.StartPos
-        let origEndPos = seg.EndPos
-
-        let offset =
+    let offset =
             match seg.Direction with
             | Horizontal -> posOf 0. diff.Y
             | Vertical -> posOf diff.X 0.
 
-        let updatedSegs =
+    let isSrcConnection = findPrevSegment wModel wId seg.StartPos seg.Direction
+    let istgtConnection = findNextSegment wModel wId seg.EndPos seg.Direction
+
+    let updatedSegs =
+        match isSrcConnection, istgtConnection with
+        
+        | Some segId, _ -> 
+            Map.add seg.Id {
+                seg with
+                    StartPos = posAdd seg.StartPos offset
+                    EndPos = posAdd seg.EndPos diff 
+            } wire.Segments
+        | _, Some segId  -> 
+            Map.add seg.Id {
+                    seg with
+                        StartPos = posAdd seg.StartPos diff
+                        EndPos = posAdd seg.EndPos offset
+                } wire.Segments
+        | _ -> 
             Map.add seg.Id {
                 seg with
                     StartPos = posAdd seg.StartPos offset
                     EndPos = posAdd seg.EndPos offset
             } wire.Segments
 
-        wModel.WX
+    wModel.WX
         |> Map.add wId {
             wire with
                 Segments = autoConnect wModel wire.Id origStartPos origEndPos seg.Id updatedSegs
                 LastDragPos = pos
         }
-    | true ->
-        wModel.WX
+        
+let endDrag (wModel: Model): Map<ConnectionId, Wire> =
+    let wxUpdate =
+         {wModel with WX = fitToGrid wModel.WX}
+
+    setUnselectedColor {wxUpdate with WX = updateConnections wxUpdate}
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     match msg with
@@ -562,7 +602,7 @@ let distPtToWire (pt: XYPos) (wire: Wire) =
 
 let isTargetWire (pt: XYPos) (wire: Wire) =
     let ptCloseToSeg (startPt: XYPos) (endPt: XYPos): bool =
-        createSegBB startPt endPt |> (inBBox pt)
+        createSegBB startPt endPt |> (containsPoint pt)
 
     let res =
         wire.Segments
