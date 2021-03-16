@@ -364,8 +364,19 @@ let addWire (wModel: Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, 
     Map.add newWire.Id {newWire with Segments = autoRoute wModel newWire} wModel.WX
 
 ///Given a connectionId deletes the given wire
-let deletWire (wModel: Model) (wId: ConnectionId) : Map<ConnectionId, Wire> =
+let deleteWire (wModel: Model) (wId: ConnectionId) : Map<ConnectionId, Wire> =
     Map.remove wId wModel.WX
+
+let deleteWiresOfSymbols (wModel: Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
+    let pIdList = Symbol.getPortsFromSymbols wModel.Symbol sIdLst
+
+    wModel.WX
+    |> Map.filter (fun _ v ->
+        match List.contains v.SrcPort pIdList, List.contains v.TargetPort pIdList with
+        | true, _ -> false
+        | _, true -> false
+        | _ -> true
+    )
 
 /// Update the colour on the given wire
 let setWireColor (wModel: Model) (wId: ConnectionId) (c: HighLightColor): Wire =
@@ -492,7 +503,7 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId,
         
 let endDrag (wModel: Model): Map<ConnectionId, Wire> =
     let wxUpdate =
-         {wModel with WX = fitToGrid wModel.WX}
+        {wModel with WX = fitToGrid wModel.WX}
 
     setUnselectedColor {wxUpdate with WX = updateConnections wxUpdate}
 
@@ -505,6 +516,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             match sMsg with
             | Symbol.Dragging (symId, _) ->
                 updateSymWires model symId
+            | Symbol.DeleteSymbols sIdLst ->
+                deleteWiresOfSymbols model sIdLst
             | _ -> model.WX
 
         { model with Symbol = sm; WX = wx }, Cmd.map Symbol sCmd
@@ -513,7 +526,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         let wxUpdated = addWire model wMsgId1 wMsgId2
         { model with WX = wxUpdated }, Cmd.none
     | DeleteWire wMsg ->
-        let wxUpdated = deletWire model wMsg
+        let wxUpdated = deleteWire model wMsg
         { model with WX = wxUpdated }, Cmd.none
     | SetSelected wMsg ->
         let wxUpdated = setSelectedColor model wMsg
@@ -533,7 +546,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     | SetColor c ->
         let wxUpdated =
             Map.map (fun wId _ -> setWireColor model wId c) model.WX
-
         { model with WX = wxUpdated }, Cmd.none
 
 ///Dummy function to initialize for demo
