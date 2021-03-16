@@ -50,7 +50,7 @@ type Msg =
     | EndDragging
     // | AddSymbol of comp:Component*pos:XYPos // used by demo code to add a circle
     //| DeleteSymbol of sId:ComponentId 
-    | AddSymbol of sType: ComponentType * pos: XYPos
+    | AddSymbol of sType: ComponentType * pos: XYPos * label: string
     | DeleteSymbols of sIdLst: ComponentId list
     | UpdateSymbolModelWithComponent of Component // Issie interface
     // | SetSelectedDummy of topLeft:XYPos * bottomRight:XYPos // 
@@ -195,6 +195,9 @@ let getHostId (symModel: Model) (portId: PortId) : ComponentId =
 
 let symbolType (symModel: Model) (compId: ComponentId) : ComponentType = 
     (Map.find compId symModel).Component.Type
+
+let symbolLabel (symModel: Model) (compId: ComponentId) : string = 
+    (Map.find compId symModel).Component.Label
 
 let symbolBBox (symModel: Model) (compId: ComponentId) : BBox =
     let foundSymbol = 
@@ -804,10 +807,10 @@ let updateSymbolModelWithComponent (symModel: Model) (comp: Component) : Model =
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     // | AddSymbol (comp,pos)-> 
-    | AddSymbol (sType, pos) -> 
+    | AddSymbol (sType, pos, label) -> 
         let compId = ComponentId (Helpers.uuid())
         let comp =
-            createSpecificComponent compId pos sType (string (rng.Next (0,100)))
+            createSpecificComponent compId pos sType label
         let sym = 
             {
                 LastDragPos = {X=0. ; Y=0.}

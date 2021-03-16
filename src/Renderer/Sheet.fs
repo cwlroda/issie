@@ -22,7 +22,7 @@ type SelectionState =
     | Empty
 
 type CopyState =
-    | Copied of (CommonTypes.ComponentType * XYPos) list
+    | Copied of (CommonTypes.ComponentType * XYPos * string) list
     | Uninitialized
 
 type Model = {
@@ -443,26 +443,27 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | AltC ->
             match model.Selection with
             | Symbols sIdLst ->
-                let sIdAndPosLst = 
+                let sCopyDataLst = 
                     sIdLst
                     |> List.map (fun sId ->
                         (Symbol.symbolType model.Wire.Symbol sId,
-                         (Symbol.symbolBBox model.Wire.Symbol sId).Pos)
+                        (Symbol.symbolBBox model.Wire.Symbol sId).Pos,
+                        (Symbol.symbolLabel model.Wire.Symbol sId) + "_copy")
                     )
 
                 let topLeftOfSymbols =
                     let middle lst = List.min lst + (List.max lst - List.min lst) / 2.
 
-                    sIdAndPosLst
-                    |> List.map (fun (_, p) -> (p.X, p.Y))
+                    sCopyDataLst
+                    |> List.map (fun (_, p, _) -> (p.X, p.Y))
                     |> List.fold (fun (xs, ys) (x, y) -> (x :: xs, y :: ys)) ([], [])
                     |> fun (xs, ys) -> posOf (middle xs) (middle ys)
                     
-                let sIdAndPosLst = 
-                    sIdAndPosLst
-                    |> List.map (fun (sId, p) -> (sId, posDiff p topLeftOfSymbols))
+                let sCopyDataLst = 
+                    sCopyDataLst
+                    |> List.map (fun (sId, p, l) -> (sId, posDiff p topLeftOfSymbols, l))
 
-                { model with CopyState=CopyState.Copied sIdAndPosLst }
+                { model with CopyState=CopyState.Copied sCopyDataLst }
             | _ -> model
             , Cmd.none
         | AltV ->
@@ -470,8 +471,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             , match model.CopyState with
               | Copied sIdLst ->
                   Cmd.batch (
-                      List.map (fun (sType, p) ->
-                          Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition)))))
+                      List.map (fun (sType, p, sLabel) ->
+                          Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel))))
                       ) sIdLst
                       @ [Cmd.ofMsg (SaveState model.Wire)]
                   )
@@ -521,7 +522,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , Cmd.batch [
                     cmds
                     discardSelectionsCmd
-                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition))))
+                    Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and_01"))))
                     Cmd.ofMsg (SaveState model.Wire)
                 ]
             | MouseButton.Middle ->
