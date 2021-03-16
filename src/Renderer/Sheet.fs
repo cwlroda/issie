@@ -648,7 +648,7 @@ let view (model: Model) (dispatch: Msg -> unit) =
 
 
 let init () =
-    let model, cmds = (BusWire.init 40) ()
+    let model, cmds = (BusWire.init) ()
     {
         Wire = model
         Selection = Empty

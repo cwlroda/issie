@@ -130,8 +130,8 @@ module CommonTypes
         Id : ComponentId
         Type : ComponentType
         Label : string // All components have a label that may be empty.
-        InputPorts : Port list
-        OutputPorts : Port list
+        InputPorts : Map<PortId, Port>
+        OutputPorts : Map<PortId, Port>
         X : float
         Y : float
         H : float
