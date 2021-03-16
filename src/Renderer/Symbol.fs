@@ -135,7 +135,7 @@ let getTargetedSymbol (symModel: Model) (pos:XYPos) : ComponentId Option =
 let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     symModel
     |> Map.filter
-        (fun (sym:Symbol) ->
+        (fun _ (sym:Symbol) ->
             let symBBox = pointsToBBox (posOf sym.Component.X sym.Component.Y) (posOf (sym.Component.X+sym.Component.W) (sym.Component.Y+sym.Component.H))
             overlaps symBBox bbox
         )
