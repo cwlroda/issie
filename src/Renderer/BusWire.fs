@@ -397,10 +397,27 @@ let getWireColor (w: Wire): HighLightColor =
     | w when w.Error <> None -> Red
     | _ -> Blue
 
+let findSrcSeg (wModel: Model) (wire: Wire) : WireSegId =
+    let isSrc (seg: WireSegment): bool=
+        match findPrevSegment wModel wire.Id seg.StartPos seg.Direction with
+        | Some segId -> false
+        | _ -> true
+    match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
+    | Some segId -> segId
+    | None -> failwithf "Something in the check is wrong"
+
+let findtgtSeg (wModel: Model) (wire: Wire) : WireSegId =
+    let isSrc (seg: WireSegment): bool=
+        match findNextSegment wModel wire.Id seg.EndPos seg.Direction with
+        | Some segId -> false
+        | _ -> true
+    match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
+    | Some segId -> segId
+    | None -> failwithf "Something in the check is wrong"
+
 let checkPortConnections (wModel: Model) (wire: Wire) =
-    let srcSeg =
-        Map.pick (fun _ (s: WireSegment)->  findPrevSegment wModel wire.Id s.StartPos s.Direction) wire.Segments
-    let tgtSeg = Map.pick (fun _ (s:WireSegment)-> findNextSegment wModel wire.Id s.EndPos s.Direction) wire.Segments
+    let srcSegId = findSrcSeg wModel wire
+    let tgtSegId = findtgtSeg wModel wire     
 
     let rec findClosestPort pos n =
         match Symbol.portsInRange wModel.Symbol pos n with
@@ -408,7 +425,7 @@ let checkPortConnections (wModel: Model) (wire: Wire) =
         | [pId] -> Some pId
         | lst -> findClosestPort pos (n-1.)
 
-    match findClosestPort (wire.Segments.[srcSeg]).StartPos 5., findClosestPort (wire.Segments.[tgtSeg]).EndPos 5. with
+    match findClosestPort (wire.Segments.[srcSegId]).StartPos 5., findClosestPort (wire.Segments.[tgtSegId]).EndPos 5. with
     | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort -> wire
     | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX}
@@ -418,9 +435,10 @@ let checkPortConnections (wModel: Model) (wire: Wire) =
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} // to not trigger double input warning
         let updatedWire = createWire updatedModel wire.SrcPort pId (Some wire.Id)
         {updatedWire with Segments = wire.Segments}
+    | None, _ | _ , None -> 
 
-    | None, _ | _ , None -> {wire with Segments = autoRoute wModel wire}
-    | _ -> failwithf "This shoulnt happen"
+        {wire with Segments = autoRoute wModel wire}
+    
 
 let updateConnections (wModel: Model): Map<ConnectionId, Wire> =
     Map.map (fun _ w -> checkPortConnections wModel w) wModel.WX
@@ -527,7 +545,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         { model with WX = wxUpdated }, Cmd.none
     | EndDrag ->
         let wxUpdated = endDrag model
-        printf $"{wxUpdated}"
+
         { model with WX = wxUpdated }, Cmd.none
     | SetColor c ->
         let wxUpdated =
