@@ -126,10 +126,8 @@ let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     symModel
     |> List.filter
         (fun (sym:Symbol) ->
-            (sym.Component.X >= bbox.Pos.X)
-            && (sym.Component.Y >= bbox.Pos.Y)
-            && (sym.Component.X + sym.Component.W <= bbox.Pos.X + bbox.Width)
-            && (sym.Component.Y + sym.Component.H <= bbox.Pos.Y + bbox.Height)
+            let symBBox = pointsToBBox (posOf sym.Component.X sym.Component.Y) (posOf (sym.Component.X+sym.Component.W) (sym.Component.Y+sym.Component.H))
+            overlaps symBBox bbox
         )
     |> List.map
         (fun (sym:Symbol) -> sym.Id)
