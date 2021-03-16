@@ -68,8 +68,8 @@ let containsPoint (p: XYPos) (bb: BBox) =
     && p.Y < (bb.Pos.Y + bb.Height)
 
 let overlaps (b1: BBox) (b2: BBox): bool =
-    let isAbove b1 b2 = (b1.Pos.Y + b1.Height) < b2.Pos.Y
-    let isLeftOf b1 b2 = (b1.Pos.X + b1.Width) < b2.Pos.X
+    let isAbove b1 b2 = (b1.Pos.Y + b1.Height) <= b2.Pos.Y
+    let isLeftOf b1 b2 = (b1.Pos.X + b1.Width) <= b2.Pos.X
 
     not (
         isAbove b1 b2
