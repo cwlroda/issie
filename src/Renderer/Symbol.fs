@@ -254,18 +254,21 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
     let compX,compY,compW,compH =
         match compType with 
-        | Not | And | Or | Xor | Nand | Nor | Xnor -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 60.,mulOfFive 105.
-        | DFF | DFFE -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 105.
-        | Mux2 | Demux2 | DFF | DFFE -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 120.
-        | NbitsAdder _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 150.,mulOfFive 130.
-        | Input _ | Output _ | Constant _->  mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 30.
-        | RAM _ | RegisterE _-> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 150.
+        | Not | And | Or | Xor | Nand | Nor | Xnor -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 60.,mulOfFive 70.
+        | DFF -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 80.
+        | DFFE -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 110.
+        | Mux2 -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 140.
+        | Demux2 -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 110.
+        | NbitsAdder _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 150.,mulOfFive 140.
+        | Input _ | Output _ | Constant _->  mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 40.
+        | RAM _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 140.
+        | RegisterE _-> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 110.
         | ROM _ | Register _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 90.
-        | AsyncROM _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 110.
-        | Decode4 -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 150.
-        | IOLabel -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 30.
-        | MergeWires | SplitWire _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 100.
-        | BusSelection _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 200., mulOfFive 90.
+        | AsyncROM _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 80.
+        | Decode4 -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 170.
+        | IOLabel -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 40.
+        | MergeWires | SplitWire _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 110.
+        | BusSelection _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 200., mulOfFive 70.
         |_ ->  mulOfFive position.X, mulOfFive position.Y,mulOfFive 60.,mulOfFive 100.
 
 
@@ -317,16 +320,22 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                     [{
                         PortId = PortId (uuid())
                         PortNumber =  None
-                        PortType = PortType.Output
-                        PortPos = {X = mulOfFive (compW/2.); Y = compH}
+                        PortType = PortType.Input
+                        PortPos = {X = 0.; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
                     }]
                 let outputPortList = 
-                    [
-                        portTemplate 0 PortType.Output (compH/2.) (PortWidth n)
-                    ]
+                    [{
+                        PortId = PortId (uuid())
+                        PortNumber =  Some (PortNumber (0))
+                        PortType = PortType.Output
+                        PortPos = {X = compW; Y = mulOfFive (compH/2.)}
+                        HostId = hostID
+                        Hover = PortHover false
+                        Width = PortWidth 0
+                    }]
                 inputPortList,outputPortList
             )
         |Output n ->
@@ -336,15 +345,21 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         PortId = PortId (uuid())
                         PortNumber =  None
                         PortType = PortType.Input
-                        PortPos = {X= mulOfFive (compW/2.); Y = compH}
+                        PortPos = {X= compW; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
                     }]
                 let inputPortList = 
-                    [
-                        portTemplate 0 PortType.Input (compH/2.) (PortWidth n)
-                    ]
+                    [{
+                        PortId = PortId (uuid())
+                        PortNumber =  Some (PortNumber (0))
+                        PortType = PortType.Output
+                        PortPos = {X = 0.; Y = mulOfFive (compH/2.)}
+                        HostId = hostID
+                        Hover = PortHover false
+                        Width = PortWidth 0
+                    }]
                 inputPortList,outputPortList
             )
         | And | Or | Xor | Nand | Nor | Xnor ->
@@ -480,7 +495,15 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                         Width = PortWidth 0
                     }]
                 let outputPortList = 
-                    [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth width)]
+                    [{
+                        PortId = PortId (uuid())
+                        PortNumber =  Some (PortNumber (0))
+                        PortType = PortType.Output
+                        PortPos = {X = compW; Y = mulOfFive (compH/2.)}
+                        HostId = hostID
+                        Hover = PortHover false
+                        Width = PortWidth width
+                    }]
                 inputPortList, outputPortList
             )
         | BusSelection (outputWidth,leastSB) ->
@@ -1005,7 +1028,7 @@ let private renderSymbol (model:Model) =
                     text 
                         (Seq.append [
                             X (topLeft.X + 0.5*(topRight.X - topLeft.X)); 
-                            Y (topLeft.Y + 6.); 
+                            Y (topLeft.Y + 9.); 
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle)) [str <| componentName];
                     viewBoxLabel
                 ]
@@ -1023,7 +1046,7 @@ let private renderSymbol (model:Model) =
                     text 
                         (Seq.append [
                             X (topLeft.X + 0.5*(topRight.X - topLeft.X)); 
-                            Y (topLeft.Y + 6.); 
+                            Y (topLeft.Y + 9.); 
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle)) [str <| componentName];
                     viewBoxLabel
                 ]
@@ -1043,7 +1066,7 @@ let private renderSymbol (model:Model) =
                     text 
                         (Seq.append [
                             X (topLeft.X + 0.5*(topRight.X - topLeft.X)); 
-                            Y (topLeft.Y + 6.); 
+                            Y (topLeft.Y + 9.); 
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle)) [str <| string n];
                     viewBoxLabel
                 ]
