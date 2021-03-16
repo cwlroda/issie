@@ -635,7 +635,7 @@ let getErrors (wModel: Model): Error list =
         (fun lst wId w ->
             match w.Error with
             | Some errStr ->
-                [{ Msg = errStr; Pos = (Symbol.portPos wModel.Symbol w.SrcPort)} ]
+                [{ Msg = errStr; Pos = (Symbol.portPos wModel.Symbol w.TargetPort)} ]
                 @ lst
             | None -> lst)
         []
