@@ -67,11 +67,6 @@ let gridSize = 10
 let undoHistorySize = 50
 let portHighlightRange = 50.
 
-let discretizeToGrid v =
-    let gridSize = float gridSize
-    let leftDist = v % gridSize
-    if leftDist < gridSize - leftDist then v - leftDist else v + gridSize - leftDist
-
 let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
     let borderSize = 3.
     let widthInPixels = sprintf "%.2fpx" ((model.Width))
@@ -106,8 +101,12 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         )
 
     let gridlines =
-        let panX = int (discretizeToGrid (model.PanX / model.Zoom))
-        let panY = int (discretizeToGrid (model.PanY / model.Zoom))
+        let pan =
+            snapToGrid {
+                X = model.PanX / model.Zoom
+                Y = model.PanY / model.Zoom
+            }
+
         let width = int (ceil (model.Width / model.Zoom))
         let height = int (ceil (model.Height / model.Zoom))
 
@@ -123,10 +122,10 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         let makeLine x0 y0 x1 y1 colorAndOpacity offset =
             let (color, opacity) = colorAndOpacity offset
             line [
-                X1 (x0 - panX)
-                Y1 (y0 - panY)
-                X2 (x1 - panX)
-                Y2 (y1 - panY)
+                X1 (x0 - int pan.X)
+                Y1 (y0 - int pan.Y)
+                X2 (x1 - int pan.X)
+                Y2 (y1 - int pan.Y)
                 SVGAttr.Stroke color
                 SVGAttr.StrokeWidth "1px"
                 SVGAttr.StrokeOpacity opacity
@@ -138,8 +137,8 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
 
         g [] (
             [
-                createHalfGrid width panX (fun x -> makeLine x -gridSize x height <| getColorAndOpacity x)
-                createHalfGrid height panY (fun y -> makeLine -gridSize y width y <| getColorAndOpacity y)
+                createHalfGrid width (int pan.X) (fun x -> makeLine x -gridSize x height <| getColorAndOpacity x)
+                createHalfGrid height (int pan.Y) (fun y -> makeLine -gridSize y width y <| getColorAndOpacity y)
             ]
             |> List.concat
         )
@@ -236,9 +235,6 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
 
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
-    let snapToGrid p =
-        posOf (discretizeToGrid p.X) (discretizeToGrid p.Y)
-
     let deselectSymbolsCmd =
         Cmd.ofMsg (Wire (BusWire.Symbol (Symbol.SetSelected [])))
 
