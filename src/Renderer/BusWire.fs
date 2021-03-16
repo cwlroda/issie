@@ -193,7 +193,7 @@ let autoRoute (wModel: Model) (wire: Wire) : Map<WireSegId, WireSegment> =
             ]
 
     let initialSegs, finalSegs =
-        defSeg startPos (midPos.Y) 5., List.rev (defSeg endPos midPos.Y -5.)
+        defSeg startPos (midPos.Y) 20., List.rev (defSeg endPos midPos.Y -20.)
 
     initialSegs @ finalSegs
     |> List.pairwise
@@ -464,13 +464,13 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId,
     let updatedSegs =
         match isSrcConnection, istgtConnection with
         
-        | Some segId, _ -> 
+        | Some segId, None -> 
             Map.add seg.Id {
                 seg with
                     StartPos = posAdd seg.StartPos offset
                     EndPos = posAdd seg.EndPos diff 
             } wire.Segments
-        | _, Some segId  -> 
+        | None , Some segId  -> 
             Map.add seg.Id {
                     seg with
                         StartPos = posAdd seg.StartPos diff
