@@ -252,16 +252,16 @@ let createWire
     let src, tgt, width, colour, err =
         match widthValid, validSrcTgt with
         | _, Ok (s, t) when (notAvaliableInput wModel t) ->
-            s, t, 5, Red,
+            s, t, 6, Red,
             Some "Invalid Input port selection. An input port cannot have multiple input wires"
         | Ok w, Ok (s, t) when w < 2 ->
-            s, t, w, Grey, None
-        | Ok _, Ok (s, t) ->
             s, t, 3, Blue, None
+        | Ok _, Ok (s, t) ->
+            s, t, 6, Blue, None
         | Error errStr, Ok (s, t) ->
-            s, t, 5, Red, Some errStr
+            s, t, 6, Red, Some errStr
         | _, Error errType ->
-            port1, port2, 5, Red, Some errType
+            port1, port2, 6, Red, Some errType
 
     let wId =
         function
@@ -384,9 +384,7 @@ let setSelectedColor (wModel: Model) (wId: ConnectionId): Map<ConnectionId, Wire
 let getWireColor (w: Wire): HighLightColor =
     match w with
     | w when w.Error <> None -> Red
-    | w when w.WireWidth > 1 -> Blue
-    | _ -> Grey
-
+    | _ -> Blue
 
 let nearestGridPt (pt: XYPos) =
 // Rounds to the floor of the dividsion
@@ -410,7 +408,6 @@ let checkPortConnections (wModel: Model) (wire: Wire) =
         | [pId] -> Some pId
         | lst -> findClosestPort pos (n-1.)
 
-
     match findClosestPort (wire.Segments.[srcSeg]).StartPos 5., findClosestPort (wire.Segments.[tgtSeg]).EndPos 5. with
     | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort -> wire
     | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
@@ -424,9 +421,6 @@ let checkPortConnections (wModel: Model) (wire: Wire) =
 
     | None, _ | _ , None -> {wire with Segments = autoRoute wModel wire}
     | _ -> failwithf "This shoulnt happen"
-
-    
-    
 
 let updateConnections (wModel: Model): Map<ConnectionId, Wire> =
     Map.map (fun _ w -> checkPortConnections wModel w) wModel.WX
@@ -445,8 +439,6 @@ let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId
             SelectedSegment = findClosestSegment wire pos
             LastDragPos = pos
         } wModel.WX
-
-
 
 let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId, Wire> =
     let wire = findWire wModel wId
@@ -635,7 +627,7 @@ let getErrors (wModel: Model): Error list =
         (fun lst wId w ->
             match w.Error with
             | Some errStr ->
-                [{ Msg = errStr; Pos = (Symbol.portPos wModel.Symbol w.SrcPort)} ]
+                [{ Msg = errStr; Pos = (Symbol.portPos wModel.Symbol w.TargetPort)} ]
                 @ lst
             | None -> lst)
         []
