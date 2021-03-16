@@ -126,10 +126,8 @@ let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     symModel
     |> List.filter
         (fun (sym:Symbol) ->
-            (sym.Component.X >= bbox.Pos.X)
-            && (sym.Component.Y >= bbox.Pos.Y)
-            && (sym.Component.X + sym.Component.W <= bbox.Pos.X + bbox.Width)
-            && (sym.Component.Y + sym.Component.H <= bbox.Pos.Y + bbox.Height)
+            let symBBox = pointsToBBox (posOf sym.Component.X sym.Component.Y) (posOf (sym.Component.X+sym.Component.W) (sym.Component.Y+sym.Component.H))
+            overlaps symBBox bbox
         )
     |> List.map
         (fun (sym:Symbol) -> sym.Id)
@@ -755,12 +753,22 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         |> List.map(fun sym ->
             if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
                 let diff = posDiff pagePos sym.LastDragPos
-                {sym with
-                    Component = {sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
-                    LastDragPos = pagePos
-                }
-                else
-                    sym
+                   
+                let symBBox = symbolBBox model sym.Id
+                let symsInNewBBox = getSymbolsInTargetArea model {symBBox with Pos = posAdd symBBox.Pos diff}
+
+                let movedSym =
+                    {sym with
+                        Component = {sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
+                        LastDragPos = pagePos
+                    }
+
+                match symsInNewBBox with
+                | [id] when id = sym.Id -> movedSym
+                | [] -> movedSym
+                | _ -> sym
+            else
+                sym
             ), Cmd.none
     
     | EndDragging ->
