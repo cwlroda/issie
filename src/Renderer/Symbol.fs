@@ -133,10 +133,10 @@ let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
         (fun (sym:Symbol) -> sym.Id)
 
 let findPort (symModel: Model) (portId: PortId) : Port =
-        allPortsInModel symModel
-        |> List.find(
-            fun (port:Port) -> port.PortId = portId
-        )
+    allPortsInModel symModel
+    |> List.find(
+        fun (port:Port) -> port.PortId = portId
+    )
 
 let portPos (symModel: Model) (portId: PortId) : XYPos = 
 
