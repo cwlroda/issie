@@ -549,12 +549,13 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         { model with WX = wxUpdated }, Cmd.none
 
 ///Dummy function to initialize for demo
-let init n () =
-    let symbols, cmd = Symbol.init ()
+let init () =
+    let symbols, _ = Symbol.init ()
 
     let pLst =
         Symbol.allPortsInModel symbols
-        |> List.map (fun p -> p.PortId)
+        |> Map.toList
+        |> List.map fst
 
     let rng = System.Random 0
 
