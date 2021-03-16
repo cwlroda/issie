@@ -425,16 +425,16 @@ let checkPortConnections (wModel: Model) (wire: Wire) =
         | [pId] -> Some pId
         | lst -> findClosestPort pos (n-1.)
 
-    match findClosestPort (wire.Segments.[srcSegId]).StartPos 5., findClosestPort (wire.Segments.[tgtSegId]).EndPos 5. with
+    match findClosestPort (wire.Segments.[srcSegId]).StartPos 10., findClosestPort (wire.Segments.[tgtSegId]).EndPos 10. with
     | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort -> wire
     | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX}
         let updatedWire = createWire updatedModel pId wire.TargetPort (Some wire.Id)  
-        {updatedWire with Segments = wire.Segments}
+        {updatedWire with Segments = autoRoute updatedModel updatedWire}
     | Some srcPId, Some pId ->  
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} // to not trigger double input warning
         let updatedWire = createWire updatedModel wire.SrcPort pId (Some wire.Id)
-        {updatedWire with Segments = wire.Segments}
+        {updatedWire with Segments = autoRoute updatedModel updatedWire}
     | None, _ | _ , None -> 
 
         {wire with Segments = autoRoute wModel wire}
