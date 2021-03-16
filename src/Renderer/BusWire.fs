@@ -82,7 +82,7 @@ type LabelRenderProps =
 
 /// Takes as input a relative position between two points and outputs true if the two original points are horzontal and false otherwise
 let isVertical (relPos: XYPos): bool =
-    abs (relPos.X) < abs (relPos.Y)
+    abs (relPos.X) <= abs (relPos.Y)
 
 let createSegBB (startPos: XYPos) (endPos: XYPos) : BBox =
     match posDiff endPos startPos with
@@ -193,7 +193,7 @@ let autoRoute (wModel: Model) (wire: Wire) : Map<WireSegId, WireSegment> =
             ]
 
     let initialSegs, finalSegs =
-        defSeg startPos (midPos.Y) 5., List.rev (defSeg endPos midPos.Y -5.)
+        defSeg startPos (midPos.Y) 20., List.rev (defSeg endPos midPos.Y -20.)
 
     initialSegs @ finalSegs
     |> List.pairwise
@@ -397,10 +397,27 @@ let getWireColor (w: Wire): HighLightColor =
     | w when w.Error <> None -> Red
     | _ -> Blue
 
+let findSrcSeg (wModel: Model) (wire: Wire) : WireSegId =
+    let isSrc (seg: WireSegment): bool=
+        match findPrevSegment wModel wire.Id seg.StartPos seg.Direction with
+        | Some segId -> false
+        | _ -> true
+    match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
+    | Some segId -> segId
+    | None -> failwithf "Something in the check is wrong"
+
+let findtgtSeg (wModel: Model) (wire: Wire) : WireSegId =
+    let isSrc (seg: WireSegment): bool=
+        match findNextSegment wModel wire.Id seg.EndPos seg.Direction with
+        | Some segId -> false
+        | _ -> true
+    match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
+    | Some segId -> segId
+    | None -> failwithf "Something in the check is wrong"
+
 let checkPortConnections (wModel: Model) (wire: Wire) =
-    let srcSeg =
-        Map.pick (fun _ (s: WireSegment)->  findPrevSegment wModel wire.Id s.StartPos s.Direction) wire.Segments
-    let tgtSeg = Map.pick (fun _ (s:WireSegment)-> findNextSegment wModel wire.Id s.EndPos s.Direction) wire.Segments
+    let srcSegId = findSrcSeg wModel wire
+    let tgtSegId = findtgtSeg wModel wire     
 
     let rec findClosestPort pos n =
         match Symbol.portsInRange wModel.Symbol pos n with
@@ -408,19 +425,20 @@ let checkPortConnections (wModel: Model) (wire: Wire) =
         | [pId] -> Some pId
         | lst -> findClosestPort pos (n-1.)
 
-    match findClosestPort (wire.Segments.[srcSeg]).StartPos 5., findClosestPort (wire.Segments.[tgtSeg]).EndPos 5. with
+    match findClosestPort (wire.Segments.[srcSegId]).StartPos 10., findClosestPort (wire.Segments.[tgtSegId]).EndPos 10. with
     | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort -> wire
     | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX}
         let updatedWire = createWire updatedModel pId wire.TargetPort (Some wire.Id)  
-        {updatedWire with Segments = wire.Segments}
+        {updatedWire with Segments = autoRoute updatedModel updatedWire}
     | Some srcPId, Some pId ->  
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} // to not trigger double input warning
         let updatedWire = createWire updatedModel wire.SrcPort pId (Some wire.Id)
-        {updatedWire with Segments = wire.Segments}
+        {updatedWire with Segments = autoRoute updatedModel updatedWire}
+    | None, _ | _ , None -> 
 
-    | None, _ | _ , None -> {wire with Segments = autoRoute wModel wire}
-    | _ -> failwithf "This shoulnt happen"
+        {wire with Segments = autoRoute wModel wire}
+    
 
 let updateConnections (wModel: Model): Map<ConnectionId, Wire> =
     Map.map (fun _ w -> checkPortConnections wModel w) wModel.WX
@@ -464,13 +482,13 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId,
     let updatedSegs =
         match isSrcConnection, istgtConnection with
         
-        | Some segId, _ -> 
+        | Some segId, None -> 
             Map.add seg.Id {
                 seg with
                     StartPos = posAdd seg.StartPos offset
                     EndPos = posAdd seg.EndPos diff 
             } wire.Segments
-        | _, Some segId  -> 
+        | None , Some segId  -> 
             Map.add seg.Id {
                     seg with
                         StartPos = posAdd seg.StartPos diff
@@ -527,7 +545,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         { model with WX = wxUpdated }, Cmd.none
     | EndDrag ->
         let wxUpdated = endDrag model
-        printf $"{wxUpdated}"
+
         { model with WX = wxUpdated }, Cmd.none
     | SetColor c ->
         let wxUpdated =
