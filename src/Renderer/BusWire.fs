@@ -82,7 +82,7 @@ type LabelRenderProps =
 
 /// Takes as input a relative position between two points and outputs true if the two original points are horzontal and false otherwise
 let isVertical (relPos: XYPos): bool =
-    abs (relPos.X) < abs (relPos.Y)
+    abs (relPos.X) <= abs (relPos.Y)
 
 let createSegBB (startPos: XYPos) (endPos: XYPos) : BBox =
     match posDiff endPos startPos with
