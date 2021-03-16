@@ -750,7 +750,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
             ) model
         ), Cmd.none
 
-    | Dragging (sIdLst, pagePos) ->
+    | Dragging (sIdLst, pagePos) -> 
         model
         |> List.map(fun sym ->
             if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
@@ -889,7 +889,7 @@ let private renderSymbol (model:Model) =
             let outputPorts = props.Symbol.Component.OutputPorts
             
             let componentType = props.Symbol.Component.Type
-
+            let selectedBool = props.Symbol.Selected
             let componentName =
                 match props.Symbol.Component.Type with
                 | Mux2 -> "MUX"
@@ -926,6 +926,27 @@ let private renderSymbol (model:Model) =
                                 UserSelect UserSelectOptions.None
                             ]
                     }
+            let viewboxExternalStaticLabelStyle: IProp seq = 
+                let txtColor = 
+                    match selectedBool with
+                    | true -> "ghostwhite"
+                    | false -> "darkslategrey"
+                
+                let txtAnchor = 
+                    match componentType with
+                    | Input _ | Constant _ -> "start"
+                    | _ -> "end"
+
+               
+                seq{Style [
+                        UserSelect UserSelectOptions.None
+                        TextAnchor txtAnchor
+                        FontSize "14px"
+                        Fill txtColor
+                        // FontFamily "system-ui"
+                        FontStyle "italic"
+                    ]
+                }
             let viewBoxInternalStaticLabelStyle: IProp seq = 
                 seq {Style [
                             UserSelect UserSelectOptions.None
@@ -934,11 +955,49 @@ let private renderSymbol (model:Model) =
                         ]
                 }
             let viewBoxLabel : ReactElement =
-                text 
-                        (Seq.append [
-                            X topLeft.X
-                            Y (topLeft.Y - 20.)
-                        ] viewBoxStaticComponent) [str <| componentName + " - " + (string props.Symbol.Component.Label)]
+                let outputStringBeforeProcessing = componentName + " - " + (string props.Symbol.Component.Label)
+                let beforeProcessingLength = String.length outputStringBeforeProcessing
+                let processing (thresholdLength)= 
+                    if beforeProcessingLength > thresholdLength then
+                            let intermediateStep = 
+                                (
+                                    String.mapi (fun ind chr -> 
+                                        if ind < thresholdLength then chr else '\000'
+                                    ) 
+                                    >> String.filter (fun x -> x <> '\000') 
+                                ) outputStringBeforeProcessing
+                            intermediateStep + ".."
+                        else outputStringBeforeProcessing
+                let outputString = 
+                    match width with
+                    | x when x < 100. ->
+                        processing 5
+                    | x when x < 150. ->
+                        processing 6
+                    | x when x < 200. ->
+                        processing 8
+                    | _ ->
+                        processing 10
+
+
+                match componentType with 
+                |Input _ |Constant _ ->
+                    (
+                        text 
+                            (Seq.append [
+                                X (bottomLeft.X + 3.)
+                                Y (bottomLeft.Y - 17.)
+                            ] viewboxExternalStaticLabelStyle) [str <| outputString]
+                    )
+                |_ -> 
+                    (
+                        text 
+                            (Seq.append [
+                                X (bottomRight.X - 3.)
+                                Y (bottomRight.Y - 17.)
+                            ] viewboxExternalStaticLabelStyle) [str <| outputString]
+                    )
+                    
 
             let viewBoxClock (bottomLeft:XYPos): ReactElement =
                 g [] 
@@ -1028,7 +1087,7 @@ let private renderSymbol (model:Model) =
                     text 
                         (Seq.append [
                             X (topLeft.X + 0.5*(topRight.X - topLeft.X)); 
-                            Y (topLeft.Y + 9.); 
+                            Y (topLeft.Y + 4.); 
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle)) [str <| componentName];
                     viewBoxLabel
                 ]
@@ -1046,7 +1105,7 @@ let private renderSymbol (model:Model) =
                     text 
                         (Seq.append [
                             X (topLeft.X + 0.5*(topRight.X - topLeft.X)); 
-                            Y (topLeft.Y + 9.); 
+                            Y (topLeft.Y + 4.); 
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle)) [str <| componentName];
                     viewBoxLabel
                 ]
@@ -1066,7 +1125,7 @@ let private renderSymbol (model:Model) =
                     text 
                         (Seq.append [
                             X (topLeft.X + 0.5*(topRight.X - topLeft.X)); 
-                            Y (topLeft.Y + 9.); 
+                            Y (topLeft.Y + 4.); 
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle)) [str <| string n];
                     viewBoxLabel
                 ]
