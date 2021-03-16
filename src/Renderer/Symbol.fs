@@ -351,7 +351,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                     [{
                         PortId = PortId (uuid())
                         PortNumber =  None
-                        PortType = PortType.Input
+                        PortType = PortType.Output
                         PortPos = {X= compW; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
@@ -364,7 +364,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                     [{
                         PortId = PortId (uuid())
                         PortNumber =  Some (PortNumber (0))
-                        PortType = PortType.Output
+                        PortType = PortType.Input
                         PortPos = {X = 0.; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
@@ -375,7 +375,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
                 inputPortMap, outputPortMap
             )
-        | And | Or | Xor | Nand | Nor | Xnor ->
+        | And | Or | Xor ->
             (
                 let inputPortMap = 
                     [0;1]
@@ -394,19 +394,52 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
                 inputPortMap,outputPortMap
             )
+        | Nand | Nor | Xnor ->
+            (
+                let inputPortMap = 
+                    [0;1]
+                    |> List.map (fun x -> 
+                        portTemplate x PortType.Input (( compH - 20. )/3.) (PortWidth 1)
+                    )
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
+
+                let outputPortMap = 
+                    // [
+                    //     portTemplate 0 PortType.Output (( compH - 20. )/2.) (PortWidth 1)
+                    // ]
+                    [{
+                        PortId = PortId (uuid())
+                        PortNumber =  Some (PortNumber (0))
+                        PortType = PortType.Output
+                        PortPos = {X = compW + 15.; Y = mulOfFive (20. + (( compH - 20. )/2.))}
+                        HostId = hostID
+                        Hover = PortHover false
+                        Width = PortWidth 1
+                    }]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
+                inputPortMap, outputPortMap
+            )
         | Not ->
             (
                 let inputPortMap = 
                     [
-                        portTemplate 0 PortType.Input (( compH - 10. )/2.) (PortWidth 1)
+                        portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth 1)
                     ]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [
-                        portTemplate 0 PortType.Output (( compH - 10. )/2.) (PortWidth 1)
-                    ]
+                    [{
+                        PortId = PortId (uuid())
+                        PortNumber =  Some (PortNumber (0))
+                        PortType = PortType.Output
+                        PortPos = {X = compW + 15.; Y = mulOfFive (20. + (( compH - 20. )/2.))}
+                        HostId = hostID
+                        Hover = PortHover false
+                        Width = PortWidth 1
+                    }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -847,7 +880,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 sym
         ) , Cmd.none
 
-    | Dragging (sIdLst, pagePos) ->
+    | Dragging (sIdLst, pagePos) -> 
         model
         |> Map.map (fun _ sym -> 
             if List.contains sym.Id sIdLst then
@@ -987,6 +1020,7 @@ let private renderSymbol (model:Model) =
             let outputPorts = props.Symbol.Component.OutputPorts
             
             let componentType = props.Symbol.Component.Type
+            let selectedBool = props.Symbol.Selected
 
             let componentName =
                 match props.Symbol.Component.Type with
@@ -1024,6 +1058,27 @@ let private renderSymbol (model:Model) =
                                 UserSelect UserSelectOptions.None
                             ]
                     }
+            let viewboxExternalStaticLabelStyle: IProp seq = 
+                let txtColor = 
+                    match selectedBool with
+                    | true -> "ghostwhite"
+                    | false -> "darkslategrey"
+                
+                let txtAnchor = 
+                    match componentType with
+                    | Input _ | Constant _ -> "start"
+                    | _ -> "end"
+
+               
+                seq{Style [
+                        UserSelect UserSelectOptions.None
+                        TextAnchor txtAnchor
+                        FontSize "14px"
+                        Fill txtColor
+                        // FontFamily "system-ui"
+                        FontStyle "italic"
+                    ]
+                }
             let viewBoxInternalStaticLabelStyle: IProp seq = 
                 seq {Style [
                             UserSelect UserSelectOptions.None
@@ -1032,11 +1087,49 @@ let private renderSymbol (model:Model) =
                         ]
                 }
             let viewBoxLabel : ReactElement =
-                text 
-                        (Seq.append [
-                            X topLeft.X
-                            Y (topLeft.Y - 20.)
-                        ] viewBoxStaticComponent) [str <| componentName + " - " + (string props.Symbol.Component.Label)]
+                let outputStringBeforeProcessing = componentName + " - " + (string props.Symbol.Component.Label)
+                let beforeProcessingLength = String.length outputStringBeforeProcessing
+                let processing (thresholdLength)= 
+                    if beforeProcessingLength > thresholdLength then
+                            let intermediateStep = 
+                                (
+                                    String.mapi (fun ind chr -> 
+                                        if ind < thresholdLength then chr else '\000'
+                                    ) 
+                                    >> String.filter (fun x -> x <> '\000') 
+                                ) outputStringBeforeProcessing
+                            intermediateStep + ".."
+                        else outputStringBeforeProcessing
+                let outputString = 
+                    match width with
+                    | x when x < 100. ->
+                        processing 5
+                    | x when x < 150. ->
+                        processing 6
+                    | x when x < 200. ->
+                        processing 8
+                    | _ ->
+                        processing 10
+
+
+                match componentType with 
+                |Input _ |Constant _ ->
+                    (
+                        text 
+                            (Seq.append [
+                                X (bottomLeft.X + 3.)
+                                Y (bottomLeft.Y - 17.)
+                            ] viewboxExternalStaticLabelStyle) [str <| outputString]
+                    )
+                |_ -> 
+                    (
+                        text 
+                            (Seq.append [
+                                X (bottomRight.X - 3.)
+                                Y (bottomRight.Y - 17.)
+                            ] viewboxExternalStaticLabelStyle) [str <| outputString]
+                    )
+                    
 
             let viewBoxClock (bottomLeft:XYPos): ReactElement =
                 g [] 
@@ -1083,6 +1176,13 @@ let private renderSymbol (model:Model) =
                         SVGAttr.Stroke "red"
                         SVGAttr.StrokeWidth 8
                 }
+            
+            let viewPortLinesStaticComponent2 (x:Port) : IProp seq = 
+                seq {
+                        SVGAttr.Fill fillColor
+                        SVGAttr.Stroke outlineColor
+                        SVGAttr.StrokeWidth 3
+                }
             let viewPortBusIndicatorLinesStaticComponent (x:Port) : IProp seq =
                 seq {
                 match x.Hover with
@@ -1126,7 +1226,7 @@ let private renderSymbol (model:Model) =
                     text 
                         (Seq.append [
                             X (topLeft.X + 0.5*(topRight.X - topLeft.X)); 
-                            Y (topLeft.Y + 9.); 
+                            Y (topLeft.Y + 4.); 
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle)) [str <| componentName];
                     viewBoxLabel
                 ]
@@ -1144,7 +1244,7 @@ let private renderSymbol (model:Model) =
                     text 
                         (Seq.append [
                             X (topLeft.X + 0.5*(topRight.X - topLeft.X)); 
-                            Y (topLeft.Y + 9.); 
+                            Y (topLeft.Y + 4.); 
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle)) [str <| componentName];
                     viewBoxLabel
                 ]
@@ -1164,7 +1264,7 @@ let private renderSymbol (model:Model) =
                     text 
                         (Seq.append [
                             X (topLeft.X + 0.5*(topRight.X - topLeft.X)); 
-                            Y (topLeft.Y + 9.); 
+                            Y (topLeft.Y + 4.); 
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle)) [str <| string n];
                     viewBoxLabel
                 ]
@@ -1197,16 +1297,16 @@ let private renderSymbol (model:Model) =
                     | _ -> nothing
                 ]
 
-            let lineLength = 24.
+            let lineLength = 15.
 
 
             let viewPortLinesType1 (compType:ComponentType)=
                 let generateLines (portMap: Map<PortId, Port>) : ReactElement list =
                     portMap
                     |> Map.toList
-                    |> List.map(fun (_, x:Port) ->
+                    |> List.map(fun (_, port:Port) ->
                     // let parentSymbol () = findSymbolFromPort model x
-                        let absPos () = posAdd  topLeft x.PortPos
+                        let absPos () = posAdd  topLeft port.PortPos
                         match compType with
                         | Not | And |Nand |Or|Nor|Xor|Xnor|Mux2|Demux2
                         |NbitsAdder _|DFF|DFFE|RegisterE _|Register _|AsyncROM _
@@ -1214,67 +1314,71 @@ let private renderSymbol (model:Model) =
                         |BusSelection _->
 
                             let dynamicContent =
-                                match x.PortType with
-                                | PortType.Input -> ((absPos()).X-lineLength), ((absPos()).X - 18.)
-                                | PortType.Output -> ((absPos()).X+lineLength), ((absPos()).X + 18.)
+                                match port.PortType with
+                                | PortType.Input -> ((absPos()).X-lineLength), ((absPos()).X - 10.)
+                                | PortType.Output -> ((absPos()).X+lineLength), ((absPos()).X + 10.)
                             let (PortNumber portNumber) =    
-                                match x.PortNumber with
+                                match port.PortNumber with
                                 |Some a -> a
                                 |None -> PortNumber -1
                             match portNumber with
                             |portCheck when portCheck >= 0 ->
                                 g[] [
-                                    line 
+                                    circle 
                                         (Seq.append [
-                                            X1 (absPos()).X
-                                            X2 (fst dynamicContent)
-                                            Y2 (absPos()).Y
-                                            Y1 (absPos()).Y
-                                        ] (viewPortLinesStaticComponent x))[]
+                                            Cx (absPos()).X
+                                            // ?=X2 (fst dynamicContent)
+                                            Cy (absPos()).Y
+                                            R 3.
+                                            // Y1 (absPos()).Y
+                                        ] (viewPortLinesStaticComponent port))[]
 
-                                    line 
-                                        (Seq.append [
-                                            X1 (snd dynamicContent)
-                                            X2 (snd dynamicContent)
-                                            match x.Hover with
-                                            |PortHover false ->
-                                                Y2 ((absPos()).Y + 6.)
-                                                Y1 ((absPos()).Y - 6.)
-                                            |_ ->
-                                                Y2 ((absPos()).Y + 8.)
-                                                Y1 ((absPos()).Y - 8.)
-                                        ] (viewPortBusIndicatorLinesStaticComponent x))[]
-                                    text (Seq.append [
-                                        X (snd dynamicContent)
-                                        match x.Hover with
-                                        |PortHover false ->
+                                    // line 
+                                    //     (Seq.append [
+                                    //         X1 (snd dynamicContent)
+                                    //         X2 (snd dynamicContent)
+                                    //         match x.Hover with
+                                    //         |PortHover false ->
+                                    //             Y2 ((absPos()).Y + 6.)
+                                    //             Y1 ((absPos()).Y - 6.)
+                                    //         |_ ->
+                                    //             Y2 ((absPos()).Y + 8.)
+                                    //             Y1 ((absPos()).Y - 8.)
+                                    //     ] (viewPortBusIndicatorLinesStaticComponent x))[]
+
+                                    if selectedBool = true then
+                                        text (Seq.append [
+                                            X (snd dynamicContent)
                                             Y ((absPos()).Y - 20.)
-                                        |_ ->
-                                            Y ((absPos()).Y - 22.)
-                                        ] (viewPortBusIndicatorTextStaticComponent x)) [str <| string (x.Width)]
+                                            ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
+                                    else nothing
+
                                     match compType with 
                                     | ComponentType.Not | ComponentType.Nand | ComponentType.Nor | ComponentType.Xnor ->
                                         (
-                                            match x.PortType with
+                                            match port.PortType with
                                             |PortType.Output -> 
-                                                line
-                                                    (Seq.append [
-                                                        X1 ((absPos()).X+12.)
-                                                        X2 (absPos()).X
-                                                        match x.Hover with
-                                                        |PortHover false ->
+                                                g [] [
+                                                    line 
+                                                        (Seq.append [
+                                                            X1 ((absPos()).X - lineLength)
+                                                            X2 ((fst dynamicContent) - lineLength);
+                                                            Y2 (absPos()).Y
+                                                            Y1 (absPos()).Y
+                                                        ] (viewPortLinesStaticComponent2 port))[]
+                                                    line
+                                                        (Seq.append [
+                                                            X1 ((absPos()).X + 12. - lineLength)
+                                                            X2 ((absPos()).X - lineLength)
                                                             Y2 ((absPos()).Y - 12.)
                                                             Y1 (absPos()).Y
-                                                        |_ ->
-                                                            Y2 ((absPos()).Y - 14.)
-                                                            Y1 ((absPos()).Y)
-                                                    ] (viewPortBusIndicatorLinesStaticComponent x))[]
+                                                        ] (viewPortLinesStaticComponent2 port))[]
+                                                ]
                                             |_ -> nothing
                                         )
                                     | _ -> nothing
                                 ]
                             |_ -> nothing
-                        
                         |_ -> nothing
                     )
                         
@@ -1410,71 +1514,101 @@ let private renderSymbol (model:Model) =
             
             let viewPortLinesOutput =
                 let port = snd (List.head (inputPorts |> Map.toList))
-                let (PortWidth wid) = port.Width
                 [g [] 
                     [
-                        line (Seq.append [
-                            X1 topLeft.X
-                            X2 (topLeft.X - lineLength)
-                            Y1 (0.5*(topLeft.Y+bottomLeft.Y))
-                            Y2 (0.5*(topLeft.Y+bottomLeft.Y))
-                        ] (viewPortLinesStaticComponent port))[]
+                        circle 
+                            (Seq.append [
+                                Cx topLeft.X
+                                // ?=X2 (fst dynamicContent)
+                                Cy (0.5*(topLeft.Y+bottomLeft.Y))
+                                R 3.
+                                // Y1 (absPos()).Y
+                            ] (viewPortLinesStaticComponent port))[]
 
-                        line (Seq.append [
-                            X1 (topLeft.X - 5.)
-                            X2 (topLeft.X - 7.)
-                            match port.Hover with
-                            |PortHover false ->
-                                Y2 (0.5*(topRight.Y+bottomRight.Y) + 6.)
-                                Y1 (0.5*(topRight.Y+bottomRight.Y) - 6.)
-                            |_ ->
-                                Y2 (0.5*(topRight.Y+bottomRight.Y) + 8.)
-                                Y1 (0.5*(topRight.Y+bottomRight.Y) - 8.)
-                        ] (viewPortBusIndicatorLinesStaticComponent port))[]
+
+                        if selectedBool = true then
+                            text (Seq.append [
+                                X (topLeft.X - lineLength)
+                                Y ((0.5*(topLeft.Y+bottomLeft.Y)) - 20.)
+                                ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
+                        else nothing
+                        // line (Seq.append [
+                        //     X1 topLeft.X
+                        //     X2 (topLeft.X - lineLength)
+                        //     Y1 (0.5*(topLeft.Y+bottomLeft.Y))
+                        //     Y2 (0.5*(topLeft.Y+bottomLeft.Y))
+                        // ] (viewPortLinesStaticComponent port))[]
+
+                        // line (Seq.append [
+                        //     X1 (topLeft.X - 5.)
+                        //     X2 (topLeft.X - 7.)
+                        //     match port.Hover with
+                        //     |PortHover false ->
+                        //         Y2 (0.5*(topRight.Y+bottomRight.Y) + 6.)
+                        //         Y1 (0.5*(topRight.Y+bottomRight.Y) - 6.)
+                        //     |_ ->
+                        //         Y2 (0.5*(topRight.Y+bottomRight.Y) + 8.)
+                        //         Y1 (0.5*(topRight.Y+bottomRight.Y) - 8.)
+                        // ] (viewPortBusIndicatorLinesStaticComponent port))[]
 
                         
-                        text (Seq.append [
-                            X (topLeft.X - 5.)
-                            match port.Hover with
-                            |PortHover false ->
-                                Y (0.5*(topRight.Y+bottomRight.Y) - 20.)
-                            |_ ->
-                                Y (0.5*(topRight.Y+bottomRight.Y) - 22.)
-                        ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string wid]
+                        // text (Seq.append [
+                        //     X (topLeft.X - 5.)
+                        //     match port.Hover with
+                        //     |PortHover false ->
+                        //         Y (0.5*(topRight.Y+bottomRight.Y) - 20.)
+                        //     |_ ->
+                        //         Y (0.5*(topRight.Y+bottomRight.Y) - 22.)
+                        // ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string wid]
                     ]
                 ]
             let viewPortLinesInput =
                 let port = snd (List.head (outputPorts |> Map.toList))
-                let (PortWidth wid) = port.Width
                 [g [] 
                     [
-                        line (Seq.append [
-                            X1 topRight.X
-                            X2 (topRight.X + lineLength)
-                            Y1 (0.5*(topRight.Y+bottomRight.Y))
-                            Y2 (0.5*(topRight.Y+bottomRight.Y))
-                        ] (viewPortLinesStaticComponent port)) []
+                        circle 
+                            (Seq.append [
+                                Cx topRight.X
+                                // ?=X2 (fst dynamicContent)
+                                Cy (0.5*(topLeft.Y+bottomLeft.Y))
+                                R 3.
+                                // Y1 (absPos()).Y
+                            ] (viewPortLinesStaticComponent port))[]
 
-                        line (Seq.append [
-                            X1 (topRight.X + 5.)
-                            X2 (topRight.X + 7.)
-                            match port.Hover with
-                            |PortHover false ->
-                                Y2 (0.5*(topRight.Y+bottomRight.Y) + 6.)
-                                Y1 (0.5*(topRight.Y+bottomRight.Y) - 6.)
-                            |_ ->
-                                Y2 (0.5*(topRight.Y+bottomRight.Y) + 8.)
-                                Y1 (0.5*(topRight.Y+bottomRight.Y) - 8.)
-                        ] (viewPortBusIndicatorLinesStaticComponent port))[]
 
-                        text (Seq.append [
-                            X (topRight.X + 5.)
-                            match port.Hover with
-                            |PortHover false ->
-                                Y (0.5*(topRight.Y+bottomRight.Y) - 20.)
-                            |_ ->
-                                Y (0.5*(topRight.Y+bottomRight.Y) - 22.)
-                        ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string wid]
+                        if selectedBool = true then
+                            text (Seq.append [
+                                X (topRight.X + lineLength)
+                                Y ((0.5*(topLeft.Y+bottomLeft.Y)) - 20.)
+                                ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
+                        else nothing
+                        // line (Seq.append [
+                        //     X1 topRight.X
+                        //     X2 (topRight.X + lineLength)
+                        //     Y1 (0.5*(topRight.Y+bottomRight.Y))
+                        //     Y2 (0.5*(topRight.Y+bottomRight.Y))
+                        // ] (viewPortLinesStaticComponent port)) []
+
+                        // line (Seq.append [
+                        //     X1 (topRight.X + 5.)
+                        //     X2 (topRight.X + 7.)
+                        //     match port.Hover with
+                        //     |PortHover false ->
+                        //         Y2 (0.5*(topRight.Y+bottomRight.Y) + 6.)
+                        //         Y1 (0.5*(topRight.Y+bottomRight.Y) - 6.)
+                        //     |_ ->
+                        //         Y2 (0.5*(topRight.Y+bottomRight.Y) + 8.)
+                        //         Y1 (0.5*(topRight.Y+bottomRight.Y) - 8.)
+                        // ] (viewPortBusIndicatorLinesStaticComponent port))[]
+
+                        // text (Seq.append [
+                        //     X (topRight.X + 5.)
+                        //     match port.Hover with
+                        //     |PortHover false ->
+                        //         Y (0.5*(topRight.Y+bottomRight.Y) - 20.)
+                        //     |_ ->
+                        //         Y (0.5*(topRight.Y+bottomRight.Y) - 22.)
+                        // ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string wid]
                     ]
                 ]
                 
