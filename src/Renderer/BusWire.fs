@@ -456,43 +456,43 @@ let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
                 Segments = autoConnect wModel wire.Id origStartPos origEndPos seg.Id updatedSegs
                 LastDragPos = pos
         }
-let fitConnection(wModel: Model) (connectionSegId: WireSegId) (segCurrentPos: XYPos) (newPortId: PortId)  (wire: Wire) : Wire = 
+let fitConnection (wModel: Model) (sModel: Symbol.Model) (connectionSegId: WireSegId) (segCurrentPos: XYPos) (newPortId: PortId)  (wire: Wire) : Wire = 
     let updatedWire = {wire with SelectedSegment = Some connectionSegId; LastDragPos = segCurrentPos; Segments = wire.Segments}
-    manualRouting {wModel with WX = Map.add updatedWire.Id updatedWire wModel.WX} updatedWire.Id (Symbol.portPos wModel.Symbol newPortId)
+    manualRouting {wModel with WX = Map.add updatedWire.Id updatedWire wModel.WX} updatedWire.Id (Symbol.portPos sModel newPortId)
 
-let checkPortConnections (wModel: Model) (wire: Wire) =
+let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) =
     let srcSegId = findSrcSeg wModel wire
     let tgtSegId = findtgtSeg wModel wire     
 
     let rec findClosestPort pos n =
-        match Symbol.portsInRange wModel.Symbol pos n with
+        match Symbol.portsInRange sModel pos n with
         | [] -> None
         | [pId] -> Some pId
         | lst -> findClosestPort pos (n-1.)
 
     match findClosestPort (wire.Segments.[srcSegId]).StartPos 15., findClosestPort (wire.Segments.[tgtSegId]).EndPos 15. with
     | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort -> 
-        fitConnection wModel srcSegId (wire.Segments.[srcSegId]).StartPos srcPId wire
-        |> fitConnection wModel tgtSegId (wire.Segments.[tgtSegId]).EndPos tgtPId
+        fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos srcPId wire
+        |> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos tgtPId
     | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} //to ensure it does not get a too many wire for input port validation error triggered by itself
-        let updatedWire = createWire updatedModel pId wire.TargetPort (Some wire.Id)
-        {updatedWire with Segments =  autoRoute updatedModel updatedWire}
+        let updatedWire = createWire updatedModel sModel pId wire.TargetPort (Some wire.Id)
+        {updatedWire with Segments = autoRoute updatedModel sModel updatedWire}
         //{createWire updatedModel pId wire.TargetPort (Some wire.Id)  with Segments = wire.Segments}  
         //|> fitConnection wModel srcSegId (wire.Segments.[srcSegId]).StartPos pId
     | Some srcPId, Some pId ->  
         //{createWire wModel pId wire.SrcPort (Some wire.Id) with Segments = wire.Segments}   
         //|> fitConnection wModel tgtSegId (wire.Segments.[tgtSegId]).EndPos pId
-        let updatedWire = createWire wModel pId wire.SrcPort (Some wire.Id)
-        {updatedWire with Segments =  autoRoute wModel updatedWire}
-    | None, Some pId -> fitConnection wModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
-    | Some pId, None -> fitConnection wModel tgtSegId (wire.Segments.[tgtSegId]).EndPos wire.TargetPort wire
+        let updatedWire = createWire wModel sModel pId wire.SrcPort (Some wire.Id)
+        {updatedWire with Segments =  autoRoute wModel sModel updatedWire}
+    | None, Some pId -> fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
+    | Some pId, None -> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos wire.TargetPort wire
     | None, None ->
-        {wire with Segments = autoRoute wModel wire}
+        {wire with Segments = autoRoute wModel sModel wire}
     
 
-let updateConnections (wModel: Model): Map<ConnectionId, Wire> =
-    Map.map (fun _ w -> checkPortConnections wModel w) wModel.WX
+let updateConnections (wModel: Model) (sModel: Symbol.Model): Map<ConnectionId, Wire> =
+    Map.map (fun _ w -> checkPortConnections wModel sModel w) wModel.WX
 
 /// Reset the color of all the wires except those set in red to highlight error
 let setUnselectedColor (wModel: Model): Map<ConnectionId, Wire> =

@@ -449,9 +449,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let sCopyDataLst = 
                     sIdLst
                     |> List.map (fun sId ->
-                        (Symbol.symbolType model.Wire.Symbol sId,
-                        (Symbol.symbolBBox model.Wire.Symbol sId).Pos,
-                        (Symbol.symbolLabel model.Wire.Symbol sId) + "_copy")
+                        (Symbol.symbolType model.Symbol sId,
+                        (Symbol.symbolBBox model.Symbol sId).Pos,
+                        (Symbol.symbolLabel model.Symbol sId) + "_copy")
                     )
 
                 let topLeftOfSymbols =
