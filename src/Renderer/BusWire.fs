@@ -171,6 +171,11 @@ let makeWireSegment (wire : Wire) (startPos: XYPos) (endPos: XYPos) : WireSegmen
         Direction = direction
     }
 
+let verticalOverlap (box1: BBox) (box2:BBox) = 
+    let isAbove (bb1: BBox) (bb2: BBox) = (bb1.Pos.Y + bb1.Height) <= bb2.Pos.Y
+   
+    not ( isAbove box1 box2 || isAbove box2 box1)
+
 let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Map<WireSegId, WireSegment> =
     let startPos = Symbol.portPos sModel wire.SrcPort
     let endPos = Symbol.portPos sModel wire.TargetPort
@@ -178,9 +183,22 @@ let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Map<WireSegI
 
     let wireDir = posDiff endPos startPos
 
-    let defSeg pos wAdj hAdj =
+    let srcHost = Symbol.symbolBBox sModel (Symbol.getHostId sModel wire.SrcPort )
+    let tgtHost = Symbol.symbolBBox sModel (Symbol.getHostId sModel wire.TargetPort)
+
+    let vAdj = 
+        match verticalOverlap srcHost tgtHost with
+        | true when srcHost.Pos.Y <= tgtHost.Pos.Y -> 
+            tgtHost.Pos.Y + tgtHost.Height+ 20.
+           
+        | true ->  
+            srcHost.Pos.Y + srcHost.Height + 20.
+        | false -> 
+            midPos.Y
+
+    let defSeg pos vPos hPos =
         match wireDir.X, wireDir.Y with
-        | x, _ when x > 0. ->
+        | x, _ when x > 1. ->
             [
                 snapToGrid pos
                 snapToGrid { X = midPos.X; Y = pos.Y }
@@ -188,12 +206,12 @@ let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Map<WireSegI
         | _ ->
             [
                 snapToGrid pos
-                snapToGrid { X = pos.X + hAdj; Y = pos.Y }
-                snapToGrid { X = pos.X + hAdj; Y = wAdj }
+                snapToGrid { X = pos.X + hPos; Y = pos.Y }
+                snapToGrid { X = pos.X + hPos; Y = vPos }
             ]
 
     let initialSegs, finalSegs =
-        defSeg startPos (midPos.Y) 20., List.rev (defSeg endPos midPos.Y -20.)
+        defSeg startPos (vAdj) 20., List.rev (defSeg endPos vAdj -20.)
 
     initialSegs @ finalSegs
     |> List.pairwise
