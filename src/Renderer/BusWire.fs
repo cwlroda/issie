@@ -20,7 +20,7 @@ type Direction =
 
 type WireSegment =
     {
-        Id: WireSegId
+        Index: SegmentIndex
         StartPos: XYPos
         EndPos: XYPos
         HostId: ConnectionId
@@ -35,9 +35,9 @@ type Wire =
         WireColor: HighLightColor
         WireWidth: int
         Error: string Option
-        SelectedSegment: WireSegId option
+        SelectedSegment: SegmentIndex
         LastDragPos: XYPos
-        Segments: Map<WireSegId, WireSegment>
+        Segments: WireSegment list
     }
 
 type Model =
@@ -56,15 +56,22 @@ type Msg =
     | StartDrag of wId: ConnectionId * pos: XYPos
     | Dragging of wId: ConnectionId * pos: XYPos
     | EndDrag
-        // snap wire to grid
-        // moving wires to different ports -> snap to port
     | SetColor of color: HighLightColor
-    | DecreaseWidth of wId: ConnectionId
-    | IncreaseWidth of wId: ConnectionId
+    // | DecreaseWidth of wId: ConnectionId
+    // | IncreaseWidth of wId: ConnectionId
 
-type SegRenderProps =
+type ConnectionRenderProps =
     {
-        Key : WireSegId
+        Key: ConnectionId
+        StartSeg: WireSegment
+        EndSeg: WireSegment
+        WireColor: HighLightColor
+        WireWidth: string
+    }
+
+type WireRenderProps =
+    {
+        Key: SegmentIndex
         StartPos: XYPos
         EndPos: XYPos
         WireColor: HighLightColor
@@ -91,7 +98,7 @@ let createSegBB (startPos: XYPos) (endPos: XYPos) : BBox =
         toBBox startPos.X (startPos.Y - 5.) (abs x.X) 10.
     // right to left
     | x when x.X < 0. ->
-       toBBox endPos.X (endPos.Y - 5.) (abs x.X) 10.
+        toBBox endPos.X (endPos.Y - 5.) (abs x.X) 10.
     // top to bottom
     | x when x.Y > 0. ->
         toBBox  (startPos.X - 5.) startPos.Y 10. (abs x.Y)
@@ -123,48 +130,54 @@ let findWire (wModel: Model) (wId: ConnectionId): Wire =
 
 
 // find previous segment connected to current segment
-let findPrevSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) (segDirection: Direction) : WireSegId option =
-    let wire = findWire wModel wId
+// let findPrevSegment (wModel: Model) (wId: ConnectionId) (index: int) : WireSegment option =
+//     let wire = findWire wModel wId
     
-    wire.Segments
-    |> Map.filter (fun _ v -> v.EndPos = pos)
-    |> Map.tryFindKey (fun _ s -> s.Direction <> segDirection)
+//     wire.Segments
+//     |> List.tryFind (fun s -> s.Index = index - 1)
 
 // find next segment connected to current segment
-let findNextSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) (segDirection: Direction) : WireSegId option =
-    let wire = findWire wModel wId
+// let findNextSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) (segDirection: Direction) : WireSegId option =
+//     let wire = findWire wModel wId
 
-    wire.Segments
-    |> Map.filter (fun _ v -> v.StartPos = pos)
-    |> Map.tryFindKey (fun _ s -> s.Direction <> segDirection)
+//     wire.Segments
+//     |> Map.filter (fun _ v -> v.StartPos = pos)
+//     |> Map.tryFindKey (fun _ s -> s.Direction <> segDirection)
+
+let isSegmentAtPort (pos1: XYPos) (pos2: XYPos) =
+    if pos1 = pos2 then true else false
 
 // checks if segment is connected directly to either input or output port
-let isFirstOrLastSegment (wModel: Model) (sModel: Symbol.Model) (wire: Wire) (seg: WireSegment) : bool =
-    let srcPos = Symbol.portPos sModel wire.SrcPort
-    let tgtPos = Symbol.portPos sModel wire.TargetPort
+// let isFirstOrLastSegment (wModel: Model) (sModel: Symbol.Model) (wire: Wire) (seg: WireSegment) : bool =
+//     let srcPos = Symbol.portPos sModel wire.SrcPort
+//     let tgtPos = Symbol.portPos sModel wire.TargetPort
 
-    match seg.StartPos, seg.EndPos with
-    | x, _ when x = srcPos -> true
-    | _, x  when x = tgtPos -> true
-    | _ -> false
+//     match isSegmentAtPort seg.StartPos srcPos, isSegmentAtPort seg.EndPos tgtPos with
+//     | false, false -> false
+//     | _ -> true
 
 let isTargetSeg pos startPos endPos =
     (createSegBB startPos endPos) |> (containsPoint pos)
 
 // finds closest wire segment to mouse position
-let findClosestSegment (wire: Wire) (pos: XYPos) : WireSegId option =
-    wire.Segments
-    |> Map.tryFindKey (fun _ s -> isTargetSeg pos s.StartPos s.EndPos)
+let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
+    let index =
+        wire.Segments
+        |> List.tryFindIndex (fun s -> isTargetSeg pos s.StartPos s.EndPos)
+
+    match index with
+    | Some x -> x
+    | None -> failwithf "This shouldn't happen!"
 
 // creates deafult wire segment
-let makeWireSegment (wire : Wire) (startPos: XYPos) (endPos: XYPos) : WireSegment =
+let makeWireSegment (wire : Wire) (startPos: XYPos) (endPos: XYPos) (index: int) : WireSegment =
     let direction =
         match isVertical (posDiff startPos endPos) with
         | true -> Vertical
         | false -> Horizontal
         
     {
-        Id = WireSegId (uuid())
+        Index = index
         StartPos = startPos
         EndPos = endPos
         HostId = wire.Id
@@ -173,10 +186,9 @@ let makeWireSegment (wire : Wire) (startPos: XYPos) (endPos: XYPos) : WireSegmen
 
 let verticalOverlap (box1: BBox) (box2:BBox) = 
     let isAbove (bb1: BBox) (bb2: BBox) = (bb1.Pos.Y + bb1.Height) <= bb2.Pos.Y
-   
     not ( isAbove box1 box2 || isAbove box2 box1)
 
-let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Map<WireSegId, WireSegment> =
+let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
     let startPos = Symbol.portPos sModel wire.SrcPort
     let endPos = Symbol.portPos sModel wire.TargetPort
     let midPos = midPt startPos endPos
@@ -190,7 +202,6 @@ let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Map<WireSegI
         match verticalOverlap srcHost tgtHost with
         | true when srcHost.Pos.Y <= tgtHost.Pos.Y -> 
             tgtHost.Pos.Y + tgtHost.Height+ 20.
-           
         | true ->  
             srcHost.Pos.Y + srcHost.Height + 20.
         | false -> 
@@ -215,37 +226,37 @@ let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Map<WireSegI
 
     initialSegs @ finalSegs
     |> List.pairwise
-    |> List.map (fun (startPos, endPos) -> makeWireSegment wire startPos endPos)
-    |> List.map (fun s -> (s.Id, s))
-    |> Map.ofList
+    |> List.mapi (fun i (startPos, endPos) -> makeWireSegment wire startPos endPos i)
 
 // reconnects the two ends of an updated wire segment to its original neighbours
-let autoConnect
-    (wModel: Model)
-    (wId: ConnectionId)
-    (startPos: XYPos)
-    (endPos: XYPos)
-    (sId: WireSegId)
-    (segMap: Map<WireSegId, WireSegment>) : Map<WireSegId, WireSegment> =
+// let autoConnect
+//     (wModel: Model)
+//     (wId: ConnectionId)
+//     (segList: WireSegment list) : WireSegment =
     
-    let seg = segMap.[sId]
+//     let wire = findWire wModel wId
+//     let seg = segMap.[wire.SelectedSegment]
 
-    let updatePrev =
-        match findPrevSegment wModel wId startPos seg.Direction with
-        | Some x ->
-            Map.add x {
-                segMap.[x] with EndPos = seg.StartPos
-            } segMap
-        | None ->
-            segMap
+//     let updatePrev =
+//         segList
+//         |> List.map (fun s ->
+//             match s.Index with
+//         )
+//         match findPrevSegment wModel wId startPos seg.Direction with
+//         | Some x ->
+//             Map.add x {
+//                 segMap.[x] with EndPos = seg.StartPos
+//             } segMap
+//         | None ->
+//             segMap
 
-    match findNextSegment wModel wId endPos seg.Direction with
-    | Some x ->
-        Map.add x {
-            segMap.[x] with StartPos = seg.EndPos
-        } updatePrev
-    | None ->
-        updatePrev
+//     match findNextSegment wModel wId endPos seg.Direction with
+//     | Some x ->
+//         Map.add x {
+//             segMap.[x] with StartPos = seg.EndPos
+//         } updatePrev
+//     | None ->
+//         updatePrev
 
 let typesValid (port1, port2) (wModel: Model) (sModel: Symbol.Model) : Result<PortId * PortId, string> =
     let getType pId = (Symbol.portType sModel pId)
@@ -271,16 +282,16 @@ let createWire
     let src, tgt, width, colour, err =
         match widthValid, validSrcTgt with
         | _, Ok (s, t) when (notAvaliableInput wModel t) ->
-            s, t, 6, Red,
+            s, t, 5, Red,
             Some "Invalid Input port selection. An input port cannot have multiple input wires"
         | Ok w, Ok (s, t) when w < 2 ->
             s, t, 3, Blue, None
         | Ok _, Ok (s, t) ->
-            s, t, 6, Blue, None
+            s, t, 5, Blue, None
         | Error errStr, Ok (s, t) ->
-            s, t, 6, Red, Some errStr
+            s, t, 5, Red, Some errStr
         | _, Error errType ->
-            port1, port2, 6, Red, Some errType
+            port1, port2, 5, Red, Some errType
 
     let wId =
         function
@@ -291,12 +302,12 @@ let createWire
         Id = wId conId
         SrcPort = src
         TargetPort = tgt
-        Segments = Map.empty
+        Segments = []
         LastDragPos = posOf 0.0 0.0
         WireColor = colour
         WireWidth = width
         Error = err
-        SelectedSegment = None
+        SelectedSegment = -1
     }
 
 // specific wire update when symbol updates
@@ -312,13 +323,34 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
         | false -> w
     )
 
-let singleSegView =
+
+
+// let segConnectionView =
+//     FunctionComponent.Of
+//         (fun (props: ConnectionRenderProps) ->
+            
+//             let color = props.WireColor
+//             let width = props.WireWidth
+
+//             g [] [
+//                 path
+//                     [
+//                         D (sprintf "M %f %f q %f %f %f %f" props.StartPos.X props.StartPos.Y props.EndPos.X props.EndPos.Y)
+//                         SVGAttr.Stroke (color.ToString())
+//                         SVGAttr.FillOpacity 0
+//                         SVGAttr.StrokeWidth width
+//                     ] []
+//             ]
+//         )
+
+
+let singleWireView =
     FunctionComponent.Of
-        (fun (props: SegRenderProps) ->
+        (fun (props: WireRenderProps) ->
             let color = props.WireColor
             let width = props.WireWidth
 
-            let segBBox = createSegBB props.StartPos props.EndPos
+            // let segBBox = createSegBB props.StartPos props.EndPos
 
             g [] [
                 // rect
@@ -353,18 +385,36 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
         |> Map.fold (fun acc _ w ->
             let segList =
                 w.Segments
-                |> Map.fold (fun acc _ s ->
+                |> List.fold (fun acc s ->
                     let props =
                         {
-                            Key = s.Id
+                            Key = s.Index
                             StartPos = s.StartPos
                             EndPos = s.EndPos
                             WireColor = w.WireColor
                             WireWidth = $"%d{w.WireWidth}"
                         }
 
-                    acc @ [singleSegView props]
+                    acc @ [singleWireView props]
                 ) []
+
+            // let connectionList =
+            //     w.Segments
+            //     |> Map.toList
+            //     |> List.map snd
+            //     |> List.pairwise
+            //     |> List.fold (fun acc (s1, s2) ->
+            //         let props =
+            //             {
+            //                 Key = w.Id
+            //                 StartSeg = s1
+            //                 EndSeg = s2
+            //                 WireColor = w.WireColor
+            //                 WireWidth = $"%d{w.WireWidth}"
+            //             }
+
+            //         acc @ [segConnectionView props]
+            //     ) []
 
             acc @ segList
         ) [])
@@ -407,80 +457,87 @@ let getWireColor (w: Wire): HighLightColor =
     | w when w.Error <> None -> Red
     | _ -> Blue
 
-let findSrcSeg (wModel: Model) (wire: Wire) : WireSegId =
-    let isSrc (seg: WireSegment): bool=
-        match findPrevSegment wModel wire.Id seg.StartPos seg.Direction with
-        | Some segId -> false
-        | _ -> true
-    match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
-    | Some segId -> segId
-    | None -> failwithf "Something in the check is wrong"
+// let findSrcSeg (wModel: Model) (wire: Wire) : WireSegId =
+//     let isSrc (seg: WireSegment): bool=
+//         match findPrevSegment wModel wire.Id seg.StartPos seg.Direction with
+//         | Some segId -> false
+//         | _ -> true
+//     match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
+//     | Some segId -> segId
+//     | None -> failwithf "Something in the check is wrong"
 
-let findtgtSeg (wModel: Model) (wire: Wire) : WireSegId =
-    let isSrc (seg: WireSegment): bool=
-        match findNextSegment wModel wire.Id seg.EndPos seg.Direction with
-        | Some segId -> false
-        | _ -> true
-    match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
-    | Some segId -> segId
-    | None -> failwithf "Something in the check is wrong"
+// let findtgtSeg (wModel: Model) (wire: Wire) : WireSegId =
+//     let isSrc (seg: WireSegment): bool=
+//         match findNextSegment wModel wire.Id seg.EndPos seg.Direction with
+//         | Some segId -> false
+//         | _ -> true
+//     match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
+//     | Some segId -> segId
+//     | None -> failwithf "Something in the check is wrong"
 
 
 let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
     let wire = findWire wModel wId
     let diff = posDiff pos wire.LastDragPos
 
-    let selectedId =
-        match wire.SelectedSegment with
-        | Some x -> x
-        | None -> failwithf "This shouldn't happen!"
+    // let selectedId =
+    //     match wire.SelectedSegment with
+    //     | Some x -> x
+    //     | None -> failwithf "This shouldn't happen!"
 
-    let seg = wire.Segments.[selectedId]
-    let origStartPos = seg.StartPos
-    let origEndPos = seg.EndPos
+    let seg = wire.Segments.[wire.SelectedSegment]
 
     let offset =
             match seg.Direction with
             | Horizontal -> posOf 0. diff.Y
             | Vertical -> posOf diff.X 0.
 
-    let isSrcConnection = findPrevSegment wModel wId seg.StartPos seg.Direction
-    let istgtConnection = findNextSegment wModel wId seg.EndPos seg.Direction
+    // let isSrcConnection = findPrevSegment wModel wId seg.StartPos seg.Direction
+    // let istgtConnection = findNextSegment wModel wId seg.EndPos seg.Direction
 
     let updatedSegs =
-        match isSrcConnection, istgtConnection with
-        
-        | Some segId, None -> 
-            Map.add seg.Id {
-                seg with
+        wire.Segments
+        |> List.mapi (fun i s ->
+            match wire.SelectedSegment with
+            | index when ((index = i) && (index = 0)) ->
+                {s with
+                    StartPos = posAdd seg.StartPos diff
+                    EndPos = posAdd seg.EndPos offset
+                }
+            | index when ((index = i) && (index = (List.length wire.Segments - 1))) ->
+                {s with
                     StartPos = posAdd seg.StartPos offset
-                    EndPos = posAdd seg.EndPos diff 
-            } wire.Segments
-        | None , Some segId  -> 
-            Map.add seg.Id {
-                    seg with
-                        StartPos = posAdd seg.StartPos diff
-                        EndPos = posAdd seg.EndPos offset
-                } wire.Segments
-        | _ -> 
-            Map.add seg.Id {
-                seg with
+                    EndPos = posAdd seg.EndPos diff
+                }
+            | index when index = i ->
+                {s with
                     StartPos = posAdd seg.StartPos offset
                     EndPos = posAdd seg.EndPos offset
-            } wire.Segments
+                }
+            | index when (index - 1) = s.Index ->
+                {s with
+                    EndPos = posAdd seg.StartPos offset
+                }
+            | index when (index + 1) = s.Index ->
+                {s with
+                    StartPos = posAdd seg.EndPos offset
+                }
+            | _ -> s
+        )
 
     {
-            wire with
-                Segments = autoConnect wModel wire.Id origStartPos origEndPos seg.Id updatedSegs
-                LastDragPos = pos
-        }
-let fitConnection (wModel: Model) (sModel: Symbol.Model) (connectionSegId: WireSegId) (segCurrentPos: XYPos) (newPortId: PortId)  (wire: Wire) : Wire = 
-    let updatedWire = {wire with SelectedSegment = Some connectionSegId; LastDragPos = segCurrentPos; Segments = wire.Segments}
+        wire with
+            Segments = updatedSegs
+            LastDragPos = pos
+    }
+
+let fitConnection (wModel: Model) (sModel: Symbol.Model) (index: SegmentIndex) (segCurrentPos: XYPos) (newPortId: PortId)  (wire: Wire) : Wire = 
+    let updatedWire = {wire with SelectedSegment = index; LastDragPos = segCurrentPos; Segments = wire.Segments}
     manualRouting {wModel with WX = Map.add updatedWire.Id updatedWire wModel.WX} updatedWire.Id (Symbol.portPos sModel newPortId)
 
 let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) =
-    let srcSegId = findSrcSeg wModel wire
-    let tgtSegId = findtgtSeg wModel wire     
+    let srcSegId = 0
+    let tgtSegId = List.length wire.Segments - 1   
 
     let rec findClosestPort pos n =
         match Symbol.portsInRange sModel pos n with
@@ -526,8 +583,6 @@ let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId
             SelectedSegment = findClosestSegment wire pos
             LastDragPos = pos
         } wModel.WX
-
-
 
 let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId, Wire> =
     wModel.WX
@@ -621,9 +676,7 @@ let distPtToSeg (pt: XYPos) ((startPt, endPt): XYPos * XYPos) = //(wSeg: WireSeg
 
 let distPtToWire (pt: XYPos) (wire: Wire) =
     wire.Segments
-    |> Map.map (fun _ s -> distPtToSeg pt (s.StartPos, s.EndPos))
-    |> Map.toList
-    |> List.map snd
+    |> List.map (fun s -> distPtToSeg pt (s.StartPos, s.EndPos))
     |> List.maxBy (~-)
 
 let isTargetWire (pt: XYPos) (wire: Wire) =
@@ -632,7 +685,7 @@ let isTargetWire (pt: XYPos) (wire: Wire) =
 
     let res =
         wire.Segments
-        |> Map.tryFindKey (fun _ s -> ptCloseToSeg s.StartPos s.EndPos)
+        |> List.tryFindIndex (fun s -> ptCloseToSeg s.StartPos s.EndPos)
 
     match res with
     | Some _ -> true

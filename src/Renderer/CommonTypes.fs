@@ -53,7 +53,7 @@ module CommonTypes
     type PortWidth = | PortWidth of int
 
     [<Erase>]
-    type WireSegId     =    | WireSegId of string
+    type SegmentIndex     =  int
 
 
 // Specify the position and type of a port in a JSComponent.
