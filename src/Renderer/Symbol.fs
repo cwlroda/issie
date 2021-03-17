@@ -697,7 +697,7 @@ let updateSymbolModelWithComponent (symModel: Model) (comp: Component) : Model =
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     // | AddSymbol (comp,pos)-> 
-    | AddSymbol (sType, pos) -> 
+    | AddSymbol (sType, pos, label) -> 
         let compId = ComponentId (uuid())
         let comp =
             createSpecificComponent compId pos sType label
