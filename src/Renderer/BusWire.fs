@@ -183,11 +183,11 @@ let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Map<WireSegI
 
     let wireDir = posDiff endPos startPos
 
-    let srcHost = Symbol.symbolBBox wModel.Symbol (Symbol.getHostId wModel.Symbol wire.SrcPort )
-    let tgtHost = Symbol.symbolBBox wModel.Symbol (Symbol.getHostId wModel.Symbol wire.TargetPort)
+    let srcHost = Symbol.symbolBBox sModel (Symbol.getHostId sModel wire.SrcPort )
+    let tgtHost = Symbol.symbolBBox sModel (Symbol.getHostId sModel wire.TargetPort)
 
     let vAdj = 
-        match verticalOverlap wModel srcHost tgtHost with
+        match verticalOverlap srcHost tgtHost with
         | true when srcHost.Pos.Y <= tgtHost.Pos.Y -> 
             tgtHost.Pos.Y + tgtHost.Height+ 20.
            
