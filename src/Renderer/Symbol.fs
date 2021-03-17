@@ -997,7 +997,7 @@ type private RenderSymbolProps =
     {
         Symbol : Symbol // name works for the demo!
         Dispatch : Dispatch<Msg>
-        Key: string // special field used by react to detect whether lists have changed, set to symbol Id
+        key: string // special field used by react to detect whether lists have changed, set to symbol Id
     }
 
 /// View for one symbol with caching for efficient execution when input does not change
@@ -1652,7 +1652,7 @@ let view (model : Model) (dispatch : Msg -> unit) =
             {
                 Symbol = symbol
                 Dispatch = dispatch
-                Key = id
+                key = id
             }
     )
     |> Map.toList
