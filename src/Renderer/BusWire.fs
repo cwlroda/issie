@@ -484,11 +484,15 @@ let checkPortConnections (wModel: Model) (wire: Wire) =
         |> fitConnection wModel tgtSegId (wire.Segments.[tgtSegId]).EndPos tgtPId
     | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} //to ensure it does not get a too many wire for input port validation error triggered by itself
-        {createWire updatedModel pId wire.TargetPort (Some wire.Id)  with Segments = wire.Segments}  
-        |> fitConnection wModel srcSegId (wire.Segments.[srcSegId]).StartPos pId
+        let updatedWire = createWire updatedModel pId wire.TargetPort (Some wire.Id)
+        {updatedWire with Segments =  autoRoute updatedModel updatedWire}
+        //{createWire updatedModel pId wire.TargetPort (Some wire.Id)  with Segments = wire.Segments}  
+        //|> fitConnection wModel srcSegId (wire.Segments.[srcSegId]).StartPos pId
     | Some srcPId, Some pId ->  
-        {createWire wModel pId wire.SrcPort (Some wire.Id) with Segments = wire.Segments}   
-        |> fitConnection wModel tgtSegId (wire.Segments.[tgtSegId]).EndPos pId
+        //{createWire wModel pId wire.SrcPort (Some wire.Id) with Segments = wire.Segments}   
+        //|> fitConnection wModel tgtSegId (wire.Segments.[tgtSegId]).EndPos pId
+        let updatedWire = createWire wModel pId wire.SrcPort (Some wire.Id)
+        {updatedWire with Segments =  autoRoute wModel updatedWire}
     | None, Some pId -> fitConnection wModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
     | Some pId, None -> fitConnection wModel tgtSegId (wire.Segments.[tgtSegId]).EndPos wire.TargetPort wire
     | None, None ->
@@ -522,7 +526,6 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId,
 
 let endDrag (wModel: Model): Map<ConnectionId, Wire> =
     let updatedModel = {wModel with WX = updateConnections wModel}
-    printf $"{updatedModel.WX   }"
     setUnselectedColor updatedModel
 
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
