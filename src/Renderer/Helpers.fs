@@ -78,20 +78,15 @@ let overlaps (b1: BBox) (b2: BBox): bool =
         || isLeftOf b2 b1
     )
 
-let gridSize = 10.
-
-let mulOfTen (input: float) : float = 
-    10. * float (int (input / 10.))
-
 // snaps wire segments to grid (variable grid size)
-let snapFloatToGrid (value: float) : float =
-    let offset = value % gridSize
-    if offset < gridSize - offset then value - offset else value + gridSize - offset
-
 let snapToGrid (pos: XYPos) : XYPos =
+    let gridSize = 10.
+    let xOffset = pos.X % gridSize
+    let yOffset = pos.Y % gridSize
+
     {
-        X = snapFloatToGrid pos.X
-        Y = snapFloatToGrid pos.Y
+        X = if xOffset < gridSize - xOffset then pos.X - xOffset else pos.X + gridSize - xOffset
+        Y = if yOffset < gridSize - yOffset then pos.Y - yOffset else pos.Y + gridSize - yOffset
     }
 
 type MouseOp = 

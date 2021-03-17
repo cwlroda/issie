@@ -42,13 +42,13 @@ type Wire =
 
 type Model =
     {
-        Symbol: Symbol.Model
         WX: Map<ConnectionId, Wire>
         WireAnnotation: bool
     }
 
 type Msg =
-    | Symbol of Symbol.Msg
+    | DeleteSymbols of CommonTypes.ComponentId list
+    | DraggingSymbols of CommonTypes.ComponentId list
     | AddWire of (PortId * PortId)
     | SetSelected of ConnectionId
     | DeleteWire of ConnectionId
@@ -103,8 +103,8 @@ let createSegBB (startPos: XYPos) (endPos: XYPos) : BBox =
         toBBox 0. 0. 0. 0.
 
 
-let checkPortWidths (wModel: Model) (srcPort: PortId) (tgtPort: PortId) : Result<int, string> =
-    let getWidth pId = Symbol.portWidth wModel.Symbol pId
+let checkPortWidths (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort: PortId) : Result<int, string> =
+    let getWidth pId = Symbol.portWidth sModel pId
 
     match getWidth srcPort, getWidth tgtPort with
     | Some pW1, Some pW2 when pW1 <> pW2 ->
@@ -139,9 +139,9 @@ let findNextSegment (wModel: Model) (wId: ConnectionId) (pos: XYPos) (segDirecti
     |> Map.tryFindKey (fun _ s -> s.Direction <> segDirection)
 
 // checks if segment is connected directly to either input or output port
-let isFirstOrLastSegment (wModel: Model) (wire: Wire) (seg: WireSegment) : bool =
-    let srcPos = Symbol.portPos wModel.Symbol wire.SrcPort
-    let tgtPos = Symbol.portPos wModel.Symbol wire.TargetPort
+let isFirstOrLastSegment (wModel: Model) (sModel: Symbol.Model) (wire: Wire) (seg: WireSegment) : bool =
+    let srcPos = Symbol.portPos sModel wire.SrcPort
+    let tgtPos = Symbol.portPos sModel wire.TargetPort
 
     match seg.StartPos, seg.EndPos with
     | x, _ when x = srcPos -> true
@@ -171,9 +171,9 @@ let makeWireSegment (wire : Wire) (startPos: XYPos) (endPos: XYPos) : WireSegmen
         Direction = direction
     }
 
-let autoRoute (wModel: Model) (wire: Wire) : Map<WireSegId, WireSegment> =
-    let startPos = Symbol.portPos wModel.Symbol wire.SrcPort
-    let endPos = Symbol.portPos wModel.Symbol wire.TargetPort
+let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Map<WireSegId, WireSegment> =
+    let startPos = Symbol.portPos sModel wire.SrcPort
+    let endPos = Symbol.portPos sModel wire.TargetPort
     let midPos = midPt startPos endPos
 
     let wireDir = posDiff endPos startPos
@@ -229,8 +229,8 @@ let autoConnect
     | None ->
         updatePrev
 
-let typesValid (port1, port2) (wModel: Model): Result<PortId * PortId, string> =
-    let getType pId = (Symbol.portType wModel.Symbol pId)
+let typesValid (port1, port2) (wModel: Model) (sModel: Symbol.Model) : Result<PortId * PortId, string> =
+    let getType pId = (Symbol.portType sModel pId)
 
     match getType port1, getType port2 with
     | pT1, pT2 when pT1 = pT2 -> Error $"Invalid Port Selection. The Ports cannot be both be {pT1}s."
@@ -242,12 +242,13 @@ let notAvaliableInput (wModel: Model) (inputId: PortId): bool =
 
 let createWire
     (wModel: Model)
+    (sModel: Symbol.Model)
     (port1: PortId)
     (port2: PortId)
     (conId: ConnectionId Option): Wire =
 
-    let widthValid = checkPortWidths wModel port1 port2
-    let validSrcTgt = typesValid (port1, port2) wModel
+    let widthValid = checkPortWidths wModel sModel port1 port2
+    let validSrcTgt = typesValid (port1, port2) wModel sModel
 
     let src, tgt, width, colour, err =
         match widthValid, validSrcTgt with
@@ -281,15 +282,15 @@ let createWire
     }
 
 // specific wire update when symbol updates
-let updateSymWires (wModel: Model) (symIds: ComponentId list) : Map<ConnectionId, Wire> =
+let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId list) : Map<ConnectionId, Wire> =
     let pIds =
         symIds
-        |> List.fold (fun acc symId -> acc @ Symbol.getPortsFromSymbols wModel.Symbol [symId]) []
+        |> List.fold (fun acc symId -> acc @ Symbol.getPortsFromSymbols sModel [symId]) []
     
     wModel.WX
     |> Map.map (fun _ w ->
         match List.contains w.SrcPort pIds || List.contains w.TargetPort pIds with
-        | true -> {w with Segments = autoRoute wModel w}
+        | true -> {w with Segments = autoRoute wModel sModel w}
         | false -> w
     )
 
@@ -330,8 +331,7 @@ let singleSegView =
         )
 
 let view (model: Model) (dispatch: Dispatch<Msg>) =
-    let wires =
-        model.WX
+    g [] (model.WX
         |> Map.fold (fun acc _ w ->
             let segList =
                 w.Segments
@@ -349,26 +349,18 @@ let view (model: Model) (dispatch: Dispatch<Msg>) =
                 ) []
 
             acc @ segList
-        ) []
+        ) [])
 
-    let symbols =
-        Symbol.view model.Symbol (fun sMsg -> dispatch (Symbol sMsg))
-
-    g [] [
-        (g [] wires);
-        symbols
-    ]
-
-let addWire (wModel: Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
-    let newWire = createWire wModel port1 port2 None
-    Map.add newWire.Id {newWire with Segments = autoRoute wModel newWire} wModel.WX
+let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
+    let newWire = createWire wModel sModel port1 port2 None
+    Map.add newWire.Id {newWire with Segments = autoRoute wModel sModel newWire} wModel.WX
 
 ///Given a connectionId deletes the given wire
 let deleteWire (wModel: Model) (wId: ConnectionId) : Map<ConnectionId, Wire> =
     Map.remove wId wModel.WX
 
-let deleteWiresOfSymbols (wModel: Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
-    let pIdList = Symbol.getPortsFromSymbols wModel.Symbol sIdLst
+let deleteWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
+    let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
 
     wModel.WX
     |> Map.filter (fun _ v ->
@@ -415,50 +407,8 @@ let findtgtSeg (wModel: Model) (wire: Wire) : WireSegId =
     | Some segId -> segId
     | None -> failwithf "Something in the check is wrong"
 
-let checkPortConnections (wModel: Model) (wire: Wire) =
-    let srcSegId = findSrcSeg wModel wire
-    let tgtSegId = findtgtSeg wModel wire     
 
-    let rec findClosestPort pos n =
-        match Symbol.portsInRange wModel.Symbol pos n with
-        | [] -> None
-        | [pId] -> Some pId
-        | lst -> findClosestPort pos (n-1.)
-
-    match findClosestPort (wire.Segments.[srcSegId]).StartPos 10., findClosestPort (wire.Segments.[tgtSegId]).EndPos 10. with
-    | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort -> wire
-    | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
-        let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX}
-        let updatedWire = createWire updatedModel pId wire.TargetPort (Some wire.Id)  
-        {updatedWire with Segments = autoRoute updatedModel updatedWire}
-    | Some srcPId, Some pId ->  
-        let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} // to not trigger double input warning
-        let updatedWire = createWire updatedModel wire.SrcPort pId (Some wire.Id)
-        {updatedWire with Segments = autoRoute updatedModel updatedWire}
-    | None, _ | _ , None -> 
-
-        {wire with Segments = autoRoute wModel wire}
-    
-
-let updateConnections (wModel: Model): Map<ConnectionId, Wire> =
-    Map.map (fun _ w -> checkPortConnections wModel w) wModel.WX
-
-/// Reset the color of all the wires except those set in red to highlight error
-let setUnselectedColor (wModel: Model): Map<ConnectionId, Wire> =
-    Map.map (fun wId w ->
-        getWireColor w |> setWireColor wModel wId
-    ) wModel.WX
-
-let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId, Wire> =
-    let wire = findWire wModel wId
-
-    Map.add wire.Id {
-        wire with
-            SelectedSegment = findClosestSegment wire pos
-            LastDragPos = pos
-        } wModel.WX
-
-let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId, Wire> =
+let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
     let wire = findWire wModel wId
     let diff = posDiff pos wire.LastDragPos
 
@@ -501,33 +451,86 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId,
                     EndPos = posAdd seg.EndPos offset
             } wire.Segments
 
-    wModel.WX
-        |> Map.add wId {
+    {
             wire with
                 Segments = autoConnect wModel wire.Id origStartPos origEndPos seg.Id updatedSegs
                 LastDragPos = pos
         }
-        
-let endDrag (wModel: Model): Map<ConnectionId, Wire> =
-    setUnselectedColor {wModel with WX = updateConnections wModel}
+let fitConnection (wModel: Model) (sModel: Symbol.Model) (connectionSegId: WireSegId) (segCurrentPos: XYPos) (newPortId: PortId)  (wire: Wire) : Wire = 
+    let updatedWire = {wire with SelectedSegment = Some connectionSegId; LastDragPos = segCurrentPos; Segments = wire.Segments}
+    manualRouting {wModel with WX = Map.add updatedWire.Id updatedWire wModel.WX} updatedWire.Id (Symbol.portPos sModel newPortId)
 
-let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
+let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) =
+    let srcSegId = findSrcSeg wModel wire
+    let tgtSegId = findtgtSeg wModel wire     
+
+    let rec findClosestPort pos n =
+        match Symbol.portsInRange sModel pos n with
+        | [] -> None
+        | [pId] -> Some pId
+        | lst -> findClosestPort pos (n-1.)
+
+    match findClosestPort (wire.Segments.[srcSegId]).StartPos 15., findClosestPort (wire.Segments.[tgtSegId]).EndPos 15. with
+    | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort -> 
+        fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos srcPId wire
+        |> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos tgtPId
+    | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
+        let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} //to ensure it does not get a too many wire for input port validation error triggered by itself
+        let updatedWire = createWire updatedModel sModel pId wire.TargetPort (Some wire.Id)
+        {updatedWire with Segments = autoRoute updatedModel sModel updatedWire}
+        //{createWire updatedModel pId wire.TargetPort (Some wire.Id)  with Segments = wire.Segments}  
+        //|> fitConnection wModel srcSegId (wire.Segments.[srcSegId]).StartPos pId
+    | Some srcPId, Some pId ->  
+        //{createWire wModel pId wire.SrcPort (Some wire.Id) with Segments = wire.Segments}   
+        //|> fitConnection wModel tgtSegId (wire.Segments.[tgtSegId]).EndPos pId
+        let updatedWire = createWire wModel sModel pId wire.SrcPort (Some wire.Id)
+        {updatedWire with Segments =  autoRoute wModel sModel updatedWire}
+    | None, Some pId -> fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
+    | Some pId, None -> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos wire.TargetPort wire
+    | None, None ->
+        {wire with Segments = autoRoute wModel sModel wire}
+    
+
+let updateConnections (wModel: Model) (sModel: Symbol.Model): Map<ConnectionId, Wire> =
+    Map.map (fun _ w -> checkPortConnections wModel sModel w) wModel.WX
+
+/// Reset the color of all the wires except those set in red to highlight error
+let setUnselectedColor (wModel: Model): Map<ConnectionId, Wire> =
+    Map.map (fun wId w ->
+        getWireColor w |> setWireColor wModel wId
+    ) wModel.WX
+
+let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId, Wire> =
+    let wire = findWire wModel wId
+
+    Map.add wire.Id {
+        wire with
+            SelectedSegment = findClosestSegment wire pos
+            LastDragPos = pos
+        } wModel.WX
+
+
+
+let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId, Wire> =
+    wModel.WX
+        |> Map.add wId (manualRouting wModel wId pos)
+           
+let endDrag (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
+    let updatedModel = {wModel with WX = updateConnections wModel sModel}
+    setUnselectedColor updatedModel
+
+let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     match msg with
-    | Symbol sMsg ->
-        let sm, sCmd = Symbol.update sMsg model.Symbol
-
-        let wx =
-            match sMsg with
-            | Symbol.Dragging (symId, _) ->
-                updateSymWires model symId
-            | Symbol.DeleteSymbols sIdLst ->
-                deleteWiresOfSymbols model sIdLst
-            | _ -> model.WX
-
-        { model with Symbol = sm; WX = wx }, Cmd.map Symbol sCmd
-
+    | DeleteSymbols sIdLst ->
+        { model with
+            WX = deleteWiresOfSymbols model sModel sIdLst
+        } , Cmd.none
+    | DraggingSymbols sIdLst ->
+        { model with
+            WX = updateSymWires model sModel sIdLst
+        } , Cmd.none
     | AddWire (wMsgId1, wMsgId2) ->
-        let wxUpdated = addWire model wMsgId1 wMsgId2
+        let wxUpdated = addWire model sModel wMsgId1 wMsgId2
         { model with WX = wxUpdated }, Cmd.none
     | DeleteWire wMsg ->
         let wxUpdated = deleteWire model wMsg
@@ -544,8 +547,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         let wxUpdated = startDrag model wMsgId wMsgPos
         { model with WX = wxUpdated }, Cmd.none
     | EndDrag ->
-        let wxUpdated = endDrag model
-
+        let wxUpdated = endDrag model sModel
         { model with WX = wxUpdated }, Cmd.none
     | SetColor c ->
         let wxUpdated =
@@ -553,18 +555,15 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         { model with WX = wxUpdated }, Cmd.none
 
 ///Dummy function to initialize for demo
-let init () =
-    let symbols, _ = Symbol.init ()
-
+let init (sModel: Symbol.Model) () =
     let pLst =
-        Symbol.allPortsInModel symbols
+        Symbol.allPortsInModel sModel
         |> Map.toList
         |> List.map fst
 
     let rng = System.Random 0
 
     let model = {
-        Symbol = symbols
         WX = Map.empty
         WireAnnotation = true
     }
@@ -576,7 +575,7 @@ let init () =
             pLst.[rng.Next(0, n - 1)], pLst.[rng.Next(0, n - 1)]
 
         { model with
-            WX = addWire model p1 p2
+            WX = addWire model sModel p1 p2
         }
 
     let model = makeRandomWire()
@@ -639,12 +638,12 @@ let getTargetedWire (wModel: Model) (pos: XYPos): ConnectionId Option =
     | lst -> Some(closestWire lst)
 
 
-let getErrors (wModel: Model): Error list =
+let getErrors (wModel: Model) (sModel: Symbol.Model): Error list =
     Map.fold
         (fun lst wId w ->
             match w.Error with
             | Some errStr ->
-                [{ Msg = errStr; Pos = (Symbol.portPos wModel.Symbol w.TargetPort)} ]
+                [{ Msg = errStr; Pos = (Symbol.portPos sModel w.TargetPort)} ]
                 @ lst
             | None -> lst)
         []

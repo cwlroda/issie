@@ -82,15 +82,16 @@ let combinedPortsMap (sym: Symbol) : Map<PortId, Port> =
         portMap
         |> Map.filter (fun _ port -> port.PortNumber <> None)
 
-    Map.fold (fun acc k v ->
-        Map.add k v acc
-    ) (filledPortList sym.Component.InputPorts) (filledPortList sym.Component.OutputPorts)
+    Map.fold (fun acc k v -> Map.add k v acc) (filledPortList sym.Component.InputPorts) (filledPortList sym.Component.OutputPorts)
 
 let getPortsFromSymbols (symModel: Model) (sIdLst: ComponentId list) : PortId list =
-    symModel
-    |> Map.filter (fun symId _ -> List.contains symId sIdLst)
-    |> Map.toList
-    |> List.map snd
+    let symList =
+        symModel
+        |> Map.filter (fun symId _ -> List.contains symId sIdLst)
+        |> Map.toList
+        |> List.map snd
+
+    symList
     |> List.fold (fun acc sym ->
         acc @ (
             combinedPortsMap sym
@@ -104,6 +105,7 @@ let getAllSymbols (symModel: Model) : ComponentId list =
     |> Map.toList
     |> List.map fst
 
+// might screw up
 let allPortsInModel (symModel: Model) : Map<PortId, Port> = 
     symModel
     |> Map.fold (fun acc _ elem -> 
@@ -113,13 +115,13 @@ let allPortsInModel (symModel: Model) : Map<PortId, Port> =
     ) Map.empty
 
 let findSymbolFromPort (symModel: Model) (port: Port) : Symbol =
-    Map.find port.HostId symModel
+    symModel.[port.HostId]
 
-let getTargetedSymbol (symModel: Model) (pos: XYPos) : ComponentId Option = 
+let getTargetedSymbol (symModel: Model) (pos:XYPos) : ComponentId Option = 
     let foundSymId = 
         symModel
         |> Map.tryFindKey 
-            (fun _ sym ->
+            (fun _ sym -> 
                 (sym.Component.X <= pos.X)
                 && (sym.Component.X + sym.Component.W >= pos.X)
                 && (sym.Component.Y <= pos.Y)
@@ -130,52 +132,59 @@ let getTargetedSymbol (symModel: Model) (pos: XYPos) : ComponentId Option =
         | Some symId -> Some symId
         | None -> None
 
-let getSymbolsInTargetArea (symModel: Model) (bbox: BBox) : ComponentId List =
+let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     symModel
     |> Map.filter
         (fun _ (sym:Symbol) ->
-            let symBBox = pointsToBBox (posOf sym.Component.X sym.Component.Y) (posOf (sym.Component.X + sym.Component.W) (sym.Component.Y + sym.Component.H))
+            let symBBox = pointsToBBox (posOf sym.Component.X sym.Component.Y) (posOf (sym.Component.X+sym.Component.W) (sym.Component.Y+sym.Component.H))
             overlaps symBBox bbox
         )
     |> Map.toList
     |> List.map fst
 
 let findPort (symModel: Model) (portId: PortId) : Port =
-    Map.find portId (allPortsInModel symModel)
+    (allPortsInModel symModel).[portId]
 
 let portPos (symModel: Model) (portId: PortId) : XYPos = 
     let foundPort = findPort symModel portId
     let foundSymbol = findSymbolFromPort symModel foundPort
-    
     {
         X = foundPort.PortPos.X + foundSymbol.Component.X
         Y = foundPort.PortPos.Y + foundSymbol.Component.Y
     }
 
-let getPortDist (symModel: Model) (port: Port) (pos: XYPos) =
-    portPos symModel port.PortId
-    |> posDist pos
-
-let getTargetedPort (symModel: Model) (pos: XYPos) : PortId Option =
+let getTargetedPort (symModel:Model) (pos:XYPos) : PortId Option =
     let nearbyPorts = 
         allPortsInModel symModel
-        |> Map.filter (fun _ port -> (getPortDist symModel port pos) < 15.)
+        |> Map.filter
+            (fun _ port ->
+                portPos symModel port.PortId
+                |> posDist pos < 20.
+            )
         |> Map.toList
         |> List.map snd
+        |> List.sortBy
+            (fun port ->
+                portPos symModel port.PortId
+                |> posDist pos
+            )
 
     match nearbyPorts with
+    | nearestPort::_ -> Some nearestPort.PortId
     | [] -> None
-    | lst -> Some (List.minBy (fun port -> getPortDist symModel port pos) lst).PortId
 
 let symbolPos (symModel: Model) (sId: ComponentId) : XYPos = 
     Map.find sId symModel
     |> (fun sym -> {X=sym.Component.X;Y=sym.Component.Y})
 
 let portType (symModel: Model) (portId: PortId) : PortType = 
-    (findPort symModel portId).PortType
+    let foundPort = findPort symModel portId
+    foundPort.PortType
 
 let portWidth (symModel: Model) (portId: PortId) : int option = 
-    match (findPort symModel portId).Width with
+    let foundPort = findPort symModel portId
+
+    match foundPort.Width with
     | PortWidth x -> Some x
 
 let getSymbolFromSymbolId (symModel: Model) (symId: ComponentId) : Symbol = 
@@ -200,169 +209,203 @@ let symbolBBox (symModel: Model) (compId: ComponentId) : BBox =
         Height = foundSymbol.Component.H
     }
 
-let portsInRange (symModel: Model) (mousePos: XYPos) (range: float) : PortId list =
-    allPortsInModel symModel
-    |> Map.filter (fun _ port -> (getPortDist symModel port mousePos) < range)
-    |> Map.toList
-    |> List.sortBy (fun (_, port) -> (getPortDist symModel port mousePos))
-    |> List.map fst
+let portsInRange (model: Model) (mousePos: XYPos) (range: float) : PortId list =
+    let nearbyPorts = 
+        allPortsInModel model
+        |> Map.filter
+            (fun _ port ->
+                portPos model port.PortId
+                |> posDist mousePos < range
+            )
+        |> Map.toList
+        |> List.map snd
+        |> List.sortBy
+            (fun port ->
+                portPos model port.PortId
+                |> posDist mousePos
+            )
+
+    List.map(fun port -> port.PortId) nearbyPorts
+    // model
+    // |> allPortsInModel
+    // |> List.filter( fun x -> ((posDist x.PortPos mousePos) < range))
+    // |> List.map(fun x -> x.PortId)
+    // // model
+    // // |> List.fold (fun (acc:PortId list) (elem:Symbol) ->
+    // //     combinedPortsList elem
+    // //     |> List.map
+    // //         (fun port -> port.PortId)
+    // //     |> List.append acc
+    // // ) []
+
+let mulOfFive (input:float)  : float = 
+    10. * float (int (input / 10.))
     
 //-----------------------------Skeleton Model Type for symbols----------------//
 
 //------------------------------Create Symbols---------------------//
 let rng = System.Random 0
 let rng2() = rng.Next(0,2)
-let createSpecificComponent (hostID: ComponentId) (position: XYPos) (compType: ComponentType) (labelName: string) : Component =
+let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:ComponentType) (labelName:string) : Component =
 
-    let x, y, w, h =
+    let compX,compY,compW,compH =
         match compType with 
-        | Not | And | Or | Xor | Nand | Nor | Xnor -> position.X, position.Y, 60., 70.
-        | DFF -> position.X, position.Y, 100., 80.
-        | DFFE -> position.X, position.Y, 100., 110.
-        | Mux2 -> position.X, position.Y, 100., 140.
-        | Demux2 -> position.X, position.Y, 100., 110.
-        | NbitsAdder _ -> position.X, position.Y, 150., 140.
-        | Input _ | Output _ | Constant _-> position.X, position.Y, 100., 40.
-        | RAM _ -> position.X, position.Y, 200., 140.
-        | RegisterE _-> position.X, position.Y, 200., 110.
-        | ROM _ | Register _ -> position.X, position.Y, 200., 90.
-        | AsyncROM _ -> position.X, position.Y, 200., 80.
-        | Decode4 -> position.X, position.Y, 100., 170.
-        | IOLabel -> position.X, position.Y, 100., 40.
-        | MergeWires | SplitWire _ -> position.X, position.Y, 100., 110.
-        | BusSelection _ -> position.X, position.Y, 200., 70.
-        | _ -> position.X, position.Y, 60., 100.
+        | Not | And | Or | Xor | Nand | Nor | Xnor -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 60.,mulOfFive 70.
+        | DFF -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 80.
+        | DFFE -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 110.
+        | Mux2 -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 140.
+        | Demux2 -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 110.
+        | NbitsAdder _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 150.,mulOfFive 140.
+        | Input _ | Output _ | Constant _->  mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 40.
+        | RAM _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 140.
+        | RegisterE _-> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 110.
+        | ROM _ | Register _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 90.
+        | AsyncROM _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 80.
+        | Decode4 -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 170.
+        | IOLabel -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 40.
+        | MergeWires | SplitWire _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 110.
+        | BusSelection _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 200., mulOfFive 70.
+        |_ ->  mulOfFive position.X, mulOfFive position.Y,mulOfFive 60.,mulOfFive 100.
 
-    let compX, compY, compW, compH =
-        mulOfTen x,
-        mulOfTen y,
-        mulOfTen w,
-        mulOfTen h
 
-    let portTemplate (portNumber: int) (portType: PortType) (portPos: float) (portWidth: PortWidth) : Port =
+    let portTemplate (portNumber:int) (portType: PortType) (portPos:float) (portWidth:PortWidth) :Port=
         let offset = 
             match portType with 
-            | PortType.Input -> 0.
-            | PortType.Output -> compW        
+            |PortType.Input -> 0.
+            |PortType.Output -> compW        
         {
             PortId = PortId (uuid())
             PortNumber =  Some (PortNumber (portNumber))
             PortType = portType
-            PortPos = {X=offset; Y = mulOfTen (20. + ((float portNumber) + 1.) * portPos ) }
+            PortPos = {X=offset; Y = mulOfFive (20. + ((float portNumber) + 1.) * portPos ) }
             HostId = hostID
             Hover = PortHover false
             Width = portWidth
         }
+
     
-    let lstToMap (lst: Port list) =
-        lst
-        |> List.map (fun port -> (port.PortId, port))
-        |> Map.ofList
-    
-    let (inputPorts, outputPorts) : (Port list * Port list) =
+    let (inputPorts, outputPorts): (Map<PortId, Port> * Map<PortId, Port>) =
         match compType with 
         | IOLabel ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [{
                         PortId = PortId (uuid())
                         PortNumber = Some (PortNumber (0))
                         PortType = PortType.Input
-                        PortPos = {X=0.; Y = mulOfTen (compH/2.)}
+                        PortPos = {X=0.; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
                     }]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [{
                         PortId = PortId (uuid())
                         PortNumber = Some (PortNumber (0))
                         PortType = PortType.Output
-                        PortPos = {X=compW; Y = mulOfTen (compH/2.)}
+                        PortPos = {X=compW; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
                     }]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
                 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | Input n ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [{
                         PortId = PortId (uuid())
                         PortNumber =  None
                         PortType = PortType.Input
-                        PortPos = {X = 0.; Y = mulOfTen (compH/2.)}
+                        PortPos = {X = 0.; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
                     }]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [{
                         PortId = PortId (uuid())
                         PortNumber =  Some (PortNumber (0))
                         PortType = PortType.Output
-                        PortPos = {X = compW; Y = mulOfTen (compH/2.)}
+                        PortPos = {X = compW; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
                     }]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         |Output n ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [{
                         PortId = PortId (uuid())
                         PortNumber =  None
                         PortType = PortType.Output
-                        PortPos = {X= compW; Y = mulOfTen (compH/2.)}
+                        PortPos = {X= compW; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
                     }]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [{
                         PortId = PortId (uuid())
                         PortNumber =  Some (PortNumber (0))
                         PortType = PortType.Input
-                        PortPos = {X = 0.; Y = mulOfTen (compH/2.)}
+                        PortPos = {X = 0.; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
                     }]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | And | Or | Xor ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [0;1]
                     |> List.map (fun x -> 
                         portTemplate x PortType.Input (( compH - 20. )/3.) (PortWidth 1)
                     )
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [
                         portTemplate 0 PortType.Output (( compH - 20. )/2.) (PortWidth 1)
                     ]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList,outputPortList
+                inputPortMap,outputPortMap
             )
         | Nand | Nor | Xnor ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [0;1]
                     |> List.map (fun x -> 
                         portTemplate x PortType.Input (( compH - 20. )/3.) (PortWidth 1)
                     )
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     // [
                     //     portTemplate 0 PortType.Output (( compH - 20. )/2.) (PortWidth 1)
                     // ]
@@ -370,236 +413,301 @@ let createSpecificComponent (hostID: ComponentId) (position: XYPos) (compType: C
                         PortId = PortId (uuid())
                         PortNumber =  Some (PortNumber (0))
                         PortType = PortType.Output
-                        PortPos = {X = compW + 15.; Y = mulOfTen (20. + (( compH - 20. )/2.))}
+                        PortPos = {X = compW + 15.; Y = mulOfFive (20. + (( compH - 20. )/2.))}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 1
                     }]
-
-                inputPortList, outputPortList
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
+                inputPortMap, outputPortMap
             )
         | Not ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [
                         portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth 1)
                     ]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [{
                         PortId = PortId (uuid())
                         PortNumber =  Some (PortNumber (0))
                         PortType = PortType.Output
-                        PortPos = {X = compW + 15.; Y = mulOfTen (20. + (( compH - 20. )/2.))}
+                        PortPos = {X = compW + 15.; Y = mulOfFive (20. + (( compH - 20. )/2.))}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 1
                     }]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList,outputPortList
+                inputPortMap,outputPortMap
             )
         | Mux2 -> 
             (
-                let inputPortList =
+                let inputPortMap =
                     [0;1]
                     |> List.map (fun x -> 
                         portTemplate x PortType.Input (( compH - 20. )/4.) (PortWidth 1)
                     )
                     |> List.append [(portTemplate 2 PortType.Input (( compH - 20. )/4.) (PortWidth 1))]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList =
+                let outputPortMap =
                     [
                         portTemplate 0 PortType.Output ((compH - 20.)/2. ) (PortWidth 1)
                     ]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
 
         | Demux2 ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [
                         portTemplate 0 PortType.Input ((compH - 20.)/3. ) (PortWidth 1)
                     ]
                     |> List.append [(portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1))]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [0;1]
                     |>List.map (fun x -> 
                         portTemplate x PortType.Output (( compH - 20. )/3.) (PortWidth 1)
                     )
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
 
         | NbitsAdder n->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [1;2]
                     |>List.map (fun x ->
                         portTemplate x PortType.Input (( compH - 20. )/4.) (PortWidth n)
                     )
                     |> List.append ([portTemplate 0 PortType.Input (( compH - 20. )/4.) (PortWidth 1)])
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [portTemplate 0 PortType.Output (( compH - 20. )/3.) (PortWidth n)]
-                    |> List.append [portTemplate 1 PortType.Output (( compH - 20. )/3.) (PortWidth 1)]
+                    |>List.append [portTemplate 1 PortType.Output (( compH - 20. )/3.) (PortWidth 1)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | DFF ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth 1)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth 1)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | DFFE -> 
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth 1)]
                     |> List.append [portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth 1)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | Register n->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth n)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth n)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | RegisterE n ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth n)]
                     |> List.append ([portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1)])
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth n)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | AsyncROM mem | ROM mem ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth mem.AddressWidth)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth mem.WordWidth)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | RAM mem ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [portTemplate 0 PortType.Input (( compH - 20. )/4.) (PortWidth mem.AddressWidth)]
                     @ [portTemplate 1 PortType.Input (( compH - 20. )/4.) (PortWidth mem.WordWidth)]
                     @ [portTemplate 2 PortType.Input (( compH - 20. )/4.) (PortWidth 1)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth mem.WordWidth)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | Constant (width,_) ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [{
                         PortId = PortId (uuid())
                         PortNumber =  None
                         PortType = PortType.Output
-                        PortPos = {X=mulOfTen (compW/2.); Y = compH}
+                        PortPos = {X=mulOfFive (compW/2.); Y = compH}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth 0
                     }]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [{
                         PortId = PortId (uuid())
                         PortNumber =  Some (PortNumber (0))
                         PortType = PortType.Output
-                        PortPos = {X = compW; Y = mulOfTen (compH/2.)}
+                        PortPos = {X = compW; Y = mulOfFive (compH/2.)}
                         HostId = hostID
                         Hover = PortHover false
                         Width = PortWidth width
                     }]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | BusSelection (outputWidth,leastSB) ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth (leastSB+outputWidth))]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth outputWidth)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
         | MergeWires ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth 0)]
-                    |> List.append [portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 0)]
+                    |>List.append [portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 0)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [
                         portTemplate 0 PortType.Output (( compH - 20. )/2.) (PortWidth 1)
                     ]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList,outputPortList
+                inputPortMap,outputPortMap
             )
         | SplitWire n->
             (
-                let outputPortList = 
+                let outputPortMap = 
                     [portTemplate 0 PortType.Output (( compH - 20. )/3.) (PortWidth 0)]
-                    |> List.append [portTemplate 1 PortType.Output (( compH - 20. )/3.) (PortWidth n)]
+                    |>List.append [portTemplate 1 PortType.Output (( compH - 20. )/3.) (PortWidth n)]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
                     
-                let inputPortList = 
+                let inputPortMap = 
                     [
                         portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth 0)
                     ]
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap,outputPortMap
             )
         | Decode4 ->
             (
-                let inputPortList = 
+                let inputPortMap = 
                     [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth 2)]
                     |> List.append ([portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1)])
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                let outputPortList = 
+                let outputPortMap = 
                     [0..3]
                     |>List.map (fun x -> 
                         portTemplate x PortType.Output (( compH - 20. )/5.) (PortWidth 1)
                     )
+                    |> List.map (fun port -> (port.PortId, port))
+                    |> Map.ofList
 
-                inputPortList, outputPortList
+                inputPortMap, outputPortMap
             )
-        | _ -> [], []
+        | _ -> Map.empty, Map.empty
     
     {
         Id = hostID
         Type = compType
         Label = labelName
-        InputPorts = lstToMap inputPorts
-        OutputPorts = lstToMap outputPorts
+        InputPorts = inputPorts
+        OutputPorts = outputPorts
         X = compX
         Y = compY
         H = compH
         W = compW
     }
+
+
+
+        
 
 
 //-----------------------Skeleton Message type for symbols---------------------//
@@ -643,11 +751,10 @@ let createNewSymbol ()  =
         //| 3 -> testComponentDemux2 ()
         //| _ -> testComponentMux2 ()
     let rng1 () = rng.Next(0,800)
-    let compId = ComponentId (uuid())
+    let compId = ComponentId (Helpers.uuid())
     let comp = 
         createSpecificComponent compId ({X= float(rng1 ());Y = float (rng1 ()) }) compType (string (rng.Next (0,100)))
     
-    compId,
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
@@ -663,6 +770,7 @@ let createNewSymbol ()  =
 
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
+    
     // let createTestList (testComponent :Component) (xIn,yIn) =
     
     //     {testComponent with X = testComponent.X + xIn; Y=testComponent.Y+yIn}
@@ -673,37 +781,38 @@ let init () =
     //Factorised to the below expression
     [1..10]
     |> List.map (fun x -> createNewSymbol ())
+    |> List.map (fun sym -> (sym.Id, sym))
     |> Map.ofList
+    // ([]:Symbol list)
     , Cmd.none
 
-// let setSelectedFunction (topLeft: XYPos, topRight: XYPos) (symModel: Model) : Model =
-//     symModel
-//     |> Map.map (fun _ sym ->
-//         if (withinSelectedBoundary {X=sym.Component.X; Y=sym.Component.Y} {X=sym.Component.X + sym.Component.W; Y=sym.Component.Y + sym.Component.H} topLeft topRight) then
-//             {sym with
-//                 Selected = true  
-//             }
-//         else
-//             {sym with
-//                 Selected = false
-//             }
-//     )
+let setSelectedFunction (topLeft: XYPos, topRight: XYPos) (symModel: Model) : Model =
+    symModel
+    |> Map.map (fun _ sym ->
+        if (withinSelectedBoundary {X=sym.Component.X; Y=sym.Component.Y} {X=sym.Component.X + sym.Component.W; Y=sym.Component.Y + sym.Component.H} topLeft topRight) then
+            {sym with
+                Selected = true  
+            }
+        else
+            {sym with
+                Selected = false
+            }
+    )
 
 let updateSymbolModelWithComponent (symModel: Model) (comp: Component) : Model =
     symModel
-    |> Map.add comp.Id {Map.find comp.Id symModel with Component = comp}
+    |> Map.add comp.Id {symModel.[comp.Id] with Component = comp}
 
 /// update function which displays symbols
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     // | AddSymbol (comp,pos)-> 
-    | AddSymbol (sType, pos, label) -> 
+    | AddSymbol (sType, pos, label) ->
         let compId = ComponentId (uuid())
-        let comp =
-            createSpecificComponent compId pos sType label
+        let comp = createSpecificComponent compId pos sType label
         let sym = 
             {
-                LastDragPos = {X=0.; Y=0.}
+                LastDragPos = {X=0. ; Y=0.}
                 IsDragging = false
                 Id = compId
                 Component = comp
@@ -714,7 +823,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     // | DeleteSymbol sId -> 
     //     List.filter (fun sym -> sym.Id <> sId) model, Cmd.none
     | DeleteSymbols _ ->
-        Map.filter (fun _ sym -> not sym.Selected) model, Cmd.none
+        Map.filter (fun _ sym -> not sym.Selected) model , Cmd.none
     // | SetSelectedDummy (topLeft, topRight) ->
     //     (setSelectedFunction (topLeft, topRight) model), Cmd.none
 
@@ -801,8 +910,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                     IsDragging = false
                     Component=
                         {sym.Component with 
-                            X = mulOfTen sym.Component.X
-                            Y = mulOfTen sym.Component.Y
+                            X = mulOfFive sym.Component.X
+                            Y = mulOfFive sym.Component.Y
                         }
                 }
             else sym
