@@ -807,10 +807,9 @@ let updateSymbolModelWithComponent (symModel: Model) (comp: Component) : Model =
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     // | AddSymbol (comp,pos)-> 
-    | AddSymbol (sType, pos, label) -> 
-        let compId = ComponentId (Helpers.uuid())
-        let comp =
-            createSpecificComponent compId pos sType label
+    | AddSymbol (sType, pos, label) ->
+        let compId = ComponentId (uuid())
+        let comp = createSpecificComponent compId pos sType label
         let sym = 
             {
                 LastDragPos = {X=0. ; Y=0.}
