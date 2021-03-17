@@ -77,6 +77,7 @@ type LabelRenderProps =
         Label: string
         ColorLabel: string
         Pos: XYPos
+        BusIdcWidth: float
     }
 
 
@@ -485,13 +486,26 @@ let endDrag (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
 let singleLabelView =
     FunctionComponent.Of
         (fun (props: LabelRenderProps) ->
-            text [ X props.Pos.X
-                   Y props.Pos.Y
-                   Style [ TextAnchor "left"
-                           DominantBaseline "middle"
-                           FontSize "14px"
-                           Fill props.ColorLabel ] ] [
-                str <| sprintf $"{props.Label}"
+            g [][
+                text [ 
+                        X (props.Pos.X + 7.5)
+                        Y (props.Pos.Y + 12.5)
+                        Style [ 
+                                TextAnchor "left"
+                                DominantBaseline "middle"
+                                FontSize "14px"
+                                Fill props.ColorLabel ] ] [
+                        str <| sprintf $"{props.Label}"
+                ]
+                line [
+                        X1 (props.Pos.X + 7.5 );
+                        Y1 (props.Pos.Y - 5.);
+                        X2 (props.Pos.X + 15.);
+                        Y2 (props.Pos.Y + 5. );
+                        SVGAttr.Stroke (props.ColorLabel)
+                        SVGAttr.FillOpacity 0
+                        SVGAttr.StrokeWidth props.BusIdcWidth
+                ][]
             ])
 
 
@@ -543,9 +557,10 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
               
             let (labelProps: LabelRenderProps) = {
                 key = w.Id
-                Pos = posAdd (srcSeg.StartPos) {X=7.5; Y=12.5}
-                ColorLabel = HighLightColor.Blue.ToString()
+                Pos = srcSeg.StartPos 
+                ColorLabel = w.WireColor.ToString()
                 Label = lbl
+                BusIdcWidth = (if w.WireWidth > 3 then 3. else 0.)
             }
 
             let segList =
