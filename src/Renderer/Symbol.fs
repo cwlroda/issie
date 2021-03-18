@@ -64,6 +64,19 @@ type Msg =
 //---------------------------------helper types and functions----------------//
 
 
+let processingString (inputString) (thresholdLength) = 
+    let beforeProcessingLength = String.length inputString
+    if beforeProcessingLength > thresholdLength then
+            let intermediateStep = 
+                (
+                    String.mapi (fun ind chr -> 
+                        if ind < thresholdLength then chr else '\000'
+                    ) 
+                    >> String.filter (fun x -> x <> '\000') 
+                ) inputString
+            intermediateStep + ".."
+        else inputString
+
 let posDiff (a:XYPos) (b:XYPos) =
     {X=a.X-b.X; Y=a.Y-b.Y}
 
@@ -76,6 +89,8 @@ let withinSelectedBoundary (compTopLeft:XYPos) (compBotRight:XYPos) (boundTopLef
     match compTopLeft,compBotRight with
         | point1,point2 when (point1.X >= boundTopLeft.X) && (point2.X <= boundBotRight.X) && (point1.Y >= boundTopLeft.Y) && (point2.Y <= boundBotRight.Y) -> true
         | _ -> false
+
+
 
 let combinedPortsMap (sym: Symbol) : Map<PortId, Port> =
     let filledPortList (portMap: Map<PortId, Port>) : Map<PortId, Port> = 
@@ -265,7 +280,15 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | IOLabel -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 40.
         | MergeWires | SplitWire _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 110.
         | BusSelection _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 200., mulOfFive 70.
-        |_ ->  mulOfFive position.X, mulOfFive position.Y,mulOfFive 60.,mulOfFive 100.
+        | Custom customParams ->  
+            let maxPorts =
+                if (List.length customParams.InputLabels) > (List.length customParams.OutputLabels) then
+                    (List.length customParams.InputLabels)
+                else
+                    (List.length customParams.OutputLabels)
+               
+            mulOfFive position.X, mulOfFive position.Y, mulOfFive 200., mulOfFive (20. + 30.* (1. + float (maxPorts)))
+            
 
 
     let portTemplate (portNumber:int) (portType: PortType) (portPos:float) (portWidth:PortWidth) :Port=
@@ -285,7 +308,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
     
     let (inputPorts, outputPorts): (Map<PortId, Port> * Map<PortId, Port>) =
-        match compType with 
+        match compType with
         | IOLabel ->
             (
                 let inputPortMap = 
@@ -376,6 +399,53 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
                 inputPortMap, outputPortMap
             )
+        | Custom customParams ->
+            (
+                let inputPortMap = 
+                    if List.isEmpty customParams.InputLabels then
+                        [{
+                            PortId = PortId (uuid())
+                            PortNumber =  None
+                            PortType = PortType.Input
+                            PortPos = {X= compW; Y = mulOfFive (compH/2.)}
+                            HostId = hostID
+                            Hover = PortHover false
+                            Width = PortWidth 0
+                        }]
+                        |> List.map (fun port -> (port.PortId, port))
+                        |> Map.ofList
+                    else
+                        customParams.InputLabels
+                        |> List.map (fun (_,portNum) ->
+                            portTemplate portNum PortType.Input (( compH - 20. ) / ((float (List.length customParams.InputLabels)) + 1.)) (PortWidth 1) 
+                        )
+                        |> List.map (fun port -> (port.PortId, port))
+                        |> Map.ofList
+                
+                let outputPortMap = 
+                    if List.isEmpty customParams.OutputLabels then
+                        [{
+                            PortId = PortId (uuid())
+                            PortNumber =  None
+                            PortType = PortType.Output
+                            PortPos = {X= compW; Y = mulOfFive (compH/2.)}
+                            HostId = hostID
+                            Hover = PortHover false
+                            Width = PortWidth 0
+                        }]
+                        |> List.map (fun port -> (port.PortId, port))
+                        |> Map.ofList
+                    else
+                        customParams.OutputLabels
+                        |> List.map (fun (_,portNum) ->
+                            portTemplate portNum PortType.Output (( compH - 20. ) / ((float (List.length customParams.OutputLabels)) + 1.)) (PortWidth 1) 
+                        )
+                        |> List.map (fun port -> (port.PortId, port))
+                        |> Map.ofList
+
+                inputPortMap,outputPortMap
+            )
+
         | And | Or | Xor ->
             (
                 let inputPortMap = 
@@ -691,8 +761,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
                 inputPortMap, outputPortMap
             )
-        | _ -> Map.empty, Map.empty
-    
+
     {
         Id = hostID
         Type = compType
@@ -718,35 +787,42 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
 let createNewSymbol ()  =
     let rng0 () = rng.Next (0,9)
-    let rngComponent () = rng.Next(0,25)
+    let rngComponent () = rng.Next(0,26)
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty} 
     let compType = 
+        let (customComp:CustomComponentType) = 
+            {
+                Name = "\"Our\" Custom Component"
+                InputLabels = [("TestInput0",0) ; ("TestInput1", 1) ; ("TestInput2", 2)]
+                OutputLabels = [("TestOutput0",0) ; ("TestOutput1", 1)]
+            }
         match (rngComponent ()) with
-        | 0 -> Not
-        | 1 -> And
-        | 2 -> Or
-        | 3 -> Xor
-        | 4 -> Nand
-        | 5 -> Nor
-        | 6 -> Xnor
-        | 7 -> Mux2
-        | 8 -> NbitsAdder (rng0 ())
-        | 9 -> DFF
-        | 10 -> DFFE
-        | 11 -> Register (rng0 ())
-        | 12 -> RegisterE (rng0())
-        | 13 -> AsyncROM (memory ())
-        | 14 -> ROM (memory())
-        | 15 -> RAM (memory())
-        | 16 -> Decode4
-        | 17 -> Input (rng0 ())
-        | 18 -> Output (rng0 ())
-        | 19 -> IOLabel
-        | 20 -> Demux2
-        | 21 -> MergeWires
-        | 22 -> BusSelection (rng0(),rng0())
-        | 23 -> Constant (rng0(), rng0())
-        | _ -> SplitWire (rng0())
+        // | 0 -> Not
+        // | 1 -> And
+        // | 2 -> Or
+        // | 3 -> Xor
+        // | 4 -> Nand
+        // | 5 -> Nor
+        // | 6 -> Xnor
+        // | 7 -> Mux2
+        // | 8 -> NbitsAdder (rng0 ())
+        // | 9 -> DFF
+        // | 10 -> DFFE
+        // | 11 -> Register (rng0 ())
+        // | 12 -> RegisterE (rng0())
+        // | 13 -> AsyncROM (memory ())
+        // | 14 -> ROM (memory())
+        // | 15 -> RAM (memory())
+        // | 16 -> Decode4
+        // | 17 -> Input (rng0 ())
+        // | 18 -> Output (rng0 ())
+        // | 19 -> IOLabel
+        // | 20 -> Demux2
+        // | 21 -> MergeWires
+        // | 22 -> BusSelection (rng0(),rng0())
+        // | 23 -> Constant (rng0(), rng0())
+        // | 24 -> SplitWire (rng0())
+        | _ -> Custom customComp
 
         //| 3 -> testComponentDemux2 ()
         //| _ -> testComponentMux2 ()
@@ -1053,7 +1129,7 @@ let private renderSymbol (model:Model) =
                 | Input _ -> "Input"
                 | Output _ -> "Output"
                 | Constant (_,n) -> "Constant -"  + string n
-                |_ -> "NameNotNeeded"
+                | Custom customComp -> processingString customComp.Name 15
 
             
             
@@ -1095,29 +1171,19 @@ let private renderSymbol (model:Model) =
                         ]
                 }
             let viewBoxLabel : ReactElement =
-                let outputStringBeforeProcessing = componentName + " - " + (string props.Symbol.Component.Label)
-                let beforeProcessingLength = String.length outputStringBeforeProcessing
-                let processing (thresholdLength)= 
-                    if beforeProcessingLength > thresholdLength then
-                            let intermediateStep = 
-                                (
-                                    String.mapi (fun ind chr -> 
-                                        if ind < thresholdLength then chr else '\000'
-                                    ) 
-                                    >> String.filter (fun x -> x <> '\000') 
-                                ) outputStringBeforeProcessing
-                            intermediateStep + ".."
-                        else outputStringBeforeProcessing
+                let fullName = componentName + " - " + (string props.Symbol.Component.Label)
+                
+                
                 let outputString = 
                     match width with
                     | x when x < 100. ->
-                        processing 5
+                        processingString fullName 5
                     | x when x < 150. ->
-                        processing 6
+                        processingString fullName 6
                     | x when x < 200. ->
-                        processing 8
+                        processingString fullName 8
                     | _ ->
-                        processing 10
+                        processingString fullName 10
 
 
                 match componentType with 
@@ -1315,78 +1381,72 @@ let private renderSymbol (model:Model) =
                     |> List.map(fun (_, port:Port) ->
                     // let parentSymbol () = findSymbolFromPort model x
                         let absPos () = posAdd  topLeft port.PortPos
-                        match compType with
-                        | Not | And |Nand |Or|Nor|Xor|Xnor|Mux2|Demux2
-                        |NbitsAdder _|DFF|DFFE|RegisterE _|Register _|AsyncROM _
-                        |ROM _|RAM _|Decode4|IOLabel|MergeWires|SplitWire _
-                        |BusSelection _->
 
-                            let dynamicContent =
-                                match port.PortType with
-                                | PortType.Input -> ((absPos()).X-lineLength), ((absPos()).X - 10.)
-                                | PortType.Output -> ((absPos()).X+lineLength), ((absPos()).X + 10.)
-                            let (PortNumber portNumber) =    
-                                match port.PortNumber with
-                                |Some a -> a
-                                |None -> PortNumber -1
-                            match portNumber with
-                            |portCheck when portCheck >= 0 ->
-                                g[] [
-                                    circle 
-                                        (Seq.append [
-                                            Cx (absPos()).X
-                                            // ?=X2 (fst dynamicContent)
-                                            Cy (absPos()).Y
-                                            R 3.
-                                            // Y1 (absPos()).Y
-                                        ] (viewPortLinesStaticComponent port))[]
+                        let dynamicContent =
+                            match port.PortType with
+                            | PortType.Input -> ((absPos()).X-lineLength), ((absPos()).X - 10.)
+                            | PortType.Output -> ((absPos()).X+lineLength), ((absPos()).X + 10.)
+                        let (PortNumber portNumber) =    
+                            match port.PortNumber with
+                            |Some a -> a
+                            |None -> PortNumber -1
+                        match portNumber with
+                        |portCheck when portCheck >= 0 ->
+                            g[] [
+                                circle 
+                                    (Seq.append [
+                                        Cx (absPos()).X
+                                        // ?=X2 (fst dynamicContent)
+                                        Cy (absPos()).Y
+                                        R 3.
+                                        // Y1 (absPos()).Y
+                                    ] (viewPortLinesStaticComponent port))[]
 
-                                    // line 
-                                    //     (Seq.append [
-                                    //         X1 (snd dynamicContent)
-                                    //         X2 (snd dynamicContent)
-                                    //         match x.Hover with
-                                    //         |PortHover false ->
-                                    //             Y2 ((absPos()).Y + 6.)
-                                    //             Y1 ((absPos()).Y - 6.)
-                                    //         |_ ->
-                                    //             Y2 ((absPos()).Y + 8.)
-                                    //             Y1 ((absPos()).Y - 8.)
-                                    //     ] (viewPortBusIndicatorLinesStaticComponent x))[]
+                                // line 
+                                //     (Seq.append [
+                                //         X1 (snd dynamicContent)
+                                //         X2 (snd dynamicContent)
+                                //         match x.Hover with
+                                //         |PortHover false ->
+                                //             Y2 ((absPos()).Y + 6.)
+                                //             Y1 ((absPos()).Y - 6.)
+                                //         |_ ->
+                                //             Y2 ((absPos()).Y + 8.)
+                                //             Y1 ((absPos()).Y - 8.)
+                                //     ] (viewPortBusIndicatorLinesStaticComponent x))[]
 
-                                    if selectedBool = true then
-                                        text (Seq.append [
-                                            X (snd dynamicContent)
-                                            Y ((absPos()).Y - 20.)
-                                            ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
-                                    else nothing
+                                if selectedBool = true then
+                                    text (Seq.append [
+                                        X (snd dynamicContent)
+                                        Y ((absPos()).Y - 20.)
+                                        ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
+                                else nothing
 
-                                    match compType with 
-                                    | ComponentType.Not | ComponentType.Nand | ComponentType.Nor | ComponentType.Xnor ->
-                                        (
-                                            match port.PortType with
-                                            |PortType.Output -> 
-                                                g [] [
-                                                    line 
-                                                        (Seq.append [
-                                                            X1 ((absPos()).X - lineLength)
-                                                            X2 ((fst dynamicContent) - lineLength);
-                                                            Y2 (absPos()).Y
-                                                            Y1 (absPos()).Y
-                                                        ] (viewPortLinesStaticComponent2 port))[]
-                                                    line
-                                                        (Seq.append [
-                                                            X1 ((absPos()).X + 12. - lineLength)
-                                                            X2 ((absPos()).X - lineLength)
-                                                            Y2 ((absPos()).Y - 12.)
-                                                            Y1 (absPos()).Y
-                                                        ] (viewPortLinesStaticComponent2 port))[]
-                                                ]
-                                            |_ -> nothing
-                                        )
-                                    | _ -> nothing
-                                ]
-                            |_ -> nothing
+                                match compType with 
+                                | ComponentType.Not | ComponentType.Nand | ComponentType.Nor | ComponentType.Xnor ->
+                                    (
+                                        match port.PortType with
+                                        |PortType.Output -> 
+                                            g [] [
+                                                line 
+                                                    (Seq.append [
+                                                        X1 ((absPos()).X - lineLength)
+                                                        X2 ((fst dynamicContent) - lineLength);
+                                                        Y2 (absPos()).Y
+                                                        Y1 (absPos()).Y
+                                                    ] (viewPortLinesStaticComponent2 port))[]
+                                                line
+                                                    (Seq.append [
+                                                        X1 ((absPos()).X + 12. - lineLength)
+                                                        X2 ((absPos()).X - lineLength)
+                                                        Y2 ((absPos()).Y - 12.)
+                                                        Y1 (absPos()).Y
+                                                    ] (viewPortLinesStaticComponent2 port))[]
+                                            ]
+                                        |_ -> nothing
+                                    )
+                                | _ -> nothing
+                            ]
                         |_ -> nothing
                     )
                         
@@ -1414,108 +1474,145 @@ let private renderSymbol (model:Model) =
 
             let viewPortsType1 (compType:ComponentType): ReactElement list = 
                 let inputList =
-                    inputPorts
-                    |> Map.toList
-                    |> List.map (fun (_, port) ->
-                        let portNumber = 
-                            match port.PortNumber with 
-                            | Some (PortNumber portNum) -> portNum
-                            | None -> -1
-                        match compType with
-                        |Decode4 ->
-                            (
-                                match portNumber with
-                                |portNum when portNum = 0 -> generatePorts port "Sel"
-                                |portNum when portNum = 1 -> generatePorts port "Data"
-                                |_ -> nothing
-                            )
-                        |Mux2 ->
-                            (
-                                match portNumber with
-                                |portNum when portNum < 2 -> generatePorts port (string portNumber)
-                                |portNum when portNum = 2 -> generatePorts port "Sel"
-                                |_ -> nothing
-                            )
-                        |Demux2 ->
-                            (
-                                match portNumber with
-                                |portNum when portNum < 1 -> generatePorts port (string portNumber)
-                                |portNum when portNum = 1 -> generatePorts port "Sel"
-                                |_ -> nothing
-                            )
-                        |NbitsAdder _ ->
-                            (
-                                match portNumber with
-                                |portNum when portNum = 0 -> generatePorts port "Cin"
-                                |portNum when portNum = 1 -> generatePorts port "A"
-                                |portNum when portNum = 2 -> generatePorts port "B"
-                                |_ -> nothing
-                            )
-                        |DFF ->
-                            (
-                                match portNumber with
-                                |portNum when portNum = 0 -> generatePorts port "D"
-                                |_ -> nothing
-                            )
-                        |DFFE ->
-                            (
-                                match portNumber with
-                                |portNum when portNum = 0 -> generatePorts port "D"
-                                |portNum when portNum = 1 -> generatePorts port "EN"
-                                |_ -> nothing
-                            )
-                        |Register _ ->
-                            (
-                                match portNumber with
-                                |portNum when portNum = 0 -> generatePorts port "Data-In"
-                                |_ -> nothing
-                            )
-                        |RegisterE _ ->
-                            (
-                                match portNumber with
-                                |portNum when portNum = 0 -> generatePorts port "Data-In"
-                                |portNum when portNum = 1 -> generatePorts port "EN"
-                                |_ -> nothing
-                            )
-                        |ROM _ | AsyncROM _ ->
-                            (
-                                match portNumber with
-                                |portNum when portNum = 0 -> generatePorts port "Addr"
-                                |_ -> nothing
-                            )
-                        |RAM _ ->
-                            (
-                                match portNumber with
-                                |portNum when portNum = 0 -> generatePorts port "Addr"
-                                |portNum when portNum = 1 -> generatePorts port "Data-In"
-                                |portNum when portNum = 2 -> generatePorts port "Write"
-                                |_ -> nothing
-                            )
-                        |_ -> nothing
+                    match compType with
+                    |Custom customParams ->
+                        inputPorts
+                        |> Map.toList
+                        |> List.map (fun (_,port) ->
+                            let portNumber =
+                                match port.PortNumber with
+                                | Some (PortNumber portNum) -> portNum
+                                | None -> -1
+                            if portNumber >= 0 then
+                                let portLabel = 
+                                    List.pick (fun elem ->
+                                        match elem with
+                                        |(value,portNumber) -> Some (processingString value 8)
+                                    ) customParams.InputLabels
+                                generatePorts port portLabel
+                            else nothing
+                        )
+                    |_ ->
+                        inputPorts
+                        |> Map.toList
+                        |> List.map (fun (_, port) ->
+                            let portNumber = 
+                                match port.PortNumber with 
+                                | Some (PortNumber portNum) -> portNum
+                                | None -> -1
+                            match compType with
                             
-                    )
-                let outputList =
-                    outputPorts
-                    |> Map.toList
-                    |> List.map (fun (_, port)->
-                        let portNumber = 
-                            match port.PortNumber with 
-                            | Some (PortNumber portNum) -> portNum
-                            | None -> -1
-                        match compType with
-                        |Demux2|Decode4 -> generatePorts port (string portNumber)
-                        |DFF|DFFE -> generatePorts port "Q"
-                        |Register _|RegisterE _ -> generatePorts port "Data-Out" 
-                        |AsyncROM _|ROM _ -> generatePorts port "Data"
-                        |RAM _ -> generatePorts port "Data-Out"
-                        |NbitsAdder _ ->
-                            match portNumber with
-                            |portNum when portNum = 0 -> generatePorts port "Sum"
-                            |portNum when portNum = 1 -> generatePorts port "Cout"
+                            |Decode4 ->
+                                (
+                                    match portNumber with
+                                    |portNum when portNum = 0 -> generatePorts port "Sel"
+                                    |portNum when portNum = 1 -> generatePorts port "Data"
+                                    |_ -> nothing
+                                )
+                            |Mux2 ->
+                                (
+                                    match portNumber with
+                                    |portNum when portNum < 2 -> generatePorts port (string portNumber)
+                                    |portNum when portNum = 2 -> generatePorts port "Sel"
+                                    |_ -> nothing
+                                )
+                            |Demux2 ->
+                                (
+                                    match portNumber with
+                                    |portNum when portNum < 1 -> generatePorts port (string portNumber)
+                                    |portNum when portNum = 1 -> generatePorts port "Sel"
+                                    |_ -> nothing
+                                )
+                            |NbitsAdder _ ->
+                                (
+                                    match portNumber with
+                                    |portNum when portNum = 0 -> generatePorts port "Cin"
+                                    |portNum when portNum = 1 -> generatePorts port "A"
+                                    |portNum when portNum = 2 -> generatePorts port "B"
+                                    |_ -> nothing
+                                )
+                            |DFF ->
+                                (
+                                    match portNumber with
+                                    |portNum when portNum = 0 -> generatePorts port "D"
+                                    |_ -> nothing
+                                )
+                            |DFFE ->
+                                (
+                                    match portNumber with
+                                    |portNum when portNum = 0 -> generatePorts port "D"
+                                    |portNum when portNum = 1 -> generatePorts port "EN"
+                                    |_ -> nothing
+                                )
+                            |Register _ ->
+                                (
+                                    match portNumber with
+                                    |portNum when portNum = 0 -> generatePorts port "Data-In"
+                                    |_ -> nothing
+                                )
+                            |RegisterE _ ->
+                                (
+                                    match portNumber with
+                                    |portNum when portNum = 0 -> generatePorts port "Data-In"
+                                    |portNum when portNum = 1 -> generatePorts port "EN"
+                                    |_ -> nothing
+                                )
+                            |ROM _ | AsyncROM _ ->
+                                (
+                                    match portNumber with
+                                    |portNum when portNum = 0 -> generatePorts port "Addr"
+                                    |_ -> nothing
+                                )
+                            |RAM _ ->
+                                (
+                                    match portNumber with
+                                    |portNum when portNum = 0 -> generatePorts port "Addr"
+                                    |portNum when portNum = 1 -> generatePorts port "Data-In"
+                                    |portNum when portNum = 2 -> generatePorts port "Write"
+                                    |_ -> nothing
+                                )
                             |_ -> nothing
-                        |_-> nothing
-
-                    )
+                        )
+                let outputList =
+                    match compType with
+                    |Custom customParams ->
+                        outputPorts
+                        |> Map.toList
+                        |> List.map (fun (_,port) ->
+                            let portNumber =
+                                match port.PortNumber with
+                                | Some (PortNumber portNum) -> portNum
+                                | None -> -1
+                            if portNumber >= 0 then
+                                let portLabel = 
+                                    List.pick (fun elem ->
+                                        match elem with
+                                        |(value,portNumber) -> Some (processingString value 8)
+                                    ) customParams.OutputLabels
+                                generatePorts port portLabel
+                            else nothing
+                        )
+                    | _ -> 
+                        outputPorts
+                        |> Map.toList
+                        |> List.map (fun (_, port)->
+                            let portNumber = 
+                                match port.PortNumber with 
+                                | Some (PortNumber portNum) -> portNum
+                                | None -> -1
+                            match compType with
+                            |Demux2|Decode4 -> generatePorts port (string portNumber)
+                            |DFF|DFFE -> generatePorts port "Q"
+                            |Register _|RegisterE _ -> generatePorts port "Data-Out" 
+                            |AsyncROM _|ROM _ -> generatePorts port "Data"
+                            |RAM _ -> generatePorts port "Data-Out"
+                            |NbitsAdder _ ->
+                                match portNumber with
+                                |portNum when portNum = 0 -> generatePorts port "Sum"
+                                |portNum when portNum = 1 -> generatePorts port "Cout"
+                                |_ -> nothing
+                            |_-> nothing
+                        )
                 inputList @ outputList
 
             //----------------------------viewPortLines Functions---------------------------//
@@ -1627,9 +1724,10 @@ let private renderSymbol (model:Model) =
                 | ComponentType.Input _ -> viewBoxInput @ viewPortsInput @ viewPortLinesInput
                 | ComponentType.Output _ -> viewBoxOutput @ viewPortsOutput @ viewPortLinesOutput
                 | ComponentType.Constant (_,n) -> (viewBoxConstant n) @ viewPortsInput @ viewPortLinesInput
-                | ComponentType.Not | ComponentType.And | ComponentType.Or | ComponentType.Xor | ComponentType.Nand | ComponentType.Nor | ComponentType.Xnor |ComponentType.Mux2 | ComponentType.Demux2 |ComponentType.NbitsAdder _ | ComponentType.DFF | ComponentType.DFFE | ComponentType.Register _ | ComponentType.RegisterE _ | ComponentType.AsyncROM _| ComponentType.ROM _| ComponentType.RAM _| ComponentType.Decode4 | ComponentType.IOLabel | ComponentType.MergeWires | ComponentType.SplitWire _ | ComponentType.BusSelection _
+                | _
+                // | ComponentType.Not | ComponentType.And | ComponentType.Or | ComponentType.Xor | ComponentType.Nand | ComponentType.Nor | ComponentType.Xnor |ComponentType.Mux2 | ComponentType.Demux2 |ComponentType.NbitsAdder _ | ComponentType.DFF | ComponentType.DFFE | ComponentType.Register _ | ComponentType.RegisterE _ | ComponentType.AsyncROM _| ComponentType.ROM _| ComponentType.RAM _| ComponentType.Decode4 | ComponentType.IOLabel | ComponentType.MergeWires | ComponentType.SplitWire _ | ComponentType.BusSelection _
                     -> viewBoxType1 @ (viewPortLinesType1 compType) @ (viewPortsType1 compType)
-                |_ -> [nothing]
+                
 
 
             g [Style [
