@@ -78,9 +78,10 @@ let overlaps (b1: BBox) (b2: BBox): bool =
         || isLeftOf b2 b1
     )
 
+let gridSize = 10.
+
 // snaps wire segments to grid (variable grid size)
 let snapToGrid (pos: XYPos) : XYPos =
-    let gridSize = 10.
     let xOffset = pos.X % gridSize
     let yOffset = pos.Y % gridSize
 
