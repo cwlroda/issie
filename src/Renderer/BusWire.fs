@@ -499,9 +499,9 @@ let singleLabelView =
                 ]
                 line [
                         X1 (props.Pos.X + 7.5 );
-                        Y1 (props.Pos.Y - 5.);
-                        X2 (props.Pos.X + 15.);
-                        Y2 (props.Pos.Y + 5. );
+                        Y1 (props.Pos.Y - 7.5);
+                        X2 (props.Pos.X + 12.5);
+                        Y2 (props.Pos.Y + 7.5 );
                         SVGAttr.Stroke (props.ColorLabel)
                         SVGAttr.FillOpacity 0
                         SVGAttr.StrokeWidth props.BusIdcWidth
@@ -560,7 +560,7 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
                 Pos = srcSeg.StartPos 
                 ColorLabel = w.WireColor.ToString()
                 Label = lbl
-                BusIdcWidth = (if w.WireWidth > 3 then 3. else 0.)
+                BusIdcWidth = (if w.WireWidth > 3 then 2. else 0.)
             }
 
             let segList =
@@ -579,7 +579,7 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
                 ) []
 
             acc @ segList
-            @ [(singleLabelView labelProps)]
+            @ if wModel.WireAnnotation then  [(singleLabelView labelProps)] else []
         ) [])
 
 
