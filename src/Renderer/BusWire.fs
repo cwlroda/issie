@@ -490,11 +490,14 @@ let singleLabelView =
                 text [ 
                         X (props.Pos.X + 7.5)
                         Y (props.Pos.Y + 12.5)
+                        
                         Style [ 
                                 TextAnchor "left"
                                 DominantBaseline "middle"
                                 FontSize "14px"
-                                Fill props.ColorLabel ] ] [
+                                Fill props.ColorLabel
+                                UserSelect UserSelectOptions.None
+                        ] ] [
                         str <| sprintf $"{props.Label}"
                 ]
                 line [
