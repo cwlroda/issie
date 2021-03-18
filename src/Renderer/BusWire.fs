@@ -89,20 +89,20 @@ type LabelRenderProps =
 let isVertical (relPos: XYPos): bool =
     abs (relPos.X) <= abs (relPos.Y)
 
-let createSegBB (startPos: XYPos) (endPos: XYPos) : BBox =
+let createSegBB (startPos: XYPos) (endPos: XYPos) (width: float) : BBox =
     match posDiff endPos startPos with
     // left to right
     | x when x.X > 0. ->
-        toBBox startPos.X (startPos.Y - 5.) (abs x.X) 10.
+        toBBox startPos.X (startPos.Y - width) (abs x.X) (width * 2.)
     // right to left
     | x when x.X < 0. ->
-        toBBox endPos.X (endPos.Y - 5.) (abs x.X) 10.
+        toBBox endPos.X (endPos.Y - width) (abs x.X) (width * 2.)
     // top to bottom
     | x when x.Y > 0. ->
-        toBBox  (startPos.X - 5.) startPos.Y 10. (abs x.Y)
+        toBBox  (startPos.X - width) startPos.Y (width * 2.) (abs x.Y)
     // bottom to top
     | x when x.Y < 0. ->
-        toBBox (endPos.X - 5.) endPos.Y 10. (abs x.Y)
+        toBBox (endPos.X - width) endPos.Y (width * 2.) (abs x.Y)
     // failsafe case with no bounding box
     | _ ->
         toBBox 0. 0. 0. 0.
@@ -129,7 +129,7 @@ let isSegmentAtPort (pos1: XYPos) (pos2: XYPos) =
     if pos1 = pos2 then true else false
 
 let isTargetSeg pos startPos endPos =
-    (createSegBB startPos endPos) |> (containsPoint pos)
+    (createSegBB startPos endPos 5.) |> (containsPoint pos)
 
 // finds closest wire segment to mouse position
 let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
@@ -155,11 +155,105 @@ let makeWireSegment (wire : Wire) (startPos: XYPos) (endPos: XYPos) : WireSegmen
         Direction = direction
     }
 
-let verticalOverlap (box1: BBox) (box2:BBox) = 
+let verticalOverlap (box1: BBox) (box2: BBox) = 
     let isAbove (bb1: BBox) (bb2: BBox) = (bb1.Pos.Y + bb1.Height) <= bb2.Pos.Y
-    not ( isAbove box1 box2 || isAbove box2 box1)
+    not (isAbove box1 box2 || isAbove box2 box1)
 
-let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
+let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : WireSegment list =
+    let srcSym = Symbol.findSymbolFromPort sModel (Symbol.findPort sModel wire.SrcPort)
+    let tgtSym = Symbol.findSymbolFromPort sModel (Symbol.findPort sModel wire.TargetPort)
+
+    let symList =
+        toBBox  (min srcSym.Component.X tgtSym.Component.X)
+                (min srcSym.Component.Y tgtSym.Component.Y)
+                ((max srcSym.Component.W tgtSym.Component.W) + abs (srcSym.Component.X - tgtSym.Component.X))
+                ((max srcSym.Component.H tgtSym.Component.H) + abs (srcSym.Component.Y - tgtSym.Component.Y))
+        |> Symbol.getSymbolsInTargetArea sModel
+        |> List.map (Symbol.getSymbolFromSymbolId sModel)
+
+    let collisionDetection (startPos: XYPos) (endPos: XYPos) : Symbol.Symbol list =
+        let bbox = createSegBB startPos endPos 20.
+
+        symList
+        |> List.filter (fun sym -> overlaps bbox (Symbol.symbolBBox sModel sym.Id))
+
+    let routedSegList =
+        segList
+        |> List.mapi (fun i s ->
+            match i with
+            | x when (x = 0) || (x = List.length segList - 1) -> s
+            | _ ->
+                match collisionDetection s.StartPos s.EndPos with
+                | [] -> s
+                | lst ->
+                    let offset = gridSize
+
+                    match s.Direction with
+                    | Horizontal ->
+                        match lst.Head.Component.Y - s.StartPos.Y with
+                        | y when y < 0. ->
+                            {s with
+                                StartPos = posAdd s.StartPos {X = 0.; Y = offset}
+                                EndPos = posAdd s.EndPos {X = 0.; Y = offset}
+                            }
+                        | _ ->
+                            {s with
+                                StartPos = posAdd s.StartPos {X = 0.; Y = -offset}
+                                EndPos = posAdd s.EndPos {X = 0.; Y = -offset}
+                            }
+                    | Vertical ->
+                        match lst.Head.Component.X - s.StartPos.X with
+                        | x when x < 0. ->
+                            {s with
+                                StartPos = posAdd s.StartPos {X = offset; Y = 0.}
+                                EndPos = posAdd s.EndPos {X = offset; Y = 0.}
+                            }
+                        | _ ->
+                            {s with
+                                StartPos = posAdd s.StartPos {X = -offset; Y = 0.}
+                                EndPos = posAdd s.EndPos {X = -offset; Y = 0.}
+                            }
+    )
+
+    routedSegList
+    |> List.mapi (fun i s ->
+        match i with
+        | x when x = 0 -> {s with EndPos = routedSegList.[i+1].StartPos}
+        | x when x = (List.length routedSegList - 1) -> {s with StartPos = routedSegList.[i-1].EndPos}
+        | x when (List.length routedSegList = 3) && (x = 1) -> s
+        | x when (List.length routedSegList = 5) && (x = 1) ->
+            {s with
+                EndPos =
+                    {
+                        X = s.EndPos.X
+                        Y = routedSegList.[i+1].StartPos.Y
+                    }
+            }
+        | x when (List.length routedSegList = 5) && (x = 2) ->
+            {s with
+                StartPos =
+                    {
+                        X = routedSegList.[i-1].EndPos.X
+                        Y = s.StartPos.Y
+                    }
+                EndPos =
+                    {
+                        X = routedSegList.[i+1].StartPos.X
+                        Y = s.StartPos.Y
+                    }
+            }
+        | x when (List.length routedSegList = 5) && (x = 3) ->
+            {s with
+                StartPos =
+                    {
+                        X = s.StartPos.X
+                        Y = routedSegList.[i-1].EndPos.Y
+                    }
+            }
+        | _ -> failwithf "This shouldn't happen!"
+    )
+
+let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
     let startPos = Symbol.portPos sModel wire.SrcPort
     let endPos = Symbol.portPos sModel wire.TargetPort
     let midPos = midPt startPos endPos
@@ -172,7 +266,7 @@ let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : WireSegment 
     let vAdj = 
         match verticalOverlap srcHost tgtHost with
         | true when srcHost.Pos.Y <= tgtHost.Pos.Y -> 
-            tgtHost.Pos.Y + tgtHost.Height+ 20.
+            tgtHost.Pos.Y + tgtHost.Height + 20.
         | true ->  
             srcHost.Pos.Y + srcHost.Height + 20.
         | false -> 
@@ -193,11 +287,14 @@ let autoRoute (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : WireSegment 
             ]
 
     let initialSegs, finalSegs =
-        defSeg startPos (vAdj) 20., List.rev (defSeg endPos vAdj -20.)
+        defSeg startPos vAdj 20., List.rev (defSeg endPos vAdj -20.)
 
-    initialSegs @ finalSegs
-    |> List.pairwise
-    |> List.map (fun (startPos, endPos) -> makeWireSegment wire startPos endPos)
+    let segList =
+        initialSegs @ finalSegs
+        |> List.pairwise
+        |> List.map (fun (startPos, endPos) -> makeWireSegment wire startPos endPos)
+
+    routing sModel wire segList
 
 let typesValid (port1, port2) (sModel: Symbol.Model) : Result<PortId * PortId, string> =
     let getType pId = (Symbol.portType sModel pId)
@@ -260,8 +357,8 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
     wModel.WX
     |> Map.map (fun _ w ->
         match List.contains w.SrcPort pIds || List.contains w.TargetPort pIds with
-        | true -> {w with Segments = autoRoute wModel sModel w}
-        | false -> w
+        | true -> {w with Segments = autoRoute sModel w}
+        | false -> {w with Segments = routing sModel w w.Segments}
     )
 
 
@@ -271,21 +368,21 @@ let singleWireView =
             let color = props.WireColor
             let width = props.WireWidth
 
-            // let segBBox = createSegBB props.StartPos props.EndPos
+            let segBBox = createSegBB props.StartPos props.EndPos 5.
 
             g [] [
-                // rect
-                //     [
-                //         X segBBox.Pos.X
-                //         Y segBBox.Pos.Y
-                //         Rx 5.
-                //         Ry 5.
-                //         SVGAttr.Width segBBox.Width
-                //         SVGAttr.Height segBBox.Height
-                //         SVGAttr.StrokeWidth "1px"
-                //         SVGAttr.Stroke "Black"
-                //         SVGAttr.FillOpacity 0
-                //     ] []
+                rect
+                    [
+                        X segBBox.Pos.X
+                        Y segBBox.Pos.Y
+                        Rx 5.
+                        Ry 5.
+                        SVGAttr.Width segBBox.Width
+                        SVGAttr.Height segBBox.Height
+                        SVGAttr.StrokeWidth "1px"
+                        SVGAttr.Stroke "Black"
+                        SVGAttr.FillOpacity 0
+                    ] []
 
                 line 
                     [
@@ -303,7 +400,7 @@ let singleWireView =
 
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
     let newWire = createWire wModel sModel port1 port2 None
-    Map.add newWire.Id {newWire with Segments = autoRoute wModel sModel newWire} wModel.WX
+    Map.add newWire.Id {newWire with Segments = autoRoute sModel newWire} wModel.WX
 
 ///Given a connectionId deletes the given wire
 let deleteWire (wModel: Model) (wId: ConnectionId) : Map<ConnectionId, Wire> =
@@ -411,18 +508,18 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) =
     | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} //to ensure it does not get a too many wire for input port validation error triggered by itself
         let updatedWire = createWire updatedModel sModel pId wire.TargetPort (Some wire.Id)
-        {updatedWire with Segments = autoRoute updatedModel sModel updatedWire}
+        {updatedWire with Segments = autoRoute sModel updatedWire}
         //{createWire updatedModel pId wire.TargetPort (Some wire.Id)  with Segments = wire.Segments}  
         //|> fitConnection wModel srcSegId (wire.Segments.[srcSegId]).StartPos pId
     | Some _, Some pId ->  
         //{createWire wModel pId wire.SrcPort (Some wire.Id) with Segments = wire.Segments}   
         //|> fitConnection wModel tgtSegId (wire.Segments.[tgtSegId]).EndPos pId
         let updatedWire = createWire wModel sModel pId wire.SrcPort (Some wire.Id)
-        {updatedWire with Segments =  autoRoute wModel sModel updatedWire}
+        {updatedWire with Segments =  autoRoute sModel updatedWire}
     | None, Some _ -> fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
     | Some _, None -> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos wire.TargetPort wire
     | None, None ->
-        {wire with Segments = autoRoute wModel sModel wire}
+        {wire with Segments = autoRoute sModel wire}
     
 
 let updateConnections (wModel: Model) (sModel: Symbol.Model): Map<ConnectionId, Wire> =
@@ -651,7 +748,7 @@ let distPtToWire (pt: XYPos) (wire: Wire) =
 
 let isTargetWire (pt: XYPos) (wire: Wire) =
     let ptCloseToSeg (startPt: XYPos) (endPt: XYPos): bool =
-        createSegBB startPt endPt |> (containsPoint pt)
+        createSegBB startPt endPt 5. |> (containsPoint pt)
 
     let res =
         wire.Segments
