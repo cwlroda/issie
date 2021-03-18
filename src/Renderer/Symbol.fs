@@ -1085,9 +1085,9 @@ let private renderSymbol (model:Model) =
             let fillColor =
                 if props.Symbol.Selected then
                 //if props.Symbol.IsDragging then
-                    "dodgerblue"
+                    "lightgrey"
                 else
-                    "cyan"
+                    "lightgreen"
                     
             let outlineColor = 
                 "black"
@@ -1171,7 +1171,7 @@ let private renderSymbol (model:Model) =
                         ]
                 }
             let viewBoxLabel : ReactElement =
-                let fullName = componentName + " - " + (string props.Symbol.Component.Label)
+                let fullName = (string props.Symbol.Component.Label)
                 
                 
                 let outputString = 
