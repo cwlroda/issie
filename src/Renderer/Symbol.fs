@@ -1085,9 +1085,9 @@ let private renderSymbol (model:Model) =
             let fillColor =
                 if props.Symbol.Selected then
                 //if props.Symbol.IsDragging then
-                    "lightgrey"
+                    "#00d1b2"
                 else
-                    "lightgreen"
+                    "#d3d3d3"
                     
             let outlineColor = 
                 "black"
@@ -1145,7 +1145,7 @@ let private renderSymbol (model:Model) =
             let viewboxExternalStaticLabelStyle: IProp seq = 
                 let txtColor = 
                     match selectedBool with
-                    | true -> "ghostwhite"
+                    | true -> "darkslategray"
                     | false -> "darkslategrey"
                 
                 let txtAnchor = 
