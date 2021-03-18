@@ -62,22 +62,16 @@ type Msg =
     | DecreaseWidth of wId: ConnectionId
     | IncreaseWidth of wId: ConnectionId
 
-type SegRenderProps =
+
+
+type WireRenderProps =
     {
-        Key : WireSegId
-        StartPos: XYPos
-        EndPos: XYPos
+        Key: ConnectionId
+        Wire: string
         WireColor: HighLightColor
         WireWidth: string
     }
 
-type LabelRenderProps =
-    {
-        Key: PortId
-        Label: string
-        ColorLabel: string
-        Pos: XYPos
-    }
 
 
 /// Takes as input a relative position between two points and outputs true if the two original points are horzontal and false otherwise
@@ -312,13 +306,69 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
         | false -> w
     )
 
-let singleSegView =
-    FunctionComponent.Of
-        (fun (props: SegRenderProps) ->
-            let color = props.WireColor
-            let width = props.WireWidth
+let findSrcSeg (wModel: Model) (wire: Wire) : WireSegId =
+    let isSrc (seg: WireSegment): bool=
+        match findPrevSegment wModel wire.Id seg.StartPos seg.Direction with
+        | Some segId -> false
+        | _ -> true
+    match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
+    | Some segId -> segId
+    | None -> failwithf "Something in the check is wrong"
 
-            let segBBox = createSegBB props.StartPos props.EndPos
+let findtgtSeg (wModel: Model) (wire: Wire) : WireSegId =
+    let isSrc (seg: WireSegment): bool=
+        match findNextSegment wModel wire.Id seg.EndPos seg.Direction with
+        | Some segId -> false
+        | _ -> true
+    match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
+    | Some segId -> segId
+    | None -> failwithf "Something in the check is wrong"
+
+let pathDefString (wModel: Model) (w: Wire) =
+    let rec order lst currentSeg =
+        match  (findNextSegment wModel w.Id currentSeg.EndPos currentSeg.Direction ) with
+        | Some segId -> order (lst@[w.Segments.[segId]]) (w.Segments.[segId])
+        | None ->  lst
+    let srcSeg = w.Segments.[findSrcSeg wModel w]
+    let lstSeg = order [srcSeg] srcSeg 
+
+    let relMove startSeg endSeg =
+        let adjPos = 
+            match posDiff startSeg.StartPos endSeg.EndPos with
+            | relPos when (startSeg.Direction = Horizontal) && (relPos.Y >0.) && (relPos.X > 0.) ->  [{X = -10.; Y = 0.};  {X = 0.; Y = 10.}]
+            | relPos when (startSeg.Direction = Horizontal) && (relPos.Y > 0.) ->  [{X = 10.; Y = 0.};  {X = 0.; Y = 10.}]
+            | relPos when (startSeg.Direction = Horizontal) && (relPos.X > 0.) -> [{X = -10.; Y = 0.};  {X = 0.; Y = -10.}]
+            | relPos when startSeg.Direction = Horizontal ->  [{X = 10.; Y = 0.};  {X = 0.; Y = -10.}]
+            | relPos when  (relPos.Y >0.) && (relPos.X > 0.) ->  [{X = 0.; Y = -10.};  {X = 10.; Y = 0.}]           
+            | relPos when (relPos.Y > 0.) -> [{X = 0.; Y = -10.}; {X = -10.; Y = 0.}]
+            | relPos when relPos.X > 0. -> [{X = 0.; Y = 10.}; {X = 10.; Y = 0.}]
+            | relPos ->  [{X = 0.; Y = 10.}; {X = -10.; Y = 0.}]
+        List.map2 posDiff [startSeg.EndPos; endSeg.StartPos] adjPos
+
+    let strLst =    
+        List.mapi (fun idx s -> 
+            match idx with 
+            | idx when idx = 0  -> [s.StartPos]@ (relMove s lstSeg.[1]) @ [s.EndPos]
+            | idx when idx = (List.length lstSeg - 1) ->  [s.EndPos]
+            | idx ->  (relMove s lstSeg.[idx+1]) @ [s.EndPos]
+            | _ -> failwithf "unexpected index {idx} list.length: {List.length lstSeg}"
+            )  lstSeg
+        |> List.mapi (fun idx lstPos ->
+            match lstPos with
+            | [start; startCorner; endCorner; midPos] when idx = 0 -> $" M {start.X} {start.Y} L {startCorner.X} {startCorner.Y} Q {midPos.X} {midPos.Y} {endCorner.X} {endCorner.Y} L"
+            | [endPos]  when idx = (List.length lstSeg - 1) -> $" {endPos.X} {endPos.Y} " 
+            | [ startCorner; endCorner; midPos] -> $"{startCorner.X} {startCorner.Y} Q {midPos.X} {midPos.Y} {endCorner.X} {endCorner.Y} L "
+            | _ -> failwithf "Something has gone wrong in coordinate generation"
+            )
+    printf $"{strLst}"
+    List.fold (fun str s -> str + s) "" strLst
+
+
+let singleWireView =
+    FunctionComponent.Of
+        (fun (props: WireRenderProps) ->
+           
+            // let segBBox = createSegBB props.StartPos props.EndPos
 
             g [] [
                 // rect
@@ -334,40 +384,31 @@ let singleSegView =
                 //         SVGAttr.FillOpacity 0
                 //     ] []
 
-                line 
-                    [
-                        X1 props.StartPos.X;
-                        Y1 props.StartPos.Y;
-                        X2 props.EndPos.X;
-                        Y2 props.EndPos.Y;
-                        SVGAttr.Stroke (color.ToString())
+                path 
+                    [ 
+                        SVGAttr.D props.Wire
+                        SVGAttr.Stroke (props.WireColor.ToString())
                         SVGAttr.FillOpacity 0
-                        SVGAttr.StrokeWidth width
-                        SVGAttr.StrokeLinecap "round"
+                        SVGAttr.StrokeWidth props.WireWidth
+                        
                     ] []
             ]
         )
 
 let view (model: Model) (dispatch: Dispatch<Msg>) =
     g [] (model.WX
-        |> Map.fold (fun acc _ w ->
-            let segList =
-                w.Segments
-                |> Map.fold (fun acc _ s ->
-                    let props =
-                        {
-                            Key = s.Id
-                            StartPos = s.StartPos
-                            EndPos = s.EndPos
-                            WireColor = w.WireColor
-                            WireWidth = $"%d{w.WireWidth}"
-                        }
+        |> Map.fold (fun acc _ w ->               
+            let props =
+                {
+                    Key = ConnectionId (uuid())
+                    Wire =  (pathDefString model w)
+                    WireColor = w.WireColor
+                    WireWidth = $"%d{w.WireWidth}"
+                }
 
-                    acc @ [singleSegView props]
-                ) []
-
-            acc @ segList
-        ) [])
+            acc @ [singleWireView props]
+            ) []
+        )
 
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
     let newWire = createWire wModel sModel port1 port2 None
@@ -407,23 +448,7 @@ let getWireColor (w: Wire): HighLightColor =
     | w when w.Error <> None -> Red
     | _ -> Blue
 
-let findSrcSeg (wModel: Model) (wire: Wire) : WireSegId =
-    let isSrc (seg: WireSegment): bool=
-        match findPrevSegment wModel wire.Id seg.StartPos seg.Direction with
-        | Some segId -> false
-        | _ -> true
-    match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
-    | Some segId -> segId
-    | None -> failwithf "Something in the check is wrong"
 
-let findtgtSeg (wModel: Model) (wire: Wire) : WireSegId =
-    let isSrc (seg: WireSegment): bool=
-        match findNextSegment wModel wire.Id seg.EndPos seg.Direction with
-        | Some segId -> false
-        | _ -> true
-    match Map.tryFindKey (fun _ s -> isSrc s) wire.Segments with
-    | Some segId -> segId
-    | None -> failwithf "Something in the check is wrong"
 
 
 let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
