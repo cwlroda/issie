@@ -227,7 +227,30 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
     segList
     |> List.mapi (fun i s ->
         match i with
-        | x when (x = 0) || (x = List.length segList - 1) -> s
+        | x when (x = 0) || (x = List.length segList - 1) -> 
+            match collisionDetection s.StartPos s.EndPos with
+                | [] ->    
+                    s
+                | lst ->
+                    //let offset = gridSize          
+                    let offset = (lst.Head.Component.Y - s.StartPos.Y) - 2.*gridSize
+                    match lst.Head.Component.Y - s.StartPos.Y with
+                    | y when (y < 0.) && (x = 0) ->   
+                        {s with
+                            EndPos = posAdd s.EndPos {X = 0.; Y = offset}
+                        }
+                    | y when y < 0. -> 
+                        {s with
+                            StartPos = posAdd s.StartPos {X = 0.; Y = offset}
+                        }
+                    | y when (x = List.length segList - 1)->
+                        {s with
+                            StartPos = posAdd s.StartPos {X = 0.; Y = -offset}
+                        }
+                    | _ -> 
+                        {s with
+                            EndPos = posAdd s.EndPos {X = 0.; Y = -offset}
+                        }
         | _ ->
             match collisionDetection s.StartPos s.EndPos with
             | [] -> 
