@@ -659,7 +659,7 @@ let view (model: Model) (dispatch: Msg -> unit) =
     let sDispatch sMsg = dispatch (Symbol sMsg)
     let symbolSvg = Symbol.view model.Symbol sDispatch
     let wDispatch wMsg = dispatch (Wire wMsg)
-    let wireSvg = BusWire.view model.Wire wDispatch
+    let wireSvg = BusWire.view model.Wire model.Symbol wDispatch
     let symbolsAndWiresSvg =
         g [] [
             wireSvg
