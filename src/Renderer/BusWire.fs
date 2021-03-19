@@ -199,7 +199,6 @@ let autoConnect (segList: WireSegment list) : WireSegment list =
             }
         | _ -> failwithf "This shouldn't happen!"
     )
-
 // naive routing algorithm
 let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : WireSegment list =
     let srcSym = Symbol.findSymbolFromPort sModel (Symbol.findPort sModel wire.SrcPort)
@@ -232,7 +231,7 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
             match collisionDetection s.StartPos s.EndPos with
             | [] -> s
             | lst ->
-                let offset = gridSize
+                let offset = Helpers.gridSize
 
                 match s.Direction with
                 | Horizontal ->
