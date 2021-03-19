@@ -301,27 +301,6 @@ let singleWireView =
             ]
         )
 
-let view (model: Model) (dispatch: Dispatch<Msg>) =
-    g [] (model.WX
-        |> Map.fold (fun acc _ w ->
-            let segList =
-                w.Segments
-                |> List.fold (fun acc s ->
-                    let props =
-                        {
-                            Key = ConnectionId (uuid())
-                            StartPos = s.StartPos
-                            EndPos = s.EndPos
-                            WireColor = w.WireColor
-                            WireWidth = $"%d{w.WireWidth}"
-                        }
-
-                    acc @ [singleWireView props]
-                ) []
-            acc @ segList
-        ) [])
-
-
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
     let newWire = createWire wModel sModel port1 port2 None
     Map.add newWire.Id {newWire with Segments = autoRoute wModel sModel newWire} wModel.WX
@@ -499,7 +478,7 @@ let singleLabelView =
 
 let singleSegView =
     FunctionComponent.Of
-        (fun (props: SegRenderProps) ->
+        (fun (props: WireRenderProps) ->
             let color = props.WireColor
             let width = props.WireWidth
 
@@ -536,9 +515,9 @@ let singleSegView =
 let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
     g [] (wModel.WX
         |> Map.fold (fun acc _ w ->
-            let srcSeg= w.Segments.[findSrcSeg wModel w]
+            let srcSeg= w.Segments.[0]
             let lbl = 
-                match checkPortWidths wModel sModel w.SrcPort w.TargetPort with 
+                match checkPortWidths sModel w.SrcPort w.TargetPort with 
                     | Ok w -> $"%d{w}"
                     | Error str -> "Undef."
             
@@ -553,10 +532,10 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
 
             let segList =
                 w.Segments
-                |> Map.fold (fun acc _ s ->
+                |> List.fold (fun acc s ->
                     let props =
                         {
-                            Key = s.Id
+                            Key = w.Id
                             StartPos = s.StartPos
                             EndPos = s.EndPos
                             WireColor = w.WireColor
