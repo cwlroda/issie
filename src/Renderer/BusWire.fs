@@ -73,10 +73,11 @@ type SegRenderProps =
 
 type LabelRenderProps =
     {
-        Key: PortId
+        key: ConnectionId
         Label: string
         ColorLabel: string
         Pos: XYPos
+        BusIdcWidth: float
     }
 
 
@@ -312,62 +313,7 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
         | false -> w
     )
 
-let singleSegView =
-    FunctionComponent.Of
-        (fun (props: SegRenderProps) ->
-            let color = props.WireColor
-            let width = props.WireWidth
 
-            let segBBox = createSegBB props.StartPos props.EndPos
-
-            g [] [
-                // rect
-                //     [
-                //         X segBBox.Pos.X
-                //         Y segBBox.Pos.Y
-                //         Rx 5.
-                //         Ry 5.
-                //         SVGAttr.Width segBBox.Width
-                //         SVGAttr.Height segBBox.Height
-                //         SVGAttr.StrokeWidth "1px"
-                //         SVGAttr.Stroke "Black"
-                //         SVGAttr.FillOpacity 0
-                //     ] []
-
-                line 
-                    [
-                        X1 props.StartPos.X;
-                        Y1 props.StartPos.Y;
-                        X2 props.EndPos.X;
-                        Y2 props.EndPos.Y;
-                        SVGAttr.Stroke (color.ToString())
-                        SVGAttr.FillOpacity 0
-                        SVGAttr.StrokeWidth width
-                        SVGAttr.StrokeLinecap "round"
-                    ] []
-            ]
-        )
-
-let view (model: Model) (dispatch: Dispatch<Msg>) =
-    g [] (model.WX
-        |> Map.fold (fun acc _ w ->
-            let segList =
-                w.Segments
-                |> Map.fold (fun acc _ s ->
-                    let props =
-                        {
-                            Key = s.Id
-                            StartPos = s.StartPos
-                            EndPos = s.EndPos
-                            WireColor = w.WireColor
-                            WireWidth = $"%d{w.WireWidth}"
-                        }
-
-                    acc @ [singleSegView props]
-                ) []
-
-            acc @ segList
-        ) [])
 
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
     let newWire = createWire wModel sModel port1 port2 None
@@ -536,6 +482,110 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos): Map<ConnectionId,
 let endDrag (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
     let updatedModel = {wModel with WX = updateConnections wModel sModel}
     setUnselectedColor updatedModel
+
+let singleLabelView =
+    FunctionComponent.Of
+        (fun (props: LabelRenderProps) ->
+            g [][
+                text [ 
+                        X (props.Pos.X + 7.5)
+                        Y (props.Pos.Y + 12.5)
+                        Style [ 
+                                TextAnchor "left"
+                                DominantBaseline "middle"
+                                FontSize "14px"
+                                Fill props.ColorLabel ] ] [
+                        str <| sprintf $"{props.Label}"
+                ]
+                line [
+                        X1 (props.Pos.X + 7.5 );
+                        Y1 (props.Pos.Y - 7.5);
+                        X2 (props.Pos.X + 12.5);
+                        Y2 (props.Pos.Y + 7.5 );
+                        SVGAttr.Stroke (props.ColorLabel)
+                        SVGAttr.FillOpacity 0
+                        SVGAttr.StrokeWidth props.BusIdcWidth
+                ][]
+            ])
+
+
+let singleSegView =
+    FunctionComponent.Of
+        (fun (props: SegRenderProps) ->
+            let color = props.WireColor
+            let width = props.WireWidth
+
+            //let segBBox = createSegBB props.StartPos props.EndPos
+
+            g [] [
+                // rect
+                //     [
+                //         X segBBox.Pos.X
+                //         Y segBBox.Pos.Y
+                //         Rx 5.
+                //         Ry 5.
+                //         SVGAttr.Width segBBox.Width
+                //         SVGAttr.Height segBBox.Height
+                //         SVGAttr.StrokeWidth "1px"
+                //         SVGAttr.Stroke "Black"
+                //         SVGAttr.FillOpacity 0
+                //     ] []
+
+                line 
+                    [
+                        X1 props.StartPos.X;
+                        Y1 props.StartPos.Y;
+                        X2 props.EndPos.X;
+                        Y2 props.EndPos.Y;
+                        SVGAttr.Stroke (color.ToString())
+                        SVGAttr.FillOpacity 0
+                        SVGAttr.StrokeWidth width
+                        SVGAttr.StrokeLinecap "round"
+                    ] []
+            ]
+        )
+
+let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
+    g [] (wModel.WX
+        |> Map.fold (fun acc _ w ->
+            let srcSeg= w.Segments.[findSrcSeg wModel w]
+            let lbl = 
+                match checkPortWidths wModel sModel w.SrcPort w.TargetPort with 
+                    | Ok w -> $"%d{w}"
+                    | Error str -> "Undef."
+            
+              
+            let (labelProps: LabelRenderProps) = {
+                key = w.Id
+                Pos = srcSeg.StartPos 
+                ColorLabel = w.WireColor.ToString()
+                Label = lbl
+                BusIdcWidth = (if w.WireWidth > 3 then 2. else 0.)
+            }
+
+            let segList =
+                w.Segments
+                |> Map.fold (fun acc _ s ->
+                    let props =
+                        {
+                            Key = s.Id
+                            StartPos = s.StartPos
+                            EndPos = s.EndPos
+                            WireColor = w.WireColor
+                            WireWidth = $"%d{w.WireWidth}"
+                        }
+
+                    acc @ [singleSegView props]
+                ) []
+
+            acc @ segList
+            @ if wModel.WireAnnotation then  [(singleLabelView labelProps)] else []
+        ) [])
+
+
+
+
+
 
 let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     match msg with
