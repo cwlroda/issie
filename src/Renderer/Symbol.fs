@@ -290,22 +290,38 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                
             200.,  (20. + 30.* (1. + float (maxPorts)))
             
+    
 
-
-    let portTemplate (portNumber:int) (portType: PortType) (portPos:float) (portWidth:PortWidth) :Port=
-        let offset = 
-            match portType with 
-            |PortType.Input -> 0.
-            |PortType.Output -> compW        
-        {
-            PortId = PortId (uuid())
-            PortNumber =  Some (PortNumber (portNumber))
-            PortType = portType
-            PortPos = {X=offset; Y = mulOfFive (20. + ((float portNumber) + 1.) * portPos ) }
-            HostId = hostID
-            Hover = PortHover false
-            Width = portWidth
-        }
+    let portTemplate (portExist:bool) (portNumber:int) (portType: PortType) (portWidth:PortWidth) (considerTitle:bool) (totalPorts:int):Port=
+        match portExist with
+        | true ->
+            let yPosCalc= 
+                match considerTitle with
+                | true -> (20. + float (portNumber + 1) * (compH - 20.) / float (totalPorts + 1))
+                | false -> (compH /2.)
+            let offset = 
+                match portType with 
+                |PortType.Input -> 0.
+                |PortType.Output -> compW        
+            {
+                PortId = PortId (uuid())
+                PortNumber =  Some (PortNumber (portNumber))
+                PortType = portType
+                PortPos = {X=offset; Y = mulOfFive yPosCalc }//(20. + ((float portNumber) + 1.) * portPos ) }
+                HostId = hostID
+                Hover = PortHover false
+                Width = portWidth
+            }
+        |false ->
+            {
+                PortId = PortId (uuid())
+                PortNumber =  None
+                PortType = portType
+                PortPos = {X=0.; Y=0. }//(20. + ((float portNumber) + 1.) * portPos ) }
+                HostId = hostID
+                Hover = PortHover false
+                Width = portWidth
+            }
 
     
     let (inputPorts, outputPorts): (Map<PortId, Port> * Map<PortId, Port>) =
@@ -313,28 +329,30 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | IOLabel ->
             (
                 let inputPortMap = 
-                    [{
-                        PortId = PortId (uuid())
-                        PortNumber = Some (PortNumber (0))
-                        PortType = PortType.Input
-                        PortPos = {X=0.; Y = mulOfFive (compH/2.)}
-                        HostId = hostID
-                        Hover = PortHover false
-                        Width = PortWidth 0
-                    }]
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth 0) (false) (1)]               
+                    // [{
+                    //     PortId = PortId (uuid())
+                    //     PortNumber = Some (PortNumber (0))
+                    //     PortType = PortType.Input
+                    //     PortPos = {X=0.; Y = mulOfFive (compH/2.)}
+                    //     HostId = hostID
+                    //     Hover = PortHover false
+                    //     Width = PortWidth 0
+                    // }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [{
-                        PortId = PortId (uuid())
-                        PortNumber = Some (PortNumber (0))
-                        PortType = PortType.Output
-                        PortPos = {X=compW; Y = mulOfFive (compH/2.)}
-                        HostId = hostID
-                        Hover = PortHover false
-                        Width = PortWidth 0
-                    }]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth 0) (false) (1)]   
+                    // [{
+                    //     PortId = PortId (uuid())
+                    //     PortNumber = Some (PortNumber (0))
+                    //     PortType = PortType.Output
+                    //     PortPos = {X=compW; Y = mulOfFive (compH/2.)}
+                    //     HostId = hostID
+                    //     Hover = PortHover false
+                    //     Width = PortWidth 0
+                    // }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
                 
@@ -343,28 +361,31 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | Input n ->
             (
                 let inputPortMap = 
-                    [{
-                        PortId = PortId (uuid())
-                        PortNumber =  None
-                        PortType = PortType.Input
-                        PortPos = {X = 0.; Y = mulOfFive (compH/2.)}
-                        HostId = hostID
-                        Hover = PortHover false
-                        Width = PortWidth 0
-                    }]
+                    [portTemplate (false) (0) (PortType.Input) (PortWidth 0) (false) (0)]   
+                    // [{
+                    //     PortId = PortId (uuid())
+                    //     PortNumber =  None
+                    //     PortType = PortType.Input
+                    //     PortPos = {X = 0.; Y = mulOfFive (compH/2.)}
+                    //     HostId = hostID
+                    //     Hover = PortHover false
+                    //     Width = PortWidth 0
+                    // }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [{
-                        PortId = PortId (uuid())
-                        PortNumber =  Some (PortNumber (0))
-                        PortType = PortType.Output
-                        PortPos = {X = compW; Y = mulOfFive (compH/2.)}
-                        HostId = hostID
-                        Hover = PortHover false
-                        Width = PortWidth 0
-                    }]
+                //portTemplate (portExist:bool) (portNumber:int) (portType: PortType) (portWidth:PortWidth) (considerTitle:bool) (totalPorts:int)
+                    [portTemplate (false) (0) (PortType.Output) (PortWidth n) (false) (1)]   
+                    // [{
+                    //     PortId = PortId (uuid())
+                    //     PortNumber =  Some (PortNumber (0))
+                    //     PortType = PortType.Output
+                    //     PortPos = {X = compW; Y = mulOfFive (compH/2.)}
+                    //     HostId = hostID
+                    //     Hover = PortHover false
+                    //     Width = PortWidth 0
+                    // }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -372,29 +393,33 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             )
         |Output n ->
             (
-                let inputPortMap = 
-                    [{
-                        PortId = PortId (uuid())
-                        PortNumber =  None
-                        PortType = PortType.Output
-                        PortPos = {X= compW; Y = mulOfFive (compH/2.)}
-                        HostId = hostID
-                        Hover = PortHover false
-                        Width = PortWidth 0
-                    }]
+                let outputPortMap = 
+                //portTemplate (portExist:bool) (portNumber:int) (portType: PortType) (portWidth:PortWidth) (considerTitle:bool) (totalPorts:int)
+                    [portTemplate (false) (0) (PortType.Output) (PortWidth 0) (false) (0)]
+                    // [{
+                    //     PortId = PortId (uuid())
+                    //     PortNumber =  None
+                    //     PortType = PortType.Output
+                    //     PortPos = {X= compW; Y = mulOfFive (compH/2.)}
+                    //     HostId = hostID
+                    //     Hover = PortHover false
+                    //     Width = PortWidth 0
+                    // }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
-                let outputPortMap = 
-                    [{
-                        PortId = PortId (uuid())
-                        PortNumber =  Some (PortNumber (0))
-                        PortType = PortType.Input
-                        PortPos = {X = 0.; Y = mulOfFive (compH/2.)}
-                        HostId = hostID
-                        Hover = PortHover false
-                        Width = PortWidth 0
-                    }]
+                let inputPortMap = 
+                //portTemplate (portExist:bool) (portNumber:int) (portType: PortType) (portWidth:PortWidth) (considerTitle:bool) (totalPorts:int)
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth n) (false) (1)]
+                    // [{
+                    //     PortId = PortId (uuid())
+                    //     PortNumber =  Some (PortNumber (0))
+                    //     PortType = PortType.Input
+                    //     PortPos = {X = 0.; Y = mulOfFive (compH/2.)}
+                    //     HostId = hostID
+                    //     Hover = PortHover false
+                    //     Width = PortWidth 0
+                    // }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -404,42 +429,48 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             (
                 let inputPortMap = 
                     if List.isEmpty customParams.InputLabels then
-                        [{
-                            PortId = PortId (uuid())
-                            PortNumber =  None
-                            PortType = PortType.Input
-                            PortPos = {X= compW; Y = mulOfFive (compH/2.)}
-                            HostId = hostID
-                            Hover = PortHover false
-                            Width = PortWidth 0
-                        }]
+               //portTemplate (portExist:bool) (portNumber:int) (portType: PortType) (portWidth:PortWidth) (considerTitle:bool) (totalPorts:int)
+                        [portTemplate (false) (0) (PortType.Input) (PortWidth 0) (false) (0)]           
+                        // [{
+                        //     PortId = PortId (uuid())
+                        //     PortNumber =  None
+                        //     PortType = PortType.Input
+                        //     PortPos = {X= compW; Y = mulOfFive (compH/2.)}
+                        //     HostId = hostID
+                        //     Hover = PortHover false
+                        //     Width = PortWidth 0
+                        // }]
                         |> List.map (fun port -> (port.PortId, port))
                         |> Map.ofList
                     else
                         customParams.InputLabels
                         |> List.map (fun (_,portNum) ->
-                            portTemplate portNum PortType.Input (( compH - 20. ) / ((float (List.length customParams.InputLabels)) + 1.)) (PortWidth 1) 
+                    //portTemplate (portExist:bool) (portNumber:int) (portType: PortType) (portWidth:PortWidth) (considerTitle:bool) (totalPorts:int)
+                            portTemplate (true) (portNum) (PortType.Input) (PortWidth 1) (true) (List.length customParams.InputLabels) 
+                            //portTemplate portNum PortType.Input (( compH - 20. ) / ((float (List.length customParams.InputLabels)) + 1.)) (PortWidth 1) 
                         )
                         |> List.map (fun port -> (port.PortId, port))
                         |> Map.ofList
                 
                 let outputPortMap = 
                     if List.isEmpty customParams.OutputLabels then
-                        [{
-                            PortId = PortId (uuid())
-                            PortNumber =  None
-                            PortType = PortType.Output
-                            PortPos = {X= compW; Y = mulOfFive (compH/2.)}
-                            HostId = hostID
-                            Hover = PortHover false
-                            Width = PortWidth 0
-                        }]
+                        [portTemplate (false) (0) (PortType.Output) (PortWidth 0) (false) (0)] 
+                        // [{
+                        //     PortId = PortId (uuid())
+                        //     PortNumber =  None
+                        //     PortType = PortType.Output
+                        //     PortPos = {X= compW; Y = mulOfFive (compH/2.)}
+                        //     HostId = hostID
+                        //     Hover = PortHover false
+                        //     Width = PortWidth 0
+                        // }]
                         |> List.map (fun port -> (port.PortId, port))
                         |> Map.ofList
                     else
                         customParams.OutputLabels
                         |> List.map (fun (_,portNum) ->
-                            portTemplate portNum PortType.Output (( compH - 20. ) / ((float (List.length customParams.OutputLabels)) + 1.)) (PortWidth 1) 
+                            portTemplate (true) (portNum) (PortType.Output) (PortWidth 1) (true) (List.length customParams.OutputLabels) 
+                            //portTemplate portNum PortType.Output (( compH - 20. ) / ((float (List.length customParams.OutputLabels)) + 1.)) (PortWidth 1) 
                         )
                         |> List.map (fun port -> (port.PortId, port))
                         |> Map.ofList
@@ -451,16 +482,18 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             (
                 let inputPortMap = 
                     [0;1]
-                    |> List.map (fun x -> 
-                        portTemplate x PortType.Input (( compH - 20. )/3.) (PortWidth 1)
+                    |> List.map (fun portNumber ->
+                        portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (true) (2) 
+                        //portTemplate x PortType.Input (( compH - 20. )/3.) (PortWidth 1)
                     )
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [
-                        portTemplate 0 PortType.Output (( compH - 20. )/2.) (PortWidth 1)
-                    ]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth 1) (true) (1)] 
+                    // [
+                    //     portTemplate 0 PortType.Output (( compH - 20. )/2.) (PortWidth 1)
+                    // ]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -470,8 +503,9 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             (
                 let inputPortMap = 
                     [0;1]
-                    |> List.map (fun x -> 
-                        portTemplate x PortType.Input (( compH - 20. )/3.) (PortWidth 1)
+                    |> List.map (fun portNumber -> 
+                        portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (true) (2) 
+                        // portTemplate portNumber PortType.Input (( compH - 20. )/3.) (PortWidth 1)
                     )
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
@@ -480,15 +514,22 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                     // [
                     //     portTemplate 0 PortType.Output (( compH - 20. )/2.) (PortWidth 1)
                     // ]
-                    [{
-                        PortId = PortId (uuid())
-                        PortNumber =  Some (PortNumber (0))
-                        PortType = PortType.Output
-                        PortPos = {X = compW + 15.; Y = mulOfFive (20. + (( compH - 20. )/2.))}
-                        HostId = hostID
-                        Hover = PortHover false
-                        Width = PortWidth 1
+                    let temp = portTemplate (true) (0) (PortType.Output) (PortWidth 1) (true) (1) 
+                    [{temp with 
+                        PortPos =
+                            {temp.PortPos with
+                                X = compW+15.
+                            }
                     }]
+                    // [{
+                    //     PortId = PortId (uuid())
+                    //     PortNumber =  Some (PortNumber (0))
+                    //     PortType = PortType.Output
+                    //     PortPos = {X = compW + 15.; Y = mulOfFive (20. + (( compH - 20. )/2.))}
+                    //     HostId = hostID
+                    //     Hover = PortHover false
+                    //     Width = PortWidth 1
+                    // }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
                 inputPortMap, outputPortMap
@@ -496,22 +537,30 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | Not ->
             (
                 let inputPortMap = 
-                    [
-                        portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth 1)
-                    ]
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth 1) (true) (1)]
+                    // [
+                    //     portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth 1)
+                    // ]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [{
-                        PortId = PortId (uuid())
-                        PortNumber =  Some (PortNumber (0))
-                        PortType = PortType.Output
-                        PortPos = {X = compW + 15.; Y = mulOfFive (20. + (( compH - 20. )/2.))}
-                        HostId = hostID
-                        Hover = PortHover false
-                        Width = PortWidth 1
+                    let temp = portTemplate (true) (0) (PortType.Output) (PortWidth 1) (true) (1) 
+                    [{temp with 
+                        PortPos =
+                            {temp.PortPos with
+                                X = compW+15.
+                            }
                     }]
+                    // [{
+                    //     PortId = PortId (uuid())
+                    //     PortNumber =  Some (PortNumber (0))
+                    //     PortType = PortType.Output
+                    //     PortPos = {X = compW + 15.; Y = mulOfFive (20. + (( compH - 20. )/2.))}
+                    //     HostId = hostID
+                    //     Hover = PortHover false
+                    //     Width = PortWidth 1
+                    // }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -520,18 +569,20 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | Mux2 -> 
             (
                 let inputPortMap =
-                    [0;1]
-                    |> List.map (fun x -> 
-                        portTemplate x PortType.Input (( compH - 20. )/4.) (PortWidth 1)
+                    [0;1;2]
+                    |> List.map (fun portNumber -> 
+                        portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (true) (3)
+                        // portTemplate x PortType.Input (( compH - 20. )/4.) (PortWidth 1)
                     )
-                    |> List.append [(portTemplate 2 PortType.Input (( compH - 20. )/4.) (PortWidth 1))]
+                    // |> List.append [(portTemplate 2 PortType.Input (( compH - 20. )/4.) (PortWidth 1))]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap =
-                    [
-                        portTemplate 0 PortType.Output ((compH - 20.)/2. ) (PortWidth 1)
-                    ]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth 1) (true) (1)]
+                    // [
+                    //     portTemplate 0 PortType.Output ((compH - 20.)/2. ) (PortWidth 1)
+                    // ]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -541,17 +592,23 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | Demux2 ->
             (
                 let inputPortMap = 
-                    [
-                        portTemplate 0 PortType.Input ((compH - 20.)/3. ) (PortWidth 1)
-                    ]
-                    |> List.append [(portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1))]
+                    [0;1]
+                    |> List.map (fun portNumber -> 
+                        portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (true) (2)
+                        // portTemplate x PortType.Input (( compH - 20. )/4.) (PortWidth 1)
+                    )
+                    // [
+                    //     portTemplate 0 PortType.Input ((compH - 20.)/3. ) (PortWidth 1)
+                    // ]
+                    // |> List.append [(portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1))]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
                     [0;1]
-                    |>List.map (fun x -> 
-                        portTemplate x PortType.Output (( compH - 20. )/3.) (PortWidth 1)
+                    |>List.map (fun portNumber -> 
+                        portTemplate (true) (portNumber) (PortType.Output) (PortWidth 1) (true) (2)
+                        // portTemplate portNumber PortType.Output (( compH - 20. )/3.) (PortWidth 1)
                     )
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
@@ -563,16 +620,20 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             (
                 let inputPortMap = 
                     [1;2]
-                    |>List.map (fun x ->
-                        portTemplate x PortType.Input (( compH - 20. )/4.) (PortWidth n)
+                    |>List.map (fun portNumber ->
+                        portTemplate (true) (portNumber) (PortType.Input) (PortWidth n) (true) (3)
+                        //portTemplate x PortType.Input (( compH - 20. )/4.) (PortWidth n)
                     )
-                    |> List.append ([portTemplate 0 PortType.Input (( compH - 20. )/4.) (PortWidth 1)])
+                    |> List.append ([portTemplate (true) (0) (PortType.Input) (PortWidth 1) (true) (3)])
+                    // |> List.append ([portTemplate 0 PortType.Input (( compH - 20. )/4.) (PortWidth 1)])
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [portTemplate 0 PortType.Output (( compH - 20. )/3.) (PortWidth n)]
-                    |>List.append [portTemplate 1 PortType.Output (( compH - 20. )/3.) (PortWidth 1)]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth n) (true) (2)]
+                    |>List.append [portTemplate (true) (1) (PortType.Output) (PortWidth 1) (true) (2)]
+                    // [portTemplate 0 PortType.Output (( compH - 20. )/3.) (PortWidth n)]
+                    // |>List.append [portTemplate 1 PortType.Output (( compH - 20. )/3.) (PortWidth 1)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -581,12 +642,14 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | DFF ->
             (
                 let inputPortMap = 
-                    [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth 1)]
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth 1) (true) (1)]
+                    //[portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth 1)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth 1)]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth 1) (true) (1)]
+                    //portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth 1)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -595,13 +658,19 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | DFFE -> 
             (
                 let inputPortMap = 
-                    [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth 1)]
-                    |> List.append [portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1)]
+                    [0;1]
+                    |>List.map (fun portNumber ->
+                        portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (true) (2)
+                        //portTemplate x PortType.Input (( compH - 20. )/4.) (PortWidth n)
+                    )
+                    // [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth 1)]
+                    // |> List.append [portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth 1)]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth 1) (true) (2)]
+                    // [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth 1)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -610,12 +679,14 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | Register n->
             (
                 let inputPortMap = 
-                    [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth n)]
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth n) (true) (1)]
+                    // [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth n)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth n)]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth n) (true) (1)]
+                    // [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth n)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -624,13 +695,16 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | RegisterE n ->
             (
                 let inputPortMap = 
-                    [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth n)]
-                    |> List.append ([portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1)])
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth n) (true) (2)]
+                    |> List.append ([portTemplate (true) (1) (PortType.Input) (PortWidth 1) (true) (2)])
+                    // [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth n)]
+                    // |> List.append ([portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1)])
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth n)]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth n) (true) (1)]
+                    // [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth n)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -639,12 +713,14 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | AsyncROM mem | ROM mem ->
             (
                 let inputPortMap = 
-                    [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth mem.AddressWidth)]
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth mem.AddressWidth) (true) (1)]
+                    // [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth mem.AddressWidth)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth mem.WordWidth)]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth mem.WordWidth) (true) (1)]
+                    // [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth mem.WordWidth)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -653,14 +729,18 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | RAM mem ->
             (
                 let inputPortMap = 
-                    [portTemplate 0 PortType.Input (( compH - 20. )/4.) (PortWidth mem.AddressWidth)]
-                    @ [portTemplate 1 PortType.Input (( compH - 20. )/4.) (PortWidth mem.WordWidth)]
-                    @ [portTemplate 2 PortType.Input (( compH - 20. )/4.) (PortWidth 1)]
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth mem.AddressWidth) (true) (3)]
+                    @ [portTemplate (true) (1) (PortType.Input) (PortWidth mem.WordWidth) (true) (3)]
+                    @ [portTemplate (true) (2) (PortType.Input) (PortWidth 1) (true) (3)]
+                    // [portTemplate 0 PortType.Input (( compH - 20. )/4.) (PortWidth mem.AddressWidth)]
+                    // @ [portTemplate 1 PortType.Input (( compH - 20. )/4.) (PortWidth mem.WordWidth)]
+                    // @ [portTemplate 2 PortType.Input (( compH - 20. )/4.) (PortWidth 1)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
-                let outputPortMap = 
-                    [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth mem.WordWidth)]
+                let outputPortMap =
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth mem.WordWidth) (true) (1)] 
+                    // [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth mem.WordWidth)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -668,29 +748,31 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             )
         | Constant (width,_) ->
             (
-                let inputPortMap = 
-                    [{
-                        PortId = PortId (uuid())
-                        PortNumber =  None
-                        PortType = PortType.Output
-                        PortPos = {X=mulOfFive (compW/2.); Y = compH}
-                        HostId = hostID
-                        Hover = PortHover false
-                        Width = PortWidth 0
-                    }]
+                let inputPortMap =
+                    [portTemplate (false) (0) (PortType.Input) (PortWidth 0) (false) (0)] 
+                    // [{
+                    //     PortId = PortId (uuid())
+                    //     PortNumber =  None
+                    //     PortType = PortType.Output
+                    //     PortPos = {X=mulOfFive (compW/2.); Y = compH}
+                    //     HostId = hostID
+                    //     Hover = PortHover false
+                    //     Width = PortWidth 0
+                    // }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [{
-                        PortId = PortId (uuid())
-                        PortNumber =  Some (PortNumber (0))
-                        PortType = PortType.Output
-                        PortPos = {X = compW; Y = mulOfFive (compH/2.)}
-                        HostId = hostID
-                        Hover = PortHover false
-                        Width = PortWidth width
-                    }]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth width) (false) (1)]
+                    // [{
+                    //     PortId = PortId (uuid())
+                    //     PortNumber =  Some (PortNumber (0))
+                    //     PortType = PortType.Output
+                    //     PortPos = {X = compW; Y = mulOfFive (compH/2.)}
+                    //     HostId = hostID
+                    //     Hover = PortHover false
+                    //     Width = PortWidth width
+                    // }]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -699,12 +781,14 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | BusSelection (outputWidth,leastSB) ->
             (
                 let inputPortMap = 
-                    [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth (leastSB+outputWidth))]
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth (leastSB+outputWidth)) (true) (1)]
+                    // [portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth (leastSB+outputWidth))]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth outputWidth)]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth outputWidth) (true) (1)]
+                    // [portTemplate 0 PortType.Output ((compH - 20.) / 2.) (PortWidth outputWidth)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -713,15 +797,21 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | MergeWires ->
             (
                 let inputPortMap = 
-                    [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth 0)]
-                    |>List.append [portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 0)]
+                    [0;1]
+                    |>List.map (fun portNumber ->
+                        portTemplate (true) (portNumber) (PortType.Input) (PortWidth 0) (true) (2)
+                        //portTemplate x PortType.Input (( compH - 20. )/4.) (PortWidth n)
+                    )
+                    // [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth 0)]
+                    // |>List.append [portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 0)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
-                    [
-                        portTemplate 0 PortType.Output (( compH - 20. )/2.) (PortWidth 1)
-                    ]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth 0) (true) (1)]
+                    // [
+                    //     portTemplate 0 PortType.Output (( compH - 20. )/2.) (PortWidth 1)
+                    // ]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -730,15 +820,18 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | SplitWire n->
             (
                 let outputPortMap = 
-                    [portTemplate 0 PortType.Output (( compH - 20. )/3.) (PortWidth 0)]
-                    |>List.append [portTemplate 1 PortType.Output (( compH - 20. )/3.) (PortWidth n)]
+                    [portTemplate (true) (0) (PortType.Output) (PortWidth 0) (true) (2)]
+                    |>List.append [portTemplate (true) (1) (PortType.Output) (PortWidth n) (true) (2)]
+                    // [portTemplate 0 PortType.Output (( compH - 20. )/3.) (PortWidth 0)]
+                    // |>List.append [portTemplate 1 PortType.Output (( compH - 20. )/3.) (PortWidth n)]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
                     
                 let inputPortMap = 
-                    [
-                        portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth 0)
-                    ]
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth 0) (true) (1)]
+                    // [
+                    //     portTemplate 0 PortType.Input (( compH - 20. )/2.) (PortWidth 0)
+                    // ]
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
@@ -747,15 +840,18 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         | Decode4 ->
             (
                 let inputPortMap = 
-                    [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth 2)]
-                    |> List.append ([portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1)])
+                    [portTemplate (true) (0) (PortType.Input) (PortWidth 2) (true) (2)]
+                    |> List.append ([portTemplate (true) (1) (PortType.Input) (PortWidth 1) (true) (2)])
+                    // [portTemplate 0 PortType.Input (( compH - 20. )/3.) (PortWidth 2)]
+                    // |> List.append ([portTemplate 1 PortType.Input (( compH - 20. )/3.) (PortWidth 1)])
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
 
                 let outputPortMap = 
                     [0..3]
-                    |>List.map (fun x -> 
-                        portTemplate x PortType.Output (( compH - 20. )/5.) (PortWidth 1)
+                    |>List.map (fun portNumber -> 
+                        portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (true) (4)
+                        // portTemplate x PortType.Output (( compH - 20. )/5.) (PortWidth 1)
                     )
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
@@ -798,31 +894,31 @@ let createNewSymbol ()  =
                 OutputLabels = [("TestOutput0",0) ; ("TestOutput1", 1)]
             }
         match (rngComponent ()) with
-        // | 0 -> Not
-        // | 1 -> And
-        // | 2 -> Or
-        // | 3 -> Xor
-        // | 4 -> Nand
-        // | 5 -> Nor
-        // | 6 -> Xnor
-        // | 7 -> Mux2
-        // | 8 -> NbitsAdder (rng0 ())
-        // | 9 -> DFF
-        // | 10 -> DFFE
-        // | 11 -> Register (rng0 ())
-        // | 12 -> RegisterE (rng0())
-        // | 13 -> AsyncROM (memory ())
-        // | 14 -> ROM (memory())
-        // | 15 -> RAM (memory())
-        // | 16 -> Decode4
-        // | 17 -> Input (rng0 ())
-        // | 18 -> Output (rng0 ())
-        // | 19 -> IOLabel
-        // | 20 -> Demux2
-        // | 21 -> MergeWires
-        // | 22 -> BusSelection (rng0(),rng0())
-        // | 23 -> Constant (rng0(), rng0())
-        // | 24 -> SplitWire (rng0())
+        | 0 -> Not
+        | 1 -> And
+        | 2 -> Or
+        | 3 -> Xor
+        | 4 -> Nand
+        | 5 -> Nor
+        | 6 -> Xnor
+        | 7 -> Mux2
+        | 8 -> NbitsAdder (rng0 ())
+        | 9 -> DFF
+        | 10 -> DFFE
+        | 11 -> Register (rng0 ())
+        | 12 -> RegisterE (rng0())
+        | 13 -> AsyncROM (memory ())
+        | 14 -> ROM (memory())
+        | 15 -> RAM (memory())
+        | 16 -> Decode4
+        | 17 -> Input (rng0 ())
+        | 18 -> Output (rng0 ())
+        | 19 -> IOLabel
+        | 20 -> Demux2
+        | 21 -> MergeWires
+        | 22 -> BusSelection (rng0(),rng0())
+        | 23 -> Constant (rng0(), rng0())
+        | 24 -> SplitWire (rng0())
         | _ -> Custom customComp
 
         //| 3 -> testComponentDemux2 ()
@@ -1465,10 +1561,10 @@ let private renderSymbol (model:Model) =
                     Seq.append [
                         match port.PortType with
                         |PortType.Input -> 
-                            X (topLeft.X + port.PortPos.X + 6.)
+                            X (topLeft.X + port.PortPos.X + 8.)
                             Y (topLeft.Y + port.PortPos.Y - 10.)
                         |PortType.Output ->
-                            X (topLeft.X + port.PortPos.X - 6.)
+                            X (topLeft.X + port.PortPos.X - 8.)
                             Y (topLeft.Y + port.PortPos.Y - 10.)
                     ] (viewPortsStaticComponent port.PortType)
                 ) [str<|portLabel]
