@@ -633,7 +633,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             let outputPortMap = 
                 [0..3]
                 |>List.map (fun portNumber -> 
-                    portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (true) (4)
+                    portTemplate (true) (portNumber) (PortType.Output) (PortWidth 1) (true) (4)
                     // portTemplate x PortType.Output (( compH - 20. )/5.) (PortWidth 1)
                 )
                 |> List.map (fun port -> (port.PortId, port))
@@ -656,7 +656,17 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 let createNewSymbol ()  =
     let rng0 () = rng.Next (0,9)
     let rngComponent () = rng.Next(0,26)
-    let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty} 
+    let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
+
+    let randomName () = 
+        let nameRng () = rng.Next (0,21)
+        match nameRng () with
+        | 1 -> "Ba" | 2 -> "Ce" | 3 -> "Di" | 4 -> "Fo" | 5 -> "Gu"
+        | 6 -> "Ha" | 7 -> "Je" | 8 -> "Ki" | 9 -> "Lo" | 10 -> "Mu"
+        | 11 -> "Na" | 12 -> "Pe" | 13 -> "Qi" | 14 -> "Ro" | 15 -> "Su"
+        | 16 -> "Ta" | 17 -> "Ve" | 18 -> "Wi" | 19 -> "Yo" | _ -> "Zu"
+        
+
     let compType = 
         let (customComp:CustomComponentType) = 
             {
@@ -695,7 +705,7 @@ let createNewSymbol ()  =
     let rng1 () = rng.Next(0,800)
     let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId ({X= float(rng1 ());Y = float (rng1 ()) }) compType (string (rng.Next (0,100)))
+        createSpecificComponent compId ({X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName () ) + (randomName ()) + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
