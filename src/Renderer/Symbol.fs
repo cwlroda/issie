@@ -659,12 +659,26 @@ let createNewSymbol ()  =
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
 
     let randomName () = 
-        let nameRng () = rng.Next (0,21)
-        match nameRng () with
-        | 1 -> "Ba" | 2 -> "Ce" | 3 -> "Di" | 4 -> "Fo" | 5 -> "Gu"
-        | 6 -> "Ha" | 7 -> "Je" | 8 -> "Ki" | 9 -> "Lo" | 10 -> "Mu"
-        | 11 -> "Na" | 12 -> "Pe" | 13 -> "Qi" | 14 -> "Ro" | 15 -> "Su"
-        | 16 -> "Ta" | 17 -> "Ve" | 18 -> "Wi" | 19 -> "Yo" | _ -> "Zu"
+        let nameRng1 () = rng.Next (1,21)
+        let nameRng2 () = rng.Next (1,6)
+        let nameRng3 () = rng.Next(1,27)
+        let firstLetter () = 
+            match nameRng1 () with
+            | 1 -> "B" | 2 -> "C" | 3 -> "D" | 4 -> "F" | 5 -> "G"
+            | 6 -> "H" | 7 -> "J" | 8 -> "K" | 9 -> "L" | 10 -> "M"
+            | 11 -> "N" | 12 -> "P" | 13 -> "Q" | 14 -> "R" | 15 -> "S"
+            | 16 -> "T" | 17 -> "V" | 18 -> "W" | 19 -> "Y" | _ -> "Z"
+        let secondLetter () = 
+            match nameRng2 () with
+            | 1 -> "a" | 2 -> "e" | 3 -> "i" | 4 -> "o" | _ -> "u"
+        let thirdLetter () = 
+            match nameRng3 () with
+            | 1 -> "a" | 2 -> "b" | 3 -> "c" | 4 -> "d" | 5 -> "e"
+            | 6 -> "f" | 7 -> "g" | 8 -> "h" | 9 -> "i" | 10 -> "j"
+            | 11 -> "k" | 12 -> "l" | 13 -> "m" | 14 -> "n" | 15 -> "o"
+            | 16 -> "p" | 17 -> "q" | 18 -> "r" | 19 -> "s" | 20 -> "t"
+            | 21 -> "u" | 22 -> "v" | 23 -> "w" | 24 -> "x" | 25 -> "y" | _ -> "z"
+        firstLetter() + secondLetter() + thirdLetter()
         
 
     let compType = 
@@ -705,7 +719,7 @@ let createNewSymbol ()  =
     let rng1 () = rng.Next(0,800)
     let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId ({X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName () ) + (randomName ()) + (string(rng.Next (0,10))))
+        createSpecificComponent compId ({X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName ()) + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
