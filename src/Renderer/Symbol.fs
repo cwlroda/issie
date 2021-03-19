@@ -262,24 +262,25 @@ let mulOfFive (input:float)  : float =
 let rng = System.Random 0
 let rng2() = rng.Next(0,2)
 let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:ComponentType) (labelName:string) : Component =
-
-    let compX,compY,compW,compH =
+    let compX = position.X
+    let compY = position.Y
+    let compW,compH =
         match compType with 
-        | Not | And | Or | Xor | Nand | Nor | Xnor -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 60.,mulOfFive 70.
-        | DFF -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 80.
-        | DFFE -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 110.
-        | Mux2 -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 140.
-        | Demux2 -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 110.
-        | NbitsAdder _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 150.,mulOfFive 140.
-        | Input _ | Output _ | Constant _->  mulOfFive position.X, mulOfFive position.Y,mulOfFive 100.,mulOfFive 40.
-        | RAM _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 140.
-        | RegisterE _-> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 110.
-        | ROM _ | Register _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 90.
-        | AsyncROM _ -> mulOfFive position.X, mulOfFive position.Y,mulOfFive 200.,mulOfFive 80.
-        | Decode4 -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 170.
-        | IOLabel -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 40.
-        | MergeWires | SplitWire _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 100.,mulOfFive 110.
-        | BusSelection _ -> mulOfFive position.X, mulOfFive position.Y, mulOfFive 200., mulOfFive 70.
+        | Not | And | Or | Xor | Nand | Nor | Xnor ->  60., 70.
+        | DFF ->  100., 80.
+        | DFFE ->  100., 110.
+        | Mux2 ->  100., 140.
+        | Demux2 ->  100., 110.
+        | NbitsAdder _ ->  150., 140.
+        | Input _ | Output _ | Constant _->   100., 40.
+        | RAM _ ->  200., 140.
+        | RegisterE _->  200., 110.
+        | ROM _ | Register _ ->  200., 90.
+        | AsyncROM _ ->  200., 80.
+        | Decode4 ->   100., 170.
+        | IOLabel ->   100., 40.
+        | MergeWires | SplitWire _ ->   100., 110.
+        | BusSelection _ ->   200.,  70.
         | Custom customParams ->  
             let maxPorts =
                 if (List.length customParams.InputLabels) > (List.length customParams.OutputLabels) then
@@ -287,7 +288,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 else
                     (List.length customParams.OutputLabels)
                
-            mulOfFive position.X, mulOfFive position.Y, mulOfFive 200., mulOfFive (20. + 30.* (1. + float (maxPorts)))
+            200.,  (20. + 30.* (1. + float (maxPorts)))
             
 
 
