@@ -199,7 +199,7 @@ let autoConnect (segList: WireSegment list) : WireSegment list =
             }
         | _ -> failwithf "This shouldn't happen!"
     )
-
+    
 // naive routing algorithm
 let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : WireSegment list =
     let srcSym = Symbol.findSymbolFromPort sModel (Symbol.findPort sModel wire.SrcPort)
