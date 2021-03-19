@@ -683,7 +683,7 @@ let init () =
         PanY = 0.
         Zoom = 1.
         Width = 1000.
-        Height = 700.
+        Height = 500.
         UndoList = []
         RedoList = []
     }, Cmd.batch [

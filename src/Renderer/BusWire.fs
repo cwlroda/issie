@@ -461,7 +461,8 @@ let singleLabelView =
                                 TextAnchor "left"
                                 DominantBaseline "middle"
                                 FontSize "14px"
-                                Fill props.ColorLabel ] ] [
+                                Fill props.ColorLabel
+                                UserSelect UserSelectOptions.None] ] [
                         str <| sprintf $"{props.Label}"
                 ]
                 line [
