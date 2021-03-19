@@ -230,14 +230,19 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
         | x when (x = 0) || (x = List.length segList - 1) -> s
         | _ ->
             match collisionDetection s.StartPos s.EndPos with
-            | [] -> s
+            | [] -> 
+                printf "Found no collisions"
+                s
             | lst ->
-                let offset = gridSize
+                printf $"found {(List.length lst)} nr of collisions"
+                //let offset = gridSize
+               
 
                 match s.Direction with
                 | Horizontal ->
+                    let offset = (lst.Head.Component.Y - s.StartPos.Y) - 2.*gridSize
                     match lst.Head.Component.Y - s.StartPos.Y with
-                    | y when y < 0. ->
+                    | y when y < 0. ->   
                         {s with
                             StartPos = posAdd s.StartPos {X = 0.; Y = offset}
                             EndPos = posAdd s.EndPos {X = 0.; Y = offset}
@@ -248,6 +253,7 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
                             EndPos = posAdd s.EndPos {X = 0.; Y = -offset}
                         }
                 | Vertical ->
+                    let offset = (lst.Head.Component.X - s.StartPos.X) - 2.*gridSize
                     match lst.Head.Component.X - s.StartPos.X with
                     | x when x < 0. ->
                         {s with
