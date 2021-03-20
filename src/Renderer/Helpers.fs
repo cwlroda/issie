@@ -22,6 +22,15 @@ let posDiff a b =
 let posAdd a b =
     {X=a.X+b.X; Y=a.Y+b.Y}
 
+let posAddX a b =
+    {X=a.X+b; Y=a.Y}
+
+let posAddY a b =
+    {X=a.X; Y=a.Y+b}
+
+let posAddXY a b =
+    {X=a.X+b; Y=a.Y+b}
+
 let posOf x y = {X=x;Y=y}
 
 let posLength p =
@@ -78,9 +87,10 @@ let overlaps (b1: BBox) (b2: BBox): bool =
         || isLeftOf b2 b1
     )
 
+let gridSize = 10.
+
 // snaps wire segments to grid (variable grid size)
 let snapToGrid (pos: XYPos) : XYPos =
-    let gridSize = 10.
     let xOffset = pos.X % gridSize
     let yOffset = pos.Y % gridSize
 
