@@ -86,7 +86,6 @@ type LabelRenderProps =
         BusIdcWidth: float
     }
 
-
 /// Takes as input a relative position between two points and outputs true if the two original points are horzontal and false otherwise
 let isVertical (relPos: XYPos): bool =
     abs (relPos.X) <= abs (relPos.Y)
@@ -168,43 +167,25 @@ let autoConnect (segList: WireSegment list) : WireSegment list =
     segList
     |> List.mapi (fun i s ->
         match i with
-        | x when x = 0 -> {s with EndPos = segList.[i+1].StartPos}
-        | x when x = (List.length segList - 1) -> {s with StartPos = segList.[i-1].EndPos}
-        | x when (List.length segList = 3) && (x = 1) -> s
-        | x when (List.length segList = 5) && (x = 1) ->
+        | x when x = 0 ->
+            {s with EndPos = segList.[i+1].StartPos}
+        | x when x = (segList.Length - 1) ->
+            {s with StartPos = segList.[i-1].EndPos}
+        | x when (segList.Length = 3) && (x = 1) -> s
+        | x when (segList.Length = 5) && (x = 1) ->
+            {s with EndPos = posOf s.EndPos.X segList.[i+1].StartPos.Y}
+        | x when (segList.Length = 5) && (x = 2) ->
             {s with
-                EndPos =
-                    {
-                        X = s.EndPos.X
-                        Y = segList.[i+1].StartPos.Y
-                    }
+                StartPos = posOf segList.[i-1].EndPos.X s.StartPos.Y
+                EndPos = posOf segList.[i+1].StartPos.X s.StartPos.Y
             }
-        | x when (List.length segList = 5) && (x = 2) ->
-            {s with
-                StartPos =
-                    {
-                        X = segList.[i-1].EndPos.X
-                        Y = s.StartPos.Y
-                    }
-                EndPos =
-                    {
-                        X = segList.[i+1].StartPos.X
-                        Y = s.StartPos.Y
-                    }
-            }
-        | x when (List.length segList = 5) && (x = 3) ->
-            {s with
-                StartPos =
-                    {
-                        X = s.StartPos.X
-                        Y = segList.[i-1].EndPos.Y
-                    }
-            }
+        | x when (segList.Length = 5) && (x = 3) ->
+            {s with StartPos = posOf s.StartPos.X segList.[i-1].EndPos.Y}
         | _ -> failwithf "This shouldn't happen!"
     )
 
-// naive routing algorithm
-let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : WireSegment list =
+// smart routing algorithm
+let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : WireSegment list =
     let srcPortPos = Symbol.portPos sModel wire.SrcPort
     let tgtPortPos = Symbol.portPos sModel wire.TargetPort
     let avgPortPos = (srcPortPos.Y + tgtPortPos.Y) / 2.
@@ -228,17 +209,16 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
             | Horizontal ->
                 let newSeg =
                     {seg with
-                        StartPos = posAdd seg.StartPos {X = 0.; Y = offset}
-                        EndPos = posAdd seg.EndPos {X = 0.; Y = offset}
+                        StartPos = posAddY seg.StartPos offset
+                        EndPos = posAddY seg.EndPos offset
                     }
                 
                 avoid newSeg index dir
-
             | Vertical ->
                 let newSeg =
                     {seg with
-                        StartPos = posAdd seg.StartPos {X = offset; Y = 0.}
-                        EndPos = posAdd seg.EndPos {X = offset; Y = 0.}
+                        StartPos = posAddX seg.StartPos offset
+                        EndPos = posAddX seg.EndPos offset
                     }
                 
                 let isFiveSeg = (List.last segList).EndPos.X <= segList.Head.StartPos.X
@@ -246,20 +226,20 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
                 let hitsTgtPort = newSeg.StartPos.X >= ((List.last segList).EndPos.X - 20.)
                 
                 match isFiveSeg, index, dir, hitsSrcPort, hitsTgtPort with
-                | false, _, false, false, _ -> avoid newSeg index false
+                | false, _, false, false, _ -> avoid newSeg index dir
                 | false, _, false, true, false -> avoid seg index true
                 | false, _, false, true, true -> seg
-                | false, _, true, false, false -> avoid newSeg index true
+                | false, _, true, false, false -> avoid newSeg index dir
                 | false, _, true, _, true -> seg
                 | false, _, true, true, false -> avoid newSeg index false
                 
-                | true, 1, false, false, _ -> avoid newSeg index false
+                | true, 1, false, false, _ -> avoid newSeg index dir
                 | true, 1, _, true, false -> avoid newSeg index false
                 | true, 1, _, true, true -> avoid newSeg index true
-                | true, 1, true, false, _ -> avoid newSeg index true
+                | true, 1, true, false, _ -> avoid newSeg index dir
 
-                | true, 3, false, _, _ -> avoid newSeg index false
-                | true, 3, true, _, false -> avoid newSeg index true
+                | true, 3, false, _, _ -> avoid newSeg index dir
+                | true, 3, true, _, false -> avoid newSeg index dir
                 | true, 3, true, _, true -> avoid newSeg index false
                 
                 | _ -> avoid newSeg index false
@@ -267,13 +247,12 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
     segList
     |> List.mapi (fun i s ->
         match i with
-        | x when (x = 0) || (x = List.length segList - 1) -> s
+        | x when (x = 0) || (x = segList.Length  - 1) -> s
         | _ ->
             match i with
             | 2 ->
                 let segUp = avoid s i false
                 let segDown = avoid s i true
-
                 let distUp = abs (avgPortPos - segUp.StartPos.Y)
                 let distDown = abs (avgPortPos - segDown.StartPos.Y)
 
@@ -387,10 +366,8 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
     |> Map.map (fun _ w ->
         match List.contains w.SrcPort pIds || List.contains w.TargetPort pIds with
         | true -> {w with Segments = autoRoute sModel w}
-        | false -> w
-        // {w with Segments = routing sModel w w.Segments}
+        | false -> {w with Segments = smartRouting sModel w w.Segments}
     )
-
 
 let singleWireView =
     FunctionComponent.Of
@@ -489,7 +466,7 @@ let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
                     StartPos = posAdd seg.StartPos diff
                     EndPos = posAdd seg.EndPos offset
                 }
-            | index when ((index = i) && (index = (List.length wire.Segments - 1))) ->
+            | index when ((index = i) && (index = (wire.Segments.Length  - 1))) ->
                 {s with
                     StartPos = posAdd seg.StartPos offset
                     EndPos = posAdd seg.EndPos diff
@@ -522,7 +499,7 @@ let fitConnection (wModel: Model) (sModel: Symbol.Model) (index: SegmentIndex) (
 
 let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) =
     let srcSegId = 0
-    let tgtSegId = List.length wire.Segments - 1   
+    let tgtSegId = wire.Segments.Length - 1   
 
     let rec findClosestPort pos n =
         match Symbol.portsInRange sModel pos n with
@@ -678,7 +655,7 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
 let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Map<ConnectionId, Wire> =
     wireMap
     |> Map.map (fun _ w ->
-        {w with Segments = routing sModel w w.Segments}
+        {w with Segments = smartRouting sModel w w.Segments}
     )
 
 let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
@@ -800,12 +777,10 @@ let getTargetedWire (wModel: Model) (pos: XYPos): ConnectionId Option =
         Map.filter (fun _ vWire -> (isTargetWire pos vWire)) wModel.WX
         |> Map.toList
 
-
     match possibleWires with
     | [ (wId, _) ] -> Some wId
     | [] -> None
     | lst -> Some(closestWire lst)
-
 
 let getErrors (wModel: Model) (sModel: Symbol.Model): Error list =
     Map.fold
