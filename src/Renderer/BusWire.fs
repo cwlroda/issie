@@ -48,6 +48,7 @@ type Model =
 type Msg =
     | DeleteSymbols of CommonTypes.ComponentId list
     | DraggingSymbols of CommonTypes.ComponentId list
+    | EndDragSymbols
     | AddWire of (PortId * PortId)
     | SetSelected of ConnectionId
     | DeleteWire of ConnectionId
@@ -207,18 +208,18 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
 
     // gets all other symbols within area bounded by the two symbols (inclusive of the two symbols)
     let symList =
-        // Symbol.getAllSymbols sModel
-        // |> List.map (Symbol.getSymbolFromSymbolId sModel)
-        toBBox  (min srcSym.Component.X tgtSym.Component.X)
-                (min srcSym.Component.Y tgtSym.Component.Y)
-                ((max srcSym.Component.W tgtSym.Component.W) + abs (srcSym.Component.X - tgtSym.Component.X))
-                ((max srcSym.Component.H tgtSym.Component.H) + abs (srcSym.Component.Y - tgtSym.Component.Y))
-        |> Symbol.getSymbolsInTargetArea sModel
+        Symbol.getAllSymbols sModel
         |> List.map (Symbol.getSymbolFromSymbolId sModel)
+        // toBBox  (min srcSym.Component.X tgtSym.Component.X)
+        //         (min srcSym.Component.Y tgtSym.Component.Y)
+        //         ((max srcSym.Component.W tgtSym.Component.W) + abs (srcSym.Component.X - tgtSym.Component.X))
+        //         ((max srcSym.Component.H tgtSym.Component.H) + abs (srcSym.Component.Y - tgtSym.Component.Y))
+        // |> Symbol.getSymbolsInTargetArea sModel
+        // |> List.map (Symbol.getSymbolFromSymbolId sModel)
 
     // checks if bounding boxes of wire segment and symbol overlap
     let collisionDetection (startPos: XYPos) (endPos: XYPos) : Symbol.Symbol list =
-        let bbox = createSegBB startPos endPos 10.
+        let bbox = createSegBB startPos endPos 20.
 
         symList
         |> List.filter (fun sym -> overlaps bbox (Symbol.symbolBBox sModel sym.Id))
@@ -227,7 +228,7 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
     segList
     |> List.mapi (fun i s ->
         match i with
-        | x when (x = 0) || (x = List.length segList - 1) -> 
+        | x when (x = 0) || (x = List.length segList - 1) ->
             match collisionDetection s.StartPos s.EndPos with
                 | [] ->    
                     s
@@ -251,37 +252,157 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
                             EndPos = posAdd s.EndPos {X = 0.; Y = -offset}
                         }
         | _ ->
-            match collisionDetection s.StartPos s.EndPos with
-            | [] -> s
-            | lst ->
-                
-                match s.Direction with
-                | Horizontal ->
-                    let offset = (lst.Head.Component.Y - s.StartPos.Y) - 2.*gridSize
-                    match lst.Head.Component.Y - s.StartPos.Y with
-                    | y when y < 0. ->   
-                        {s with
-                            StartPos = posAdd s.StartPos {X = 0.; Y = offset}
-                            EndPos = posAdd s.EndPos {X = 0.; Y = offset}
-                        }
-                    | _ ->
-                        {s with
-                            StartPos = posAdd s.StartPos {X = 0.; Y = -offset}
-                            EndPos = posAdd s.EndPos {X = 0.; Y = -offset}
-                        }
-                | Vertical ->
-                    let offset = (lst.Head.Component.X - s.StartPos.X) - 2.*gridSize
-                    match lst.Head.Component.X - s.StartPos.X with
-                    | x when x < 0. ->
-                        {s with
-                            StartPos = posAdd s.StartPos {X = offset; Y = 0.}
-                            EndPos = posAdd s.EndPos {X = offset; Y = 0.}
-                        }
-                    | _ ->
-                        {s with
-                            StartPos = posAdd s.StartPos {X = -offset; Y = 0.}
-                            EndPos = posAdd s.EndPos {X = -offset; Y = 0.}
-                        }
+            let rec collision (seg: WireSegment) (dir: bool) : WireSegment =
+                // dir - left: false, right: true 
+                match collisionDetection seg.StartPos seg.EndPos with
+                | [] -> seg
+                | lst ->
+                    match seg.Direction with
+                    | Horizontal ->
+                        let offset =
+                            match dir with
+                            | false -> -((seg.StartPos.Y - lst.Head.Component.Y) + 2.*gridSize)
+                            | true -> (lst.Head.Component.Y + lst.Head.Component.H - seg.StartPos.Y) + 2.*gridSize
+                        
+                        let newSeg =
+                            {seg with
+                                StartPos = posAdd seg.StartPos {X = 0.; Y = offset}
+                                EndPos = posAdd seg.EndPos {X = 0.; Y = offset}
+                            }
+                        // match lst.Head.Component.Y - seg.StartPos.Y with
+                        // | y when y < 0. ->   
+                        //     {seg with
+                        //         StartPos = posAdd seg.StartPos {X = 0.; Y = offset}
+                        //         EndPos = posAdd seg.EndPos {X = 0.; Y = offset}
+                        //     }
+                        // | _ ->
+                        //     {seg with
+                        //         StartPos = posAdd seg.StartPos {X = 0.; Y = -offset}
+                        //         EndPos = posAdd seg.EndPos {X = 0.; Y = -offset}
+                        //     }
+
+                        match dir, (newSeg.StartPos.Y <= (segList.Head.StartPos.Y + 20.)), (newSeg.StartPos.Y >= ((List.last segList).EndPos.Y - 20.))  with
+                        | false, false, _ -> collision newSeg false
+                        | false, true, _ -> collision s true
+                        | true, _ , _ ->
+                            if (srcSym.Component.Y >= tgtSym.Component.Y + tgtSym.Component.H || tgtSym.Component.Y >= srcSym.Component.Y + srcSym.Component.H) then s
+                            else collision newSeg true
+                        // | true, _, false -> collision newSeg true
+                        
+                        // | false, true, _ -> collision s true
+                        // | true, _ , true -> s
+                        // | true, _, _ -> collision newSeg true
+                        // | _ -> collision newSeg false
+
+                    | Vertical ->
+                        let offset =
+                            match dir with
+                            | false -> -((seg.StartPos.X - lst.Head.Component.X) + 2.*gridSize)
+                            | true -> (lst.Head.Component.X + lst.Head.Component.W - seg.StartPos.X) + 2.*gridSize
+                        
+                        let newSeg =
+                            {seg with
+                                StartPos = posAdd seg.StartPos {X = offset; Y = 0.}
+                                EndPos = posAdd seg.EndPos {X = offset; Y = 0.}
+                            }
+                        // match lst.Head.Component.X - seg.StartPos.X with
+                        // | x when x < 0. ->
+                        //     {seg with
+                        //         StartPos = posAdd seg.StartPos {X = offset; Y = 0.}
+                        //         EndPos = posAdd seg.EndPos {X = offset; Y = 0.}
+                        //     }
+                        // | _ ->
+                        //     {seg with
+                        //         StartPos = posAdd seg.StartPos {X = -offset; Y = 0.}
+                        //         EndPos = posAdd seg.EndPos {X = -offset; Y = 0.}
+                        //     }
+                        match ((List.last segList).EndPos.X <= segList.Head.StartPos.X), i, dir, (newSeg.StartPos.X <= (segList.Head.StartPos.X + 20.)), (newSeg.StartPos.X >= ((List.last segList).EndPos.X - 20.)) with
+                        | false, _, false, false, false -> collision newSeg false
+                        | false, _, false, false, true ->  collision newSeg false // X
+                        | false, _, false, true, false -> collision s true
+                        | false, _, false, true, true -> s
+                        | false, _, true, false, false -> collision newSeg true
+                        | false, _, true, false, true -> s
+                        | false, _, true, true, false -> collision newSeg false // X
+                        | false, _, true, true, true -> s
+
+                        
+                        | true, 1, false, false, false -> collision newSeg false //X
+                        | true, 1, false, false, true -> collision newSeg false
+                        | true, 1, false, true, false -> collision newSeg false //X
+                        | true, 1, false, true, true -> collision newSeg true
+                        | true, 1, true, false, false -> collision newSeg true // X
+                        | true, 1, true, false, true -> collision newSeg true
+                        | true, 1, true, true, false -> collision newSeg false // X
+                        | true, 1, true, true, true -> collision newSeg true
+
+                        | true, 3, false, false, false -> collision newSeg false //X
+                        | true, 3, false, false, true -> collision newSeg false // X
+                        | true, 3, false, true, false -> collision newSeg false
+                        | true, 3, false, true, true -> collision newSeg false
+                        | true, 3, true, false, false -> collision newSeg true //X
+                        | true, 3, true, false, true -> collision newSeg false //X
+                        | true, 3, true, true, false -> collision newSeg true
+                        | true, 3, true, true, true -> collision newSeg false
+
+                        // | _, _, false, false, _ -> collision newSeg false
+                        // | _, _, false, true, _ -> collision s true
+                        // | _, _, true, _ , true -> s
+                        // | _, _, true, _, false -> collision newSeg true
+                        // | _ -> collision newSeg false
+                        
+                        | _ -> collision newSeg false
+                        
+                        
+                        
+                        // true = 5seg, false = 3seg
+                        // true = right, false = left
+                        // 3seg, _ left, noerrout, noerrin-> left
+                        // 3seg, _  left, noerrout, errin-> X
+                        // 3seg, _  left, errout, noerrin-> right
+                        // 3seg, _  left errout, errin-> s
+                        // 3seg, _  right noerrout, noerrin -> right
+                        // 3seg, _  right noerrout, errin -> s
+                        // 3seg, _  right errout, noerrin-> X
+                        // 3seg, _  right, errout errin-> s
+
+                        // 5seg, 1, left, noerrout, noerrin -> X
+                        // 5seg, 1, left, noerrout, errin -> left
+                        // 5seg, 1, left, errout, noerrin -> X
+                        // 5seg, 1, left, errout, errin -> right
+                        // 5seg, 1, right, noerrout, noerrin -> X
+                        // 5seg, 1, right, noerrout, errin -> right
+                        // 5seg, 1, right, errout, noerrin -> X
+                        // 5seg, 1, right, errout, errin -> right
+
+                        // 5seg, 3, left, noerrout, noerrin -> X
+                        // 5seg, 3, left, noerrout, errin -> X
+                        // 5seg, 3, left, errout, noerrin -> left
+                        // 5seg, 3, left, errout, errin -> left
+                        // 5seg, 3, right, noerrout, noerrin -> X
+                        // 5seg, 3, right, noerrout, errin -> X
+                        // 5seg, 3, right, errout, noerrin -> right
+                        // 5seg, 3, right, errout, errin -> left
+
+
+                        // | false, false, false, false -> left
+                        // | 
+                        // | false, true, _, false -> collision s true
+                        // | false, false, _, true -> collision newSeg false
+                        // | true, _ , true -> s
+                        // | true, _, _ -> collision newSeg true
+                        // | _ -> collision newSeg false
+                    // collision newSeg false
+                    
+
+                    // match newSeg.StartPos.X <= (segList.Head.StartPos.X + 20.) && (dir = false) with
+                    //     match dir with
+                    // | false -> collision newSeg false
+                    // | true -> collision newSeg true
+            
+            match i with
+            | 3 -> collision s true
+            | _ -> collision s false
     )
     |> autoConnect
 
@@ -323,12 +444,10 @@ let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
     let initialSegs, finalSegs =
         defSeg startPos vAdj 20., List.rev (defSeg endPos vAdj -20.)
 
-    let segList =
-        initialSegs @ finalSegs
-        |> List.pairwise
-        |> List.map (fun (startPos, endPos) -> makeWireSegment wire startPos endPos)
-
-    routing sModel wire segList
+    initialSegs @ finalSegs
+    |> List.pairwise
+    |> List.map (fun (startPos, endPos) -> makeWireSegment wire startPos endPos)
+    // |> routing sModel wire
 
 let typesValid (port1, port2) (sModel: Symbol.Model) : Result<PortId * PortId, string> =
     let getType pId = (Symbol.portType sModel pId)
@@ -392,7 +511,8 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
     |> Map.map (fun _ w ->
         match List.contains w.SrcPort pIds || List.contains w.TargetPort pIds with
         | true -> {w with Segments = autoRoute sModel w}
-        | false -> {w with Segments = routing sModel w w.Segments}
+        | false -> w
+        // {w with Segments = routing sModel w w.Segments}
     )
 
 let singleWireView =
@@ -610,6 +730,16 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
         { model with
             WX = updateSymWires model sModel sIdLst
         } , Cmd.none
+    | EndDragSymbols ->
+        let updatedWX =
+            model.WX
+            |> Map.map (fun _ w ->
+                {w with Segments = routing sModel w w.Segments}
+            )
+
+        { model with
+            WX = updatedWX
+        }, Cmd.none
     | AddWire (wMsgId1, wMsgId2) ->
         let wxUpdated = addWire model sModel wMsgId1 wMsgId2
         { model with WX = wxUpdated }, Cmd.none
