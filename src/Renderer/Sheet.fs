@@ -660,7 +660,7 @@ let view (model: Model) (dispatch: Msg -> unit) =
     let sDispatch sMsg = dispatch (Symbol sMsg)
     let symbolSvg = Symbol.view model.Symbol sDispatch
     let wDispatch wMsg = dispatch (Wire wMsg)
-    let wireSvg = BusWire.view model.Wire wDispatch
+    let wireSvg = BusWire.view model.Wire model.Symbol wDispatch
     let symbolsAndWiresSvg =
         g [] [
             wireSvg
@@ -684,7 +684,7 @@ let init () =
         PanY = 0.
         Zoom = 1.
         Width = 1000.
-        Height = 700.
+        Height = 500.
         UndoList = []
         RedoList = []
     }, Cmd.batch [
