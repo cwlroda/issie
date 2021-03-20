@@ -608,6 +608,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             | DragState.Symbol (didDrag, prevWireModel) ->
                 newModel, Cmd.batch [
                     Cmd.ofMsg (Symbol (Symbol.EndDragging))
+                    Cmd.ofMsg (Wire (BusWire.EndDragSymbols))
                     saveStateIfDraggedCmd didDrag prevWireModel
                 ]
             | DragState.WireCreation (pIdStart, p) ->
