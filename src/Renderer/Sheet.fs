@@ -671,7 +671,7 @@ let view (model: Model) (dispatch: Msg -> unit) =
 
 let init () =
     let sModel, sCmds = Symbol.init ()
-    let wModel, wCmds = (BusWire.init sModel) ()
+    let wModel, wCmds = (BusWire.init) ()
     {
         Wire = wModel
         Symbol = sModel
