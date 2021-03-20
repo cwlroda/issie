@@ -286,7 +286,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 PortId = PortId (uuid())
                 PortNumber =  Some (PortNumber (portNumber))
                 PortType = portType
-                PortPos = {X=offset; Y = mulOfFive yPosCalc }//(20. + ((float portNumber) + 1.) * portPos ) }
+                PortPos = {X=offset; Y = mulOfFive yPosCalc }
                 HostId = hostID
                 Hover = PortHover false
                 Width = portWidth
