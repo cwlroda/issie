@@ -205,8 +205,9 @@ let autoConnect (segList: WireSegment list) : WireSegment list =
 
 // naive routing algorithm
 let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : WireSegment list =
-    let srcSym = Symbol.findSymbolFromPort sModel (Symbol.findPort sModel wire.SrcPort)
-    let tgtSym = Symbol.findSymbolFromPort sModel (Symbol.findPort sModel wire.TargetPort)
+    let srcPortPos = Symbol.portPos sModel wire.SrcPort
+    let tgtPortPos = Symbol.portPos sModel wire.TargetPort
+    let avgPortPos = (srcPortPos.Y + tgtPortPos.Y) / 2.
 
     // checks if bounding boxes of wire segment and symbol overlap
     let collision (startPos: XYPos) (endPos: XYPos) : bool =
@@ -231,29 +232,7 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
                         EndPos = posAdd seg.EndPos {X = 0.; Y = offset}
                     }
                 
-                match (tgtSym.Component.Y - srcSym.Component.Y) with
-                | y when y >= (srcSym.Component.H + tgtSym.Component.H) ->
-                    let hitsSrcPort = newSeg.StartPos.Y <= (segList.Head.StartPos.Y - 20.)
-                    let hitsTgtPort = newSeg.StartPos.Y >= ((List.last segList).EndPos.Y + 20.)
-
-                    match dir, hitsSrcPort, hitsTgtPort with
-                    | false, false, _ -> avoid newSeg index false
-                    | false, true, _ -> avoid seg index true
-                    | true, _, _ -> avoid newSeg index true
-                | y when y <= -(srcSym.Component.H + tgtSym.Component.H) ->
-                    let hitsSrcPort = newSeg.StartPos.Y >= (segList.Head.StartPos.Y + 20.)
-                    let hitsTgtPort = newSeg.StartPos.Y <= ((List.last segList).EndPos.Y - 20.)
-
-                    match dir, hitsSrcPort, hitsTgtPort with
-                    | false, _, false -> avoid newSeg index false
-                    | false, _, true -> avoid seg index true
-                    | true, _, _ -> avoid newSeg index true
-                | y when y <= abs (max srcSym.Component.H tgtSym.Component.H) ->
-                    match dir, (newSeg.StartPos.Y <= (max srcSym.Component.Y tgtSym.Component.Y)) with
-                    | false, false -> avoid newSeg index false
-                    | false, true -> avoid seg index true
-                    | true, _ -> avoid newSeg index true
-                | _ -> seg
+                avoid newSeg index dir
 
             | Vertical ->
                 let newSeg =
@@ -291,6 +270,14 @@ let routing (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : Wi
         | x when (x = 0) || (x = List.length segList - 1) -> s
         | _ ->
             match i with
+            | 2 ->
+                let segUp = avoid s i false
+                let segDown = avoid s i true
+
+                let distUp = abs (avgPortPos - segUp.StartPos.Y)
+                let distDown = abs (avgPortPos - segDown.StartPos.Y)
+
+                if distUp < distDown then segUp else segDown
             | 3 -> avoid s i true
             | _ -> avoid s i false
     )
