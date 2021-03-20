@@ -45,8 +45,10 @@ type Model =
     }
 
 type Msg =
+    | AddSymbol
     | DeleteSymbols of CommonTypes.ComponentId list
     | DraggingSymbols of CommonTypes.ComponentId list
+    | EndDragSymbols
     | AddWire of (PortId * PortId)
     | DeleteWire of ConnectionId
     | SetSelected of ConnectionId
@@ -143,7 +145,7 @@ let makeWireSegment (startPos: XYPos) (endPos: XYPos) : WireSegment =
         Direction = direction
     }
 
-let verticalOverlap (box1: BBox) (box2:BBox) = 
+let verticalOverlap (box1: BBox) (box2: BBox) = 
     let isAbove (bb1: BBox) (bb2: BBox) = (bb1.Pos.Y + bb1.Height) <= bb2.Pos.Y
     not (isAbove box1 box2 || isAbove box2 box1)
 
@@ -284,7 +286,7 @@ let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
             |> List.map snapToGrid
 
     let initialSegs, finalSegs =
-        defSeg startPos (vAdj) 20., List.rev (defSeg endPos vAdj -20.)
+        defSeg startPos vAdj 20., List.rev (defSeg endPos vAdj -20.)
 
     initialSegs @ finalSegs
     |> List.pairwise
@@ -627,17 +629,26 @@ let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Ma
 
 let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     match msg with
-    | DeleteSymbols sIdLst ->
+    | AddSymbol ->
         { model with
-            WX = deleteWiresOfSymbols model sModel sIdLst
+            WX = routingUpdate sModel model.WX
+        }, Cmd.none
+    | DeleteSymbols sIdLst ->
+        let wxUpdated = deleteWiresOfSymbols model sModel sIdLst
+        { model with
+            WX = routingUpdate sModel wxUpdated
         } , Cmd.none
     | DraggingSymbols sIdLst ->
         { model with
             WX = updateSymWires model sModel sIdLst
         } , Cmd.none
+    | EndDragSymbols ->
+        { model with
+            WX = routingUpdate sModel model.WX
+        }, Cmd.none
     | AddWire (wMsgId1, wMsgId2) ->
         let wxUpdated = addWire model sModel wMsgId1 wMsgId2
-        { model with WX = wxUpdated }, Cmd.none
+        { model with WX = routingUpdate sModel wxUpdated }, Cmd.none
     | DeleteWire wMsg ->
         let wxUpdated = deleteWire model wMsg
         { model with WX = wxUpdated }, Cmd.none
