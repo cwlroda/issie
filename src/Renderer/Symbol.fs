@@ -286,7 +286,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 PortId = PortId (uuid())
                 PortNumber =  Some (PortNumber (portNumber))
                 PortType = portType
-                PortPos = {X=offset; Y = mulOfFive yPosCalc }//(20. + ((float portNumber) + 1.) * portPos ) }
+                PortPos = {X=offset; Y = mulOfFive yPosCalc }
                 HostId = hostID
                 Hover = PortHover false
                 Width = portWidth
@@ -351,8 +351,8 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                     |> Map.ofList
                 else
                     customParams.InputLabels
-                    |> List.map (fun (_,portNum) ->
-                        portTemplate (true) (portNum) (PortType.Input) (PortWidth 1) (true) (List.length customParams.InputLabels) 
+                    |> List.mapi (fun i (_,portNum) ->
+                        portTemplate (true) (i) (PortType.Input) (PortWidth portNum) (true) (List.length customParams.InputLabels) 
                     )
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
@@ -364,8 +364,8 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                     |> Map.ofList
                 else
                     customParams.OutputLabels
-                    |> List.map (fun (_,portNum) ->
-                        portTemplate (true) (portNum) (PortType.Output) (PortWidth 1) (true) (List.length customParams.OutputLabels) 
+                    |> List.mapi (fun i (_,portNum) ->
+                        portTemplate (true) (i) (PortType.Output) (PortWidth portNum) (true) (List.length customParams.OutputLabels) 
                         //portTemplate portNum PortType.Output (( compH - 20. ) / ((float (List.length customParams.OutputLabels)) + 1.)) (PortWidth 1) 
                     )
                     |> List.map (fun port -> (port.PortId, port))
@@ -683,10 +683,18 @@ let createNewSymbol ()  =
 
     let compType = 
         let (customComp:CustomComponentType) = 
+            let labels (inputOutput:bool) = 
+                let inOrOut = 
+                    match inputOutput with
+                    |true -> "TestInput"
+                    |false -> "TestOutput"
+
+                [0..rng.Next(1,5)]
+                |> List.map (fun i -> ((string i + inOrOut), rng.Next(0,10)))
             {
                 Name = "\"Our\" Custom Component"
-                InputLabels = [("TestInput0",0) ; ("TestInput1", 1) ; ("TestInput2", 2)]
-                OutputLabels = [("TestOutput0",0) ; ("TestOutput1", 1)]
+                InputLabels = labels true
+                OutputLabels = labels false
             }
         match (rngComponent ()) with
         | 0 -> Not
@@ -1286,25 +1294,31 @@ let private renderSymbol (model:Model) =
                 ) [str<|portLabel]
 
             let viewPortsType1 (compType:ComponentType): ReactElement list = 
-                let inputList =
-                    match compType with
-                    |Custom customParams ->
-                        inputPorts
-                        |> Map.toList
+                let customCompHelper inputOutputLabelLst  inputOutputPorts =
+                    inputOutputPorts
+                    |> Map.toList
                         |> List.map (fun (_,port) ->
                             let portNumber =
                                 match port.PortNumber with
                                 | Some (PortNumber portNum) -> portNum
                                 | None -> -1
                             if portNumber >= 0 then
+                                let expandedPortLabel = 
+                                    List.mapi (fun i (value, _) -> (i,value)) inputOutputLabelLst
                                 let portLabel = 
                                     List.pick (fun elem ->
                                         match elem with
-                                        |(value,portNumber) -> Some (processingString value 8)
-                                    ) customParams.InputLabels
+                                        |(x,label) when x = portNumber -> Some (processingString label 8)
+                                        | _ -> None
+                                    ) expandedPortLabel
                                 generatePorts port portLabel
                             else nothing
                         )
+
+                let inputList =
+                    match compType with
+                    |Custom customParams ->
+                        customCompHelper customParams.InputLabels inputPorts
                     |_ ->
                         inputPorts
                         |> Map.toList
@@ -1368,22 +1382,7 @@ let private renderSymbol (model:Model) =
                 let outputList =
                     match compType with
                     |Custom customParams ->
-                        outputPorts
-                        |> Map.toList
-                        |> List.map (fun (_,port) ->
-                            let portNumber =
-                                match port.PortNumber with
-                                | Some (PortNumber portNum) -> portNum
-                                | None -> -1
-                            if portNumber >= 0 then
-                                let portLabel = 
-                                    List.pick (fun elem ->
-                                        match elem with
-                                        |(value,portNumber) -> Some (processingString value 8)
-                                    ) customParams.OutputLabels
-                                generatePorts port portLabel
-                            else nothing
-                        )
+                        customCompHelper customParams.OutputLabels outputPorts
                     | _ -> 
                         outputPorts
                         |> Map.toList
