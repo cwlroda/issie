@@ -53,7 +53,7 @@ module CommonTypes
     type PortWidth = | PortWidth of int
 
     [<Erase>]
-    type WireSegId     =    | WireSegId of string
+    type SegmentIndex     =  int
 
 
 // Specify the position and type of a port in a JSComponent.
@@ -162,7 +162,7 @@ module CommonTypes
     /// lots of colors can be added, see https://www.w3schools.com/colors/colors_names.asp
     /// The Text() method converts it to the correct HTML string
     /// Where speed matters the color must be added as a case in the match statement
-    type HighLightColor = Red | Blue | Yellow | Green | Orange | Grey
+    type HighLightColor = Red | Blue | Yellow | Green | Orange | Grey | Purple
     with 
         member this.Text() = // the match statement is used for performance
             match this with
@@ -171,6 +171,7 @@ module CommonTypes
             | Yellow -> "Yellow"
             | Green -> "Green"
             | Grey -> "Grey"
+            | Purple -> "Darkmagenta"
             | c -> sprintf "%A" c
             
             

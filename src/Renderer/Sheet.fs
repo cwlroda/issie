@@ -440,6 +440,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                   Cmd.batch [
                       Cmd.ofMsg (Wire (BusWire.DeleteSymbols sIdLst))
                       Cmd.ofMsg (Symbol (Symbol.DeleteSymbols sIdLst))
+                      Cmd.ofMsg (Wire (BusWire.RoutingUpdate))
                       Cmd.ofMsg <| SaveState model.Wire
                   ]
               | Empty -> Cmd.none
@@ -472,16 +473,20 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             | _ -> model
             , Cmd.none
         | AltV ->
-            model
-            , match model.CopyState with
-              | Copied sIdLst ->
-                  Cmd.batch (
-                      List.map (fun (sType, p, sLabel) ->
-                          Cmd.ofMsg (Symbol (Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)))
-                      ) sIdLst
-                      @ [Cmd.ofMsg (SaveState model.Wire)]
-                  )
-              | Uninitialized -> Cmd.none
+            model,
+            match model.CopyState with
+            | Copied sIdLst ->
+                Cmd.batch (
+                    List.map (fun (sType, p, sLabel) ->
+                        Cmd.ofMsg (Symbol (Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)))
+                    ) sIdLst
+
+                    @ [
+                            Cmd.ofMsg (Wire (BusWire.AddSymbol))  
+                            Cmd.ofMsg (SaveState model.Wire)
+                        ]
+                )
+            | Uninitialized -> Cmd.none
         | AltZ ->
             match model.UndoList with
             | [] -> model, Cmd.none
@@ -528,6 +533,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     cmds
                     discardSelectionsCmd
                     Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and_01")))
+                    Cmd.ofMsg (Wire (BusWire.AddSymbol))
                     Cmd.ofMsg (SaveState model.Wire)
                 ]
             | MouseButton.Middle ->
@@ -608,6 +614,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             | DragState.Symbol (didDrag, prevWireModel) ->
                 newModel, Cmd.batch [
                     Cmd.ofMsg (Symbol (Symbol.EndDragging))
+                    Cmd.ofMsg (Wire (BusWire.EndDragSymbols))
                     saveStateIfDraggedCmd didDrag prevWireModel
                 ]
             | DragState.WireCreation (pIdStart, p) ->
@@ -671,7 +678,7 @@ let view (model: Model) (dispatch: Msg -> unit) =
 
 let init () =
     let sModel, sCmds = Symbol.init ()
-    let wModel, wCmds = (BusWire.init sModel) ()
+    let wModel, wCmds = (BusWire.init) ()
     {
         Wire = wModel
         Symbol = sModel
@@ -683,7 +690,7 @@ let init () =
         PanY = 0.
         Zoom = 1.
         Width = 1000.
-        Height = 700.
+        Height = 500.
         UndoList = []
         RedoList = []
     }, Cmd.batch [
