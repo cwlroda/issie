@@ -472,16 +472,20 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             | _ -> model
             , Cmd.none
         | AltV ->
-            model
-            , match model.CopyState with
-              | Copied sIdLst ->
-                  Cmd.batch (
-                      List.map (fun (sType, p, sLabel) ->
-                          Cmd.ofMsg (Symbol (Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)))
-                      ) sIdLst
-                      @ [Cmd.ofMsg (SaveState model.Wire)]
-                  )
-              | Uninitialized -> Cmd.none
+            model,
+            match model.CopyState with
+            | Copied sIdLst ->
+                Cmd.batch (
+                    List.map (fun (sType, p, sLabel) ->
+                        Cmd.ofMsg (Symbol (Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)))
+                    ) sIdLst
+
+                    @ [
+                            Cmd.ofMsg (Wire (BusWire.AddSymbol))  
+                            Cmd.ofMsg (SaveState model.Wire)
+                        ]
+                )
+            | Uninitialized -> Cmd.none
         | AltZ ->
             match model.UndoList with
             | [] -> model, Cmd.none
@@ -528,6 +532,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     cmds
                     discardSelectionsCmd
                     Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and_01")))
+                    Cmd.ofMsg (Wire (BusWire.AddSymbol))
                     Cmd.ofMsg (SaveState model.Wire)
                 ]
             | MouseButton.Middle ->
@@ -672,7 +677,7 @@ let view (model: Model) (dispatch: Msg -> unit) =
 
 let init () =
     let sModel, sCmds = Symbol.init ()
-    let wModel, wCmds = (BusWire.init sModel) ()
+    let wModel, wCmds = (BusWire.init) ()
     {
         Wire = wModel
         Symbol = sModel
