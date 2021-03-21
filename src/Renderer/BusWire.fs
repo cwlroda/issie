@@ -130,7 +130,9 @@ let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
         |> List.tryFindIndex (fun s -> isTargetSeg pos s.StartPos s.EndPos)
 
     match index with
-    | Some x -> x
+    | Some x -> 
+        //printf $"selected Seg:{x}"
+        x
     | None -> failwithf "This shouldn't happen!"
 
 // creates deafult wire segment
@@ -371,39 +373,6 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
         | false -> {w with Segments = smartRouting sModel w w.Segments}
     )
 
-let singleWireView =
-    FunctionComponent.Of
-        (fun (props: WireRenderProps) ->
-            // let segBBox = createSegBB props.StartPos props.EndPos 5.
-
-            g [] [
-                // rect
-                //     [
-                //         X segBBox.Pos.X
-                //         Y segBBox.Pos.Y
-                //         Rx 5.
-                //         Ry 5.
-                //         SVGAttr.Width segBBox.Width
-                //         SVGAttr.Height segBBox.Height
-                //         SVGAttr.StrokeWidth "1px"
-                //         SVGAttr.Stroke "Black"
-                //         SVGAttr.FillOpacity 0
-                //     ] []
-
-                line 
-                    [
-                        X1 props.StartPos.X;
-                        Y1 props.StartPos.Y;
-                        X2 props.EndPos.X;
-                        Y2 props.EndPos.Y;
-                        SVGAttr.Stroke (props.WireColor.ToString())
-                        SVGAttr.FillOpacity 0
-                        SVGAttr.StrokeWidth props.WireWidth
-                        SVGAttr.StrokeLinecap "round"
-                    ] []
-            ]
-        )
-
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
     let newWire = createWire wModel sModel port1 port2 None
     Map.add newWire.Id {newWire with Segments = autoRoute sModel newWire} wModel.WX
@@ -572,24 +541,24 @@ let singleLabelView =
                 ][]
             ])
 
-let singleSegView =
+let singleWireView =
     FunctionComponent.Of
         (fun (props: WireRenderProps) ->
-            // let segBBox = createSegBB props.StartPos props.EndPos 5.
+            let segBBox = createSegBB props.StartPos props.EndPos 5.
 
             g [] [
-                // rect
-                //     [
-                //         X segBBox.Pos.X
-                //         Y segBBox.Pos.Y
-                //         Rx 10.
-                //         Ry 10.
-                //         SVGAttr.Width segBBox.Width
-                //         SVGAttr.Height segBBox.Height
-                //         SVGAttr.StrokeWidth "1px"
-                //         SVGAttr.Stroke "Black"
-                //         SVGAttr.FillOpacity 0
-                //     ] []
+                rect
+                    [
+                        X segBBox.Pos.X
+                        Y segBBox.Pos.Y
+                        Rx 10.
+                        Ry 10.
+                        SVGAttr.Width segBBox.Width
+                        SVGAttr.Height segBBox.Height
+                        SVGAttr.StrokeWidth "1px"
+                        SVGAttr.Stroke "Black"
+                        SVGAttr.FillOpacity 0
+                    ] []
 
                 line 
                     [
@@ -641,7 +610,7 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
                             WireWidth = $"%d{w.WireWidth}"
                         }
 
-                    acc @ [singleSegView props]
+                    acc @ [singleWireView props]
                 ) []
 
             acc @ segList
