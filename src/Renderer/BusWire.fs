@@ -84,16 +84,16 @@ let createSegBB (startPos: XYPos) (endPos: XYPos) (width: float) : BBox =
     match posDiff endPos startPos with
     // left to right
     | x when x.X > 0. ->
-        toBBox startPos.X (startPos.Y - width) (abs x.X) (width * 2.)
+        toBBox (startPos.X - width) (startPos.Y - width) (abs x.X + (width * 2.)) (width * 2.)
     // right to left
     | x when x.X < 0. ->
-        toBBox endPos.X (endPos.Y - width) (abs x.X) (width * 2.)
+        toBBox (endPos.X - width) (endPos.Y - width) (abs x.X + (width * 2.)) (width * 2.)
     // top to bottom
     | x when x.Y > 0. ->
-        toBBox  (startPos.X - width) startPos.Y (width * 2.) (abs x.Y)
+        toBBox  (startPos.X - width) (startPos.Y - width) (width * 2.) (abs x.Y + (width * 2.))
     // bottom to top
     | x when x.Y < 0. ->
-        toBBox (endPos.X - width) endPos.Y (width * 2.) (abs x.Y)
+        toBBox (endPos.X - width) (endPos.Y - width) (width * 2.) (abs x.Y + (width * 2.))
     // failsafe case with no bounding box
     | _ ->
         toBBox 0. 0. 0. 0.
@@ -149,39 +149,43 @@ let verticalOverlap (box1: BBox) (box2: BBox) =
     let isAbove (bb1: BBox) (bb2: BBox) = (bb1.Pos.Y + bb1.Height) <= bb2.Pos.Y
     not (isAbove box1 box2 || isAbove box2 box1)
 
-// --- START OF COLLISION DETECTION AUTOROUTING --- //
-
 // autoconnect wire segments
 let autoConnect (segList: WireSegment list) : WireSegment list =
+    let adjSeg (index: int) : WireSegment =
+        match List.tryItem index segList with
+        | Some x -> x
+        | None -> failwithf "Indexing error!"
+
     segList
     |> List.mapi (fun i s ->
         match i with
         | x when x = 0 ->
-            {s with EndPos = segList.[i+1].StartPos}
+            {s with EndPos = (adjSeg (i+1)).StartPos}
         | x when x = (segList.Length - 1) ->
-            {s with StartPos = segList.[i-1].EndPos}
-        | x when (segList.Length = 3) && (x = 1) -> s
+            {s with StartPos = (adjSeg (i-1)).EndPos}
         | x when (segList.Length = 5) && (x = 1) ->
-            {s with EndPos = posOf s.EndPos.X segList.[i+1].StartPos.Y}
+            {s with EndPos = posOf s.EndPos.X (adjSeg (i+1)).StartPos.Y}
         | x when (segList.Length = 5) && (x = 2) ->
             {s with
-                StartPos = posOf segList.[i-1].EndPos.X s.StartPos.Y
-                EndPos = posOf segList.[i+1].StartPos.X s.StartPos.Y
+                StartPos = posOf (adjSeg (i-1)).EndPos.X s.StartPos.Y
+                EndPos = posOf (adjSeg (i+1)).StartPos.X s.StartPos.Y
             }
         | x when (segList.Length = 5) && (x = 3) ->
-            {s with StartPos = posOf s.StartPos.X segList.[i-1].EndPos.Y}
-        | _ -> failwithf "This shouldn't happen!"
+            {s with StartPos = posOf s.StartPos.X (adjSeg (i-1)).EndPos.Y}
+        | _ -> s
     )
 
 // smart routing algorithm
 let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : WireSegment list =
     let srcPortPos = Symbol.portPos sModel wire.SrcPort
     let tgtPortPos = Symbol.portPos sModel wire.TargetPort
-    let avgPortPos = (srcPortPos.Y + tgtPortPos.Y) / 2.
+    let avgPortPos = snapToGrid (midPt srcPortPos tgtPortPos)
+    let halfPortDist = snapToGrid (posHalve (posDiff tgtPortPos srcPortPos))
+    let interval = gridSize * 2.
 
     // checks if bounding boxes of wire segment and symbol overlap
     let collision (startPos: XYPos) (endPos: XYPos) : bool =
-        let segBBox = createSegBB startPos endPos (gridSize * 2.)
+        let segBBox = createSegBB startPos endPos interval
 
         Symbol.getAllSymbols sModel
         |> List.map (Symbol.getSymbolFromSymbolId sModel)
@@ -189,69 +193,82 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
 
     // reroute segments recursively
     let rec avoid (seg: WireSegment) (index: int) (dir: bool) : WireSegment =
-        let offset = if dir then (gridSize * 2.) else -(gridSize * 2.)
+        let offset = if dir then interval else -interval
 
         match collision seg.StartPos seg.EndPos with
-        | false -> seg
         | true ->
-            match seg.Direction with
-            | Horizontal ->
-                let newSeg =
+            let newSeg =
+                match seg.Direction with
+                | Horizontal ->
                     {seg with
                         StartPos = posAddY seg.StartPos offset
                         EndPos = posAddY seg.EndPos offset
                     }
-                
-                avoid newSeg index dir
-            | Vertical ->
-                let newSeg =
+                | Vertical ->
                     {seg with
                         StartPos = posAddX seg.StartPos offset
                         EndPos = posAddX seg.EndPos offset
                     }
-                
-                let isFiveSeg = (List.last segList).EndPos.X <= segList.Head.StartPos.X
-                let hitsSrcPort = newSeg.StartPos.X <= (segList.Head.StartPos.X + 20.)
-                let hitsTgtPort = newSeg.StartPos.X >= ((List.last segList).EndPos.X - 20.)
-                
-                match isFiveSeg, index, dir, hitsSrcPort, hitsTgtPort with
-                | false, _, false, false, _ -> avoid newSeg index dir
-                | false, _, false, true, false -> avoid seg index true
-                | false, _, false, true, true -> seg
-                | false, _, true, false, false -> avoid newSeg index dir
-                | false, _, true, _, true -> seg
-                | false, _, true, true, false -> avoid newSeg index false
-                
-                | true, 1, false, false, _ -> avoid newSeg index dir
-                | true, 1, _, true, false -> avoid newSeg index false
-                | true, 1, _, true, true -> avoid newSeg index true
-                | true, 1, true, false, _ -> avoid newSeg index dir
 
-                | true, 3, false, _, _ -> avoid newSeg index dir
-                | true, 3, true, _, false -> avoid newSeg index dir
-                | true, 3, true, _, true -> avoid newSeg index false
-                
-                | _ -> avoid newSeg index false
+            avoid newSeg index dir
+        | false -> seg
 
+    // bidirectional recursion to shorten path
     segList
     |> List.mapi (fun i s ->
         match i with
-        | x when (x = 0) || (x = segList.Length  - 1) -> s
-        | _ ->
-            match i with
-            | 2 ->
-                let segUp = avoid s i false
-                let segDown = avoid s i true
-                let distUp = abs (avgPortPos - segUp.StartPos.Y)
-                let distDown = abs (avgPortPos - segDown.StartPos.Y)
+        | x when (x = 0) || (x = segList.Length - 1) -> s
+        | 1 ->
+            match segList.Length with
+            | 3 ->
+                let newSeg =
+                    {s with
+                        StartPos = posOf avgPortPos.X s.StartPos.Y 
+                        EndPos = posOf avgPortPos.X s.EndPos.Y 
+                    }
 
-                if distUp < distDown then segUp else segDown
-            | 3 -> avoid s i true
-            | _ -> avoid s i false
+                let segLeft = avoid newSeg i false
+                let segRight = avoid newSeg i true
+                let distLeft = abs (avgPortPos.X - segLeft.StartPos.X)
+                let distRight = abs (avgPortPos.X - segRight.StartPos.X)
+                let clearance = abs (halfPortDist.X) - interval
+
+                match distLeft, distRight with
+                | x, y when x >= clearance && y >= clearance -> newSeg
+                | x, _ when x < clearance -> segLeft
+                | _, y when y < clearance -> segRight
+                | _ -> if distLeft <= distRight then segLeft else segRight
+            | _ ->
+                let newSeg =
+                    {s with
+                        StartPos = posOf (srcPortPos.X + interval) s.StartPos.Y
+                        EndPos = posOf (srcPortPos.X + interval) s.EndPos.Y
+                    }
+
+                avoid newSeg i true
+        | 2 ->
+            let newSeg =
+                {s with
+                    StartPos = posOf s.StartPos.X avgPortPos.Y
+                    EndPos = posOf s.EndPos.X avgPortPos.Y
+                }
+
+            let segUp = avoid newSeg i false
+            let segDown = avoid newSeg i true
+            let distUp = abs (avgPortPos.Y - segUp.StartPos.Y)
+            let distDown = abs (avgPortPos.Y - segDown.StartPos.Y)
+
+            if distUp <= distDown then segUp else segDown
+        | _ ->
+            let newSeg =
+                {s with
+                    StartPos = posOf (tgtPortPos.X - interval) s.StartPos.Y
+                    EndPos = posOf (tgtPortPos.X - interval) s.EndPos.Y
+                }
+
+            avoid newSeg i false
     )
     |> autoConnect
-
-// --- END OF COLLISION DETECTION AUTOROUTING --- //
 
 let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
     let startPos = Symbol.portPos sModel wire.SrcPort

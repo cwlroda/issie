@@ -31,6 +31,9 @@ let posAddY a b =
 let posAddXY a b =
     {X=a.X+b; Y=a.Y+b}
 
+let posHalve a =
+    {X=a.X/2.; Y=a.Y/2.}
+
 let posOf x y = {X=x;Y=y}
 
 let posLength p =
