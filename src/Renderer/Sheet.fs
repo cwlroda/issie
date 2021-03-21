@@ -440,6 +440,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                   Cmd.batch [
                       Cmd.ofMsg (Wire (BusWire.DeleteSymbols sIdLst))
                       Cmd.ofMsg (Symbol (Symbol.DeleteSymbols sIdLst))
+                      Cmd.ofMsg (Wire (BusWire.RoutingUpdate))
                       Cmd.ofMsg <| SaveState model.Wire
                   ]
               | Empty -> Cmd.none

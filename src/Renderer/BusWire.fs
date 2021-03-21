@@ -57,6 +57,7 @@ type Msg =
     | StartDrag of wId: ConnectionId * pos: XYPos
     | Dragging of wId: ConnectionId * pos: XYPos
     | EndDrag
+    | RoutingUpdate
 
 type WireRenderProps =
     {
@@ -656,22 +657,13 @@ let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Ma
 let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     match msg with
     | AddSymbol ->
-        { model with
-            WX = routingUpdate sModel model.WX
-        }, Cmd.none
+        { model with WX = routingUpdate sModel model.WX }, Cmd.none
     | DeleteSymbols sIdLst ->
-        let wxUpdated = deleteWiresOfSymbols model sModel sIdLst
-        { model with
-            WX = routingUpdate sModel wxUpdated
-        } , Cmd.none
+        { model with WX = deleteWiresOfSymbols model sModel sIdLst }, Cmd.none
     | DraggingSymbols sIdLst ->
-        { model with
-            WX = updateSymWires model sModel sIdLst
-        } , Cmd.none
+        { model with WX = updateSymWires model sModel sIdLst }, Cmd.none
     | EndDragSymbols ->
-        { model with
-            WX = routingUpdate sModel model.WX
-        }, Cmd.none
+        { model with WX = routingUpdate sModel model.WX }, Cmd.none
     | AddWire (wMsgId1, wMsgId2) ->
         let wxUpdated = addWire model sModel wMsgId1 wMsgId2
         { model with WX = routingUpdate sModel wxUpdated }, Cmd.none
@@ -696,6 +688,8 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
         let wxUpdated =
             Map.map (fun wId _ -> setWireColor model wId c) model.WX
         { model with WX = wxUpdated }, Cmd.none
+    | RoutingUpdate ->
+        { model with WX = routingUpdate sModel model.WX }, Cmd.none
 
 ///Dummy function to initialize for demo
 let init () =
