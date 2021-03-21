@@ -193,7 +193,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
 
     // reroute segments recursively
     let rec avoid (seg: WireSegment) (index: int) (dir: bool) : WireSegment =
-        let offset = if dir then interval else -interval
+        let offset = if dir then gridSize else -gridSize
 
         match collision seg.StartPos seg.EndPos with
         | true ->
@@ -291,14 +291,14 @@ let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
         | x, _ when x > 1. ->
             [
                 pos
-                { X = midPos.X; Y = pos.Y }
+                posOf midPos.X pos.Y
             ]
             |> List.map snapToGrid
         | _ ->
             [
                 pos
-                { X = pos.X + hPos; Y = pos.Y }
-                { X = pos.X + hPos; Y = vPos }
+                posOf (pos.X + hPos) pos.Y
+                posOf (pos.X + hPos) vPos
             ]
             |> List.map snapToGrid
 
@@ -364,16 +364,15 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
     wModel.WX
     |> Map.map (fun _ w ->
         match List.contains w.SrcPort pIds || List.contains w.TargetPort pIds with
-        | true -> {w with Segments = autoRoute sModel w}
+        | true ->
+            let segList = autoRoute sModel w
+            {w with Segments = smartRouting sModel w segList}
         | false -> {w with Segments = smartRouting sModel w w.Segments}
     )
 
 let singleWireView =
     FunctionComponent.Of
         (fun (props: WireRenderProps) ->
-            let color = props.WireColor
-            let width = props.WireWidth
-
             // let segBBox = createSegBB props.StartPos props.EndPos 5.
 
             g [] [
@@ -396,9 +395,9 @@ let singleWireView =
                         Y1 props.StartPos.Y;
                         X2 props.EndPos.X;
                         Y2 props.EndPos.Y;
-                        SVGAttr.Stroke (color.ToString())
+                        SVGAttr.Stroke (props.WireColor.ToString())
                         SVGAttr.FillOpacity 0
-                        SVGAttr.StrokeWidth width
+                        SVGAttr.StrokeWidth props.WireWidth
                         SVGAttr.StrokeLinecap "round"
                     ] []
             ]
