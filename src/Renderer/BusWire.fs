@@ -620,10 +620,10 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
         wModel.WX
         |> Map.fold (fun acc _ w ->
             let srcSeg= w.Segments.[0]
+           
             let (labelProps: LabelRenderProps) = 
                 match checkPortWidths sModel w.SrcPort w.TargetPort with 
                     | Ok width -> 
-
                         {
                             key = w.Id
                             Pos = srcSeg.StartPos 
@@ -632,39 +632,25 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
                             BusIdcWidth =  2. 
                         }
                     | Error str -> 
-                        {
-                            key = w.Id
-                            Pos = srcSeg.StartPos 
-                            ColorLabel = w.WireColor.ToString()
-                            Label =  $"x"
-                            BusIdcWidth =  2. 
-                        }
+                            {
+                                key = w.Id
+                                Pos = srcSeg.StartPos 
+                                ColorLabel = w.WireColor.ToString()
+                                Label =  $"x"
+                                BusIdcWidth =  2. 
+                            }
+            
+            let (props: WireRenderProps) =
+                {
+                    Key = w.Id
+                    SegPath = (pathDefString wModel w)
+                    WireColor = w.WireColor
+                    WireWidth = $"%d{w.WireWidth}"
+                }
+            acc @ [singleWireView props]
+             @ if wModel.WireAnnotation && (w.WireWidth > 3) then  [(singleLabelView labelProps)] else []
+        ) [] )
 
-            let segList =
-                w.Segments
-                |> List.fold (fun acc s ->
-                    let props =
-                        {
-                            key = w.Id
-                            Pos = srcSeg.StartPos 
-                            ColorLabel = w.WireColor.ToString()
-                            Label =  $"%d{width}"
-                            BusIdcWidth =  2. 
-                        }
-                    | Error str -> 
-                        {
-                            key = w.Id
-                            Pos = srcSeg.StartPos 
-                            ColorLabel = w.WireColor.ToString()
-                            Label =  $"x"
-                            BusIdcWidth =  2. 
-                        }
-                    acc @ [singleSegView props]
-                ) []
-
-            acc @ segList
-            @ if wModel.WireAnnotation && (w.WireWidth > 3) then  [(singleLabelView labelProps)] else []
-        ) [])
 
 let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Map<ConnectionId, Wire> =
     wireMap
