@@ -60,7 +60,6 @@ type Msg =
     | RoutingUpdate
 
 
-
 type WireRenderProps =
     {
         Key: ConnectionId
@@ -255,6 +254,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
                     EndPos = posOf s.EndPos.X avgPortPos.Y
                 }
 
+
             let segUp = avoid newSeg i false
             let segDown = avoid newSeg i true
             let distUp = abs (avgPortPos.Y - segUp.StartPos.Y)
@@ -271,6 +271,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
             avoid newSeg i false
     )
     |> autoConnect
+
 
 let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
     let startPos = Symbol.portPos sModel wire.SrcPort
@@ -373,6 +374,7 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
     )
 
 
+
 let pathDefString (wModel: Model) (w: Wire) =  
 
     let relMove (startSeg: WireSegment) (endSeg: WireSegment) =
@@ -429,6 +431,7 @@ let singleWireView =
                 //         SVGAttr.FillOpacity 0
                 //     ] []
 
+
                 path 
                     [ 
                         SVGAttr.D props.SegPath
@@ -436,6 +439,7 @@ let singleWireView =
                         SVGAttr.FillOpacity 0
                         SVGAttr.StrokeWidth props.WireWidth
                         
+
                     ] []
             ]
         )
@@ -619,6 +623,7 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
             let (labelProps: LabelRenderProps) = 
                 match checkPortWidths sModel w.SrcPort w.TargetPort with 
                     | Ok width -> 
+
                         {
                             key = w.Id
                             Pos = srcSeg.StartPos 
@@ -635,19 +640,31 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
                             BusIdcWidth =  2. 
                         }
 
-            
-            let (props: WireRenderProps) =
-                {
-                    Key = w.Id
-                    SegPath = (pathDefString wModel w)
-                    WireColor = w.WireColor
-                    WireWidth = $"%d{w.WireWidth}"
-                }
+            let segList =
+                w.Segments
+                |> List.fold (fun acc s ->
+                    let props =
+                        {
+                            key = w.Id
+                            Pos = srcSeg.StartPos 
+                            ColorLabel = w.WireColor.ToString()
+                            Label =  $"%d{width}"
+                            BusIdcWidth =  2. 
+                        }
+                    | Error str -> 
+                        {
+                            key = w.Id
+                            Pos = srcSeg.StartPos 
+                            ColorLabel = w.WireColor.ToString()
+                            Label =  $"x"
+                            BusIdcWidth =  2. 
+                        }
+                    acc @ [singleSegView props]
+                ) []
 
-            acc @ [singleWireView props]
-            @ if wModel.WireAnnotation then  [(singleLabelView labelProps)] else [] 
-        ) [] )
-
+            acc @ segList
+            @ if wModel.WireAnnotation && (w.WireWidth > 3) then  [(singleLabelView labelProps)] else []
+        ) [])
 
 let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Map<ConnectionId, Wire> =
     wireMap
