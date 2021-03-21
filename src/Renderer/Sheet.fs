@@ -8,9 +8,11 @@ open Elmish.React
 
 open Helpers
 
+type SubModel = BusWire.Model * Symbol.Model
+
 type DragState =
-    | Wire of bool * BusWire.Model
-    | Symbol of bool * BusWire.Model
+    | Wire of bool * SubModel
+    | Symbol of bool * SubModel
     | AreaSelect of XYPos * XYPos * bool
     | WireCreation of CommonTypes.PortId * XYPos
     | Pan of XYPos * XYPos * XYPos
@@ -24,7 +26,7 @@ type SelectionState =
 type CopyState =
     | Copied of (CommonTypes.ComponentType * XYPos * string) list
     | Uninitialized
-
+    
 type Model = {
     Wire: BusWire.Model
     Symbol: Symbol.Model
@@ -37,8 +39,8 @@ type Model = {
     Zoom: float
     Width: float
     Height: float
-    UndoList: BusWire.Model list
-    RedoList: BusWire.Model list
+    UndoList: SubModel list
+    RedoList: SubModel list
 }
 
 type KeyboardMsg =
@@ -58,7 +60,7 @@ type Modifier =
     | NoModifier
 
 type Msg =
-    | SaveState of BusWire.Model
+    | SaveState of SubModel
     | Wire of BusWire.Msg
     | Symbol of Symbol.Msg
     | KeyPress of KeyboardMsg
@@ -274,15 +276,15 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
         match model.DragState with
         | AreaSelect _ -> newModel, Cmd.none
-        | DragState.Wire (didDrag, prevWireModel) ->
+        | DragState.Wire (didDrag, prevSubModel) ->
             newModel, Cmd.batch [
                 Cmd.ofMsg (Wire (BusWire.EndDrag))
-                saveStateIfDraggedCmd didDrag prevWireModel
+                saveStateIfDraggedCmd didDrag prevSubModel
             ]
-        | DragState.Symbol (didDrag, prevWireModel) ->
+        | DragState.Symbol (didDrag, prevSubModel) ->
             newModel, Cmd.batch [
                 Cmd.ofMsg (Symbol (Symbol.EndDragging))
-                saveStateIfDraggedCmd didDrag prevWireModel
+                saveStateIfDraggedCmd didDrag prevSubModel
             ]
         | DragState.WireCreation _ ->
             { newModel with Selection = Empty }
@@ -318,7 +320,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
             { model with
                 Selection = Symbols selectedSymbols
-                DragState = DragState.Symbol (false, model.Wire)
+                DragState = DragState.Symbol (false, (model.Wire, model.Symbol))
             }, Cmd.batch [
                 Cmd.ofMsg (Symbol (Symbol.SetSelected selectedSymbols))
                 Cmd.ofMsg (Symbol (Symbol.StartDragging (selectedSymbols, snapToGrid p)))
@@ -327,7 +329,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | (None, None, Some wId, _) ->
             { model with
                 Selection = SelectionState.Wire wId
-                DragState = DragState.Wire (false, model.Wire)
+                DragState = DragState.Wire (false, (model.Wire, model.Symbol))
             }, Cmd.batch [
                 deselectSymbolsCmd
                 Cmd.ofMsg (Wire (BusWire.SetSelected wId))
@@ -383,9 +385,10 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     deselectSymbolsCmd
                     Cmd.ofMsg (Wire (BusWire.UnselectAll))
                 ]
-            | DragState.Symbol (_, prevWireModel) ->
+            | DragState.Symbol (_, (prevWireModel, prevSymbolModel)) ->
                 {model with
                     Wire=prevWireModel
+                    Symbol=prevSymbolModel
                     DragState=NotDragging
                 }, Cmd.none
             | WireCreation _ -> model, Cmd.none
@@ -434,13 +437,13 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
               | SelectionState.Wire wId ->
                   Cmd.batch [
                       Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
-                      Cmd.ofMsg <| SaveState model.Wire
+                      Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                   ]
               | Symbols sIdLst ->
                   Cmd.batch [
                       Cmd.ofMsg (Wire (BusWire.DeleteSymbols sIdLst))
                       Cmd.ofMsg (Symbol (Symbol.DeleteSymbols sIdLst))
-                      Cmd.ofMsg <| SaveState model.Wire
+                      Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                   ]
               | Empty -> Cmd.none
         | AltC ->
@@ -479,26 +482,28 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                       List.map (fun (sType, p, sLabel) ->
                           Cmd.ofMsg (Symbol (Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)))
                       ) sIdLst
-                      @ [Cmd.ofMsg (SaveState model.Wire)]
+                      @ [Cmd.ofMsg (SaveState (model.Wire, model.Symbol))]
                   )
               | Uninitialized -> Cmd.none
         | AltZ ->
             match model.UndoList with
             | [] -> model, Cmd.none
-            | newWire :: undoList ->
+            | (newWire, newSymbol) :: undoList ->
                 { model with
                     Wire=newWire
+                    Symbol=newSymbol
                     UndoList=undoList
-                    RedoList= model.Wire :: model.RedoList
+                    RedoList= (model.Wire, model.Symbol) :: model.RedoList
                 }
                 , highlightingAfterUndoAndRedoCmd model
         | AltShiftZ ->
             match model.RedoList with
             | [] -> model, Cmd.none
-            | newWire :: redoList ->
+            | (newWire, newSymbol) :: redoList ->
                 { model with
                     Wire=newWire
-                    UndoList=model.Wire :: model.UndoList
+                    Symbol=newSymbol
+                    UndoList=(model.Wire, model.Symbol) :: model.UndoList
                     RedoList=redoList
                 }
                 , highlightingAfterUndoAndRedoCmd model
@@ -528,7 +533,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     cmds
                     discardSelectionsCmd
                     Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and_01")))
-                    Cmd.ofMsg (SaveState model.Wire)
+                    Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                 ]
             | MouseButton.Middle ->
                 { model with DragState = Pan (posOf model.PanX model.PanY, p, p) }
@@ -617,7 +622,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                   | Some pIdEnd when pIdEnd <> pIdStart ->
                       Cmd.batch [
                           Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
-                          Cmd.ofMsg (SaveState model.Wire)
+                          Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                       ]
                   | _ -> Cmd.none
             | DragState.Pan (origPan, panStart, panEnd) ->
@@ -636,9 +641,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             , highlightPortsNearCmd p
 
     match msg with
-    | SaveState savedWire ->
+    | SaveState savedSubModel ->
         { model with
-            UndoList=List.truncate undoHistorySize <| savedWire :: model.UndoList
+            UndoList=List.truncate undoHistorySize <| savedSubModel :: model.UndoList
             RedoList=[]
         }, Cmd.none
     | Symbol sMsg ->
