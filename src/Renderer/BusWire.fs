@@ -378,14 +378,33 @@ let pathDefString (wModel: Model) (w: Wire) =
     let relMove (startSeg: WireSegment) (endSeg: WireSegment) =
         let adjPos = 
             match posDiff startSeg.StartPos endSeg.EndPos with
-            | relPos when (startSeg.Direction = Horizontal) && (relPos.Y >0.) && (relPos.X > 0.) ->  [{X = -10.; Y = 0.};  {X = 0.; Y = 10.}]
-            | relPos when (startSeg.Direction = Horizontal) && (relPos.Y > 0.) ->  [{X = 10.; Y = 0.};  {X = 0.; Y = 10.}]
-            | relPos when (startSeg.Direction = Horizontal) && (relPos.X > 0.) -> [{X = -10.; Y = 0.};  {X = 0.; Y = -10.}]
-            | relPos when startSeg.Direction = Horizontal ->  [{X = 10.; Y = 0.};  {X = 0.; Y = -10.}]
-            | relPos when  (relPos.Y >0.) && (relPos.X > 0.) ->  [{X = 0.; Y = -10.};  {X = 10.; Y = 0.}]           
-            | relPos when (relPos.Y > 0.) -> [{X = 0.; Y = -10.}; {X = -10.; Y = 0.}]
-            | relPos when relPos.X > 0. -> [{X = 0.; Y = 10.}; {X = 10.; Y = 0.}]
-            | relPos ->  [{X = 0.; Y = 10.}; {X = -10.; Y = 0.}]
+            | relPos when  ((abs relPos.Y) <1.) -> 
+                
+                [posOf 0. 0.; posOf 0. 0.]
+            | relPos when (startSeg.Direction = Horizontal) && (relPos.Y >0.) && (relPos.X > 0.) ->  
+                
+                [{X = -5.; Y = 0.};  {X = 0.; Y = 5.}]
+            | relPos when (startSeg.Direction = Horizontal) && (relPos.Y > 0.) ->  
+                
+                [{X = 5.; Y = 0.};  {X = 0.; Y = 5.}]
+            | relPos when (startSeg.Direction = Horizontal) && (relPos.X > 0.) ->
+                
+                [{X = -5.; Y = 0.};  {X = 0.; Y = -5.}]
+            | relPos when startSeg.Direction = Horizontal ->  
+                
+                [{X = 5.; Y = 0.};  {X = 0.; Y = -5.}]
+            | relPos when  (relPos.Y >0.) && (relPos.X > 0.) ->  
+                
+                [{X = 0.; Y = -5.};  {X = 5.; Y = 0.}]           
+            | relPos when (relPos.Y > 0.) ->
+                
+                [{X = 0.; Y = -5.}; {X = -5.; Y = 0.}]
+            | relPos when relPos.X > 0. -> 
+               
+                [{X = 0.; Y = 5.}; {X = 5.; Y = 0.}]
+            | relPos ->  
+               
+                [{X = 0.; Y = 5.}; {X = -5.; Y = 0.}]
         List.map2 posDiff [startSeg.EndPos; endSeg.StartPos] adjPos
 
     let strLst =  
@@ -404,7 +423,7 @@ let pathDefString (wModel: Model) (w: Wire) =
             | [ startCorner; endCorner; midPos] -> $"{startCorner.X} {startCorner.Y} Q {midPos.X} {midPos.Y} {endCorner.X} {endCorner.Y} L "
             | _ -> failwithf "Something has gone wrong in coordinate generation"
             )
-    printf $"{strLst}"
+    
     List.fold (fun str s -> str + s) "" strLst
 
 
