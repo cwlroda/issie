@@ -286,7 +286,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 PortId = PortId (uuid())
                 PortNumber =  Some (PortNumber (portNumber))
                 PortType = portType
-                PortPos = {X=offset; Y = mulOfFive yPosCalc }
+                PortPos = (snapToGrid {X=offset; Y =  yPosCalc })//{X=offset; Y = mulOfFive yPosCalc }
                 HostId = hostID
                 Hover = PortHover false
                 Width = portWidth
@@ -839,12 +839,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         model
         |> Map.map (fun _ sym ->
             if sym.IsDragging then
+                let newPos = snapToGrid (posOf sym.Component.X sym.Component.Y)
                 {sym with
                     IsDragging = false
                     Component=
                         {sym.Component with 
-                            X = mulOfFive sym.Component.X
-                            Y = mulOfFive sym.Component.Y
+                            X = newPos.X//mulOfFive sym.Component.X
+                            Y = newPos.Y//mulOfFive sym.Component.Y
                         }
                 }
             else sym

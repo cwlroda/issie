@@ -131,9 +131,11 @@ let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
 
     match index with
     | Some x -> 
-        //printf $"selected Seg:{x}"
+        printf $"selected Seg:{x}"
         x
-    | None -> failwithf "This shouldn't happen!"
+    | None -> 
+        printf $"WireSegements: {wire.Segments} and pos: {pos}"
+        failwithf "This shouldn't happen!"
 
 // creates deafult wire segment
 let makeWireSegment (startPos: XYPos) (endPos: XYPos) : WireSegment =
