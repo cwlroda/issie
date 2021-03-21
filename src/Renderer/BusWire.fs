@@ -130,12 +130,10 @@ let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
         |> List.tryFindIndex (fun s -> ptCloseToSeg pos s.StartPos s.EndPos )
 
     match index with
-    | Some x -> 
-        printf $"selected Seg:{x}"
+    | Some x ->  
         x
-    | None -> 
-        printf $"WireSegements: {wire.Segments} and pos: {pos}"
-        failwithf "This shouldn't happen!"
+    | None ->      
+        failwithf $"This shouldn't happen! - WireSegements: {wire.Segments} and pos: {pos}"
 
 // creates deafult wire segment
 let makeWireSegment (startPos: XYPos) (endPos: XYPos) : WireSegment =
@@ -429,17 +427,17 @@ let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
             match wire.SelectedSegment with
             | index when ((index = i) && (index = 0)) ->
                 {s with
-                    StartPos = posAdd seg.StartPos diff
-                    EndPos = posAdd seg.EndPos offset
+                    StartPos = posAdd seg.StartPos diff 
+                    EndPos =  posAdd seg.EndPos offset 
                 }
             | index when ((index = i) && (index = (wire.Segments.Length  - 1))) ->
                 {s with
-                    StartPos = posAdd seg.StartPos offset
+                    StartPos = posAdd seg.StartPos offset 
                     EndPos = posAdd seg.EndPos diff
                 }
             | index when index = i ->
                 {s with
-                    StartPos = posAdd seg.StartPos offset
+                    StartPos = posAdd  seg.StartPos offset
                     EndPos = posAdd seg.EndPos offset
                 }
             | index when (index - 1) = i ->
@@ -546,10 +544,10 @@ let singleLabelView =
 let singleWireView =
     FunctionComponent.Of
         (fun (props: WireRenderProps) ->
-            let segBBox = createSegBB props.StartPos props.EndPos 5.
+            //let segBBox = createSegBB props.StartPos props.EndPos 5.
 
             g [] [
-                rect
+                (* rect
                     [
                         X segBBox.Pos.X
                         Y segBBox.Pos.Y
@@ -560,7 +558,7 @@ let singleWireView =
                         SVGAttr.StrokeWidth "1px"
                         SVGAttr.Stroke "Black"
                         SVGAttr.FillOpacity 0
-                    ] []
+                    ] [] *)
 
                 line 
                     [
@@ -699,7 +697,7 @@ let isTargetWire (pt: XYPos) (wire: Wire) =
 
     match res with
     | Some idx -> 
-        printf $"Idx which caused select:{idx}"
+        
         true
     | None -> false
 

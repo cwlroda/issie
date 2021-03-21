@@ -822,8 +822,9 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 let symsInNewBBox = getSymbolsInTargetArea model {symBBox with Pos = posAdd symBBox.Pos diff}
 
                 let movedSym =
+                    let newPos = (snapToGrid >> posAdd) (posOf sym.Component.X sym.Component.Y) diff
                     {sym with
-                        Component = {sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
+                        Component = {sym.Component with X = newPos.X; Y = newPos.Y}
                         LastDragPos = pagePos
                     }
 
