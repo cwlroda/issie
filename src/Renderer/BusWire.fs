@@ -697,7 +697,7 @@ let isTargetWire (pt: XYPos) (wire: Wire) =
 
     match res with
     | Some idx -> 
-        
+        printf $"index of segment which caused select: {idx}"
         true
     | None -> false
 
