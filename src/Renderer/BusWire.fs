@@ -648,7 +648,7 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
                     WireWidth = $"%d{w.WireWidth}"
                 }
             acc @ [singleWireView props]
-             @ if wModel.WireAnnotation && (w.WireWidth > 3) then  [(singleLabelView labelProps)] else []
+            @ if wModel.WireAnnotation && (w.WireWidth > 3) then  [(singleLabelView labelProps)] else []
         ) [] )
 
 
