@@ -100,20 +100,62 @@ let createSegBB (startPos: XYPos) (endPos: XYPos) (width: float) : BBox =
     | _ ->
         toBBox 0. 0. 0. 0.
 
-let checkPortWidths (sModel: Symbol.Model) (srcPort: PortId) (tgtPort: PortId) : Result<int, string> =
+let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortId) : Result<int, string> =
+    let tgtPort = Symbol.findPort sModel tgtPortId
+    let tgtSym = 
+        tgtPort
+        |> Symbol.findSymbolFromPort sModel
     let getWidth pId = Symbol.portWidth sModel pId
     let bits p = if p < 2 then $"{p} bit" else $"{p} bits"
-
-    match getWidth srcPort, getWidth tgtPort with
-    | Some pW1, Some pW2 when pW1 <> pW2 ->
+    match tgtSym.Component.Type with
+    | MergeWires | IOLabel ->
+        let srcPort = Symbol.findPort sModel srcPortId
+        let srcSym = 
+            srcPort
+            |> Symbol.findSymbolFromPort sModel
+        match srcSym.Id with
+        | x when x = tgtSym.Id -> Error $"Invalid connection! Can't connect to itself"
+        | _ -> 
+            match getWidth srcPortId, getWidth tgtPortId with
+                | Some pW1, Some pW2 when pW1 <> pW2 ->
+                    
+                    Error $"Invalid connection! Mismatched wire widths [{bits pW1}, {bits pW2}]"
+                | None, Some w ->
+                    Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
+                | Some w, None ->
+                    Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
+                | Some w, _ -> Ok w
+                | _, _ -> failwithf "Should not occur"
+    | SplitWire n ->
+        let srcPortWidth = Symbol.portWidth sModel srcPortId
         
-        Error $"Invalid connection! Mismatched wire widths [{bits pW1}, {bits pW2}]"
-    | None, Some w ->
-        Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
-    | Some w, None ->
-        Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
-    | Some w, _ -> Ok w
-    | _, _ -> failwithf "Should not occur"
+
+        match srcPortWidth with
+            |Some width when width <= n -> 
+                Error $"Invalid connection! Input Connection Requires At Least [{bits n}]"
+            |_->
+
+                match getWidth srcPortId, getWidth tgtPortId with
+                | Some pW1, Some pW2 when pW1 <> pW2 ->
+                    
+                    Error $"Invalid connection! Mismatched wire widths [{bits pW1}, {bits pW2}]"
+                | None, Some w ->
+                    Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
+                | Some w, None ->
+                    Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
+                | Some w, _ -> Ok w
+                | _, _ -> failwithf "Should not occur"
+    | _ ->
+        match getWidth srcPortId, getWidth tgtPortId with
+        | Some pW1, Some pW2 when pW1 <> pW2 ->
+            
+            Error $"Invalid connection! Mismatched wire widths [{bits pW1}, {bits pW2}]"
+        | None, Some w ->
+            Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
+        | Some w, None ->
+            Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
+        | Some w, _ -> Ok w
+        | _, _ -> failwithf "Should not occur"
 
 let findWire (wModel: Model) (wId: ConnectionId): Wire =
     match Map.tryFind wId wModel.WX with
@@ -326,9 +368,11 @@ let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<Po
 let notAvaliableInput (wModel: Model) (inputId: PortId): bool =
     Map.exists (fun _ w -> w.TargetPort = inputId) wModel.WX
 
-let createWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) (conId: ConnectionId Option) : Wire =
-    let widthValid = checkPortWidths sModel port1 port2
-    let validSrcTgt = typesValid (port1, port2) sModel
+
+
+let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort: PortId) (conId: ConnectionId Option) : Wire =
+    let widthValid = checkPortWidths sModel srcPort tgtPort
+    let validSrcTgt = typesValid (srcPort, tgtPort) sModel
 
     let src, tgt, width, colour, err =
         match widthValid, validSrcTgt with
@@ -342,7 +386,7 @@ let createWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: Po
         | Error errStr, Ok (s, t) ->
             s, t, 5, Red, Some errStr
         | _, Error errType ->
-            port1, port2, 5, Red, Some errType
+            srcPort, tgtPort, 5, Red, Some errType
 
     let wId =
         function
@@ -465,6 +509,16 @@ let deleteWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: Compone
         match List.contains v.SrcPort pIdList, List.contains v.TargetPort pIdList with
         | true, _ -> false
         | _, true -> false
+        | _ -> true
+    )
+
+let getWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
+    let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
+
+    wModel.WX
+    |> Map.filter (fun _ v ->
+        match List.contains v.SrcPort pIdList, List.contains v.TargetPort pIdList with
+        | false, false -> false
         | _ -> true
     )
 
@@ -703,7 +757,6 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
         { model with WX = wxUpdated }, Cmd.none
     | RoutingUpdate ->
         { model with WX = routingUpdate sModel model.WX }, Cmd.none
-
 ///Dummy function to initialize for demo
 let init () =
     {
