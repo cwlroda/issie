@@ -740,10 +740,13 @@ let createNewSymbol ()  =
         | 20 -> Demux2
         | 21 -> MergeWires
         | 22 -> BusSelection (rng0(),rng0())
-        | 23 -> Constant (rng0(), rng0())
+        | 23 -> 
+            let cons = rng0()
+            let wid = int ((log(float cons)/log(2.))+1.)
+            Constant (wid, cons)
         | 24 -> SplitWire (rng0())
         | _ -> Custom customComp
-
+        
     let rng1 () = rng.Next(0,800)
     let compId = ComponentId (Helpers.uuid())
     let comp = 
@@ -1444,8 +1447,8 @@ let private renderSymbol (model:Model) =
                                         Cy (absPos()).Y
                                         R 3.
                                     ] (viewPortLinesStaticComponent port))[]
-
-                                if selectedBool = true && (port.Width <> PortWidth 0) then
+                                let (PortWidth wid) = port.Width
+                                if selectedBool = true && (wid > 0) then
                                     text (Seq.append [
                                         X (snd dynamicContent)
                                         Y ((absPos()).Y - 20.)
