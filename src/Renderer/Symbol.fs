@@ -324,7 +324,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
             let outputPortMap = 
             //portTemplate (portExist:bool) (portNumber:int) (portType: PortType) (portWidth:PortWidth) (considerTitle:bool) (totalPorts:int)
-                [portTemplate (false) (0) (PortType.Output) (PortWidth n) (false) (1)] 
+                [portTemplate (true) (0) (PortType.Output) (PortWidth n) (false) (1)] 
                 |> List.map (fun port -> (port.PortId, port))
                 |> Map.ofList
 
