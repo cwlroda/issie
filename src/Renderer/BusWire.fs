@@ -114,6 +114,8 @@ let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortI
 
     let widthMatching =
         match getWidth srcPortId, getWidth tgtPortId with
+        | Some x, _ when x<=0 ->
+            Error $"Invalid connection! Invalid Driver"
         | Some pW1, Some pW2 when pW1 <> pW2 ->
             Error $"Invalid connection! Mismatched wire widths [{bits pW1}, {bits pW2}]"
         | None, Some w ->
@@ -569,7 +571,6 @@ let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortI
 ///Given a connectionId deletes the given wire
 let deleteWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Map<ConnectionId, Wire> =
     let updatedModel = {wModel with WX = Map.remove wId wModel.WX}
-
     updatedModel.WX
     |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
@@ -815,6 +816,14 @@ let getErrors (wModel: Model) (sModel: Symbol.Model): Error list =
             }] @ lst
         | None -> lst
     ) [] wModel.WX
+
+let getAllPidEnds (wModel: Model) (pIdSrc: PortId) : PortId List =
+    wModel.WX
+    |> Map.toList
+    |> List.filter (fun (_,w) ->
+        w.SrcPort = pIdSrc
+    )
+    |> List.map (fun (_,w) -> w.TargetPort) 
 
 //----------------------interface to Issie-----------------------//
 let extractWire (wModel: Model) (sId:ComponentId) : Component =

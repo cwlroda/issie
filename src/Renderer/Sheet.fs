@@ -290,7 +290,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
     let handleInterruptAction model =
         let newModel = {model with DragState=NotDragging}
-
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         match model.DragState with
         | AreaSelect _ -> newModel, Cmd.none
         | DragState.Wire (didDrag, prevSubModel) ->
@@ -365,6 +365,39 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 deselectSymbolsCmd
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
+    let rec batchInfer (pIdStart:CommonTypes.PortId) (pIdEnd:CommonTypes.PortId) (createOrDelete:CommonTypes.CreateOrDelete) : Cmd<Msg> List =
+            let createDeleteMsg = 
+                match createOrDelete with
+                | CommonTypes.CreateOrDelete.Create -> Symbol.WidthInferrer (pIdStart,pIdEnd)
+                | CommonTypes.CreateOrDelete.Delete -> Symbol.DeleteInference (pIdStart,pIdEnd)
+
+            let tgtSymbol = 
+                Symbol.findPort model.Symbol pIdEnd
+                |> Symbol.findSymbolFromPort model.Symbol
+
+            let listOfConnections = 
+                tgtSymbol.Component.OutputPorts
+                |> Map.toList
+                |> List.map (fun (newSrcPId, _) -> 
+                    newSrcPId
+                    |> BusWire.getAllPidEnds model.Wire
+                    |> List.filter (fun newTgtPort -> 
+                        let newTgtSymbol = 
+                            Symbol.findPort model.Symbol newTgtPort
+                            |> Symbol.findSymbolFromPort model.Symbol
+                        match newTgtSymbol.Component.Type with
+                        | CommonTypes.SplitWire _ | CommonTypes.BusSelection _  -> true
+                        | comp when comp = CommonTypes.MergeWires -> true
+                        | comp when comp = CommonTypes.IOLabel -> true
+                        | _ -> false
+                    )
+                    |> List.map (fun newTgtPId -> (newSrcPId, newTgtPId))
+                )
+                |> List.toSeq
+                |> List.concat
+            match listOfConnections with
+            | [] -> [Cmd.ofMsg (Symbol createDeleteMsg)]
+            | _ -> List.fold (fun acc (newPIdStart, newPIdEnd) -> acc @ (batchInfer newPIdStart newPIdEnd createOrDelete)) [Cmd.ofMsg (Symbol createDeleteMsg)] listOfConnections
 
     let handleKeyPress key =
         let highlightingAfterUndoAndRedoCmd model =
@@ -387,7 +420,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     ]
             ]
-
+    
         match key with
         | AltA ->
             let selectedSymbols = Symbol.getAllSymbols model.Symbol
@@ -452,21 +485,26 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             { model with Selection = Empty;DragState=NotDragging }
             , match model.Selection with
               | SelectionState.Wire wId ->
-                  Cmd.batch [
-                      let wire = (BusWire.findWire model.Wire wId)
-                      
-                      Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
-                      Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort, wire.TargetPort)))
-                      Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
-                  ]
+                  let wire = (BusWire.findWire model.Wire wId)
+                  let inference = batchInfer wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete
+                  Cmd.batch 
+                    (inference @ 
+                      [
+                        Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort, wire.TargetPort)))
+                        Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
+                        Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
+                      ]
+                    )
               | Symbols sIdLst ->
                   let widthInf = 
                     BusWire.getWiresOfSymbols model.Wire model.Symbol sIdLst
                           |> Map.toList
                           |> List.map (fun (_ , wire) ->
-                            Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort,wire.TargetPort)))
+                            batchInfer wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete
+                            // Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort,wire.TargetPort)))
                           )
-                          |> Seq.ofList
+                          |> List.toSeq
+                          |> List.concat
                   let remainingMsg = 
                     [
                       Cmd.ofMsg (Wire (BusWire.DeleteSymbols sIdLst))
@@ -474,7 +512,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                       Cmd.ofMsg (Wire (BusWire.RoutingUpdate))
                       Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                     ]
-                  Cmd.batch (Seq.append widthInf remainingMsg)
+                  Cmd.batch (widthInf @ remainingMsg)
                   
                   
               | Empty -> Cmd.none
@@ -544,6 +582,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , highlightingAfterUndoAndRedoCmd model
 
     let handleMouseMsg mT modifier =
+        
+
+
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, mods) ->
             let discardSelectionsCmd =
@@ -657,11 +698,17 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 { newModel with Selection = Empty }
                 , match targetedPort with
                   | Some pIdEnd when pIdEnd <> pIdStart ->
-                      Cmd.batch [
-                          Cmd.ofMsg (Symbol (Symbol.WidthInferrer (pIdStart, pIdEnd)))
+
+                      
+                      let temp = batchInfer pIdStart pIdEnd CommonTypes.CreateOrDelete.Create
+
+                      Cmd.batch 
+                        (temp @ [
+                        //   Cmd.ofMsg (Symbol (Symbol.WidthInferrer (pIdStart, pIdEnd)))
                           Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
                           Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
-                      ]
+                        ])
+                      
                   | _ -> Cmd.none
             | DragState.Pan (origPan, panStart, panEnd) ->
                 updatePan newModel origPan panStart panEnd
@@ -726,7 +773,7 @@ let init () =
         PanY = 0.
         Zoom = 1.
         Width = 1000.
-        Height = 500.
+        Height = 800.
         UndoList = []
         RedoList = []
     }, Cmd.batch [
