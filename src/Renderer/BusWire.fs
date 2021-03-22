@@ -570,12 +570,24 @@ let deleteWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Map<
 let deleteWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
     let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
 
-    wModel.WX
-    |> Map.filter (fun _ v ->
-        match List.contains v.SrcPort pIdList, List.contains v.TargetPort pIdList with
-        | true, _ -> false
-        | _, true -> false
-        | _ -> true
+    let updatedWX =
+        wModel.WX
+        |> Map.filter (fun _ v ->
+            match List.contains v.SrcPort pIdList, List.contains v.TargetPort pIdList with
+            | true, _ -> false
+            | _, true -> false
+            | _ -> true
+        )
+
+    let updatedModel = {wModel with WX = updatedWX}
+
+    updatedWX
+    |> Map.map (fun _ w ->
+        match notAvaliableInput updatedModel w.Id w.TargetPort with
+        | false ->
+            let newWire = createWire updatedModel sModel w.SrcPort w.TargetPort (Some w.Id)
+            {newWire with Segments = w.Segments}
+        | true -> w
     )
 
 let getWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
