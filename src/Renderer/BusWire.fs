@@ -206,8 +206,8 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
     let srcPortPos = Symbol.portPos sModel wire.SrcPort
     let tgtPortPos = Symbol.portPos sModel wire.TargetPort
     let avgPortPos = snapToGrid (midPt srcPortPos tgtPortPos)
-    let halfPortDist = snapToGrid (posHalve (posDiff tgtPortPos srcPortPos))
-    let interval = gridSize * 2.
+    let halfPortDist = posHalve (posDiff tgtPortPos srcPortPos)
+    let interval = gridSize // * 2.
 
     // checks if bounding boxes of wire segment and symbol overlap
     let collision (seg: WireSegment) : bool =
@@ -218,85 +218,96 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
         |> List.exists (fun sym -> overlaps segBBox (Symbol.symbolBBox sModel sym.Id))
 
     // reroute segments recursively
-    let rec avoid (seg: WireSegment) (index: int) (dir: bool) : WireSegment =
+    let rec avoid (seg: WireSegment) (index: int) (dir: bool) (depth: int) : WireSegment =
         let offset = if dir then gridSize else -gridSize
 
-        match collision seg with
-        | true ->
-            let newSeg =
-                match seg.Direction with
-                | Horizontal ->
-                    {seg with
-                        StartPos = posAddY seg.StartPos offset
-                        EndPos = posAddY seg.EndPos offset
-                    }
-                | Vertical ->
-                    {seg with
-                        StartPos = posAddX seg.StartPos offset
-                        EndPos = posAddX seg.EndPos offset
-                    }
+        match depth with
+        | x when x >= 50 -> seg
+        | _ ->
+            match collision seg with
+            | true ->
+                let newSeg =
+                    match seg.Direction with
+                    | Horizontal ->
+                        {seg with
+                            StartPos = posAddY seg.StartPos offset
+                            EndPos = posAddY seg.EndPos offset
+                        }
+                    | Vertical ->
+                        {seg with
+                            StartPos = posAddX seg.StartPos offset
+                            EndPos = posAddX seg.EndPos offset
+                        }
 
-            avoid newSeg index dir
-        | false -> seg
+                avoid newSeg index dir (depth + 1)
+            | false -> seg
 
     // bidirectional recursion to shorten path
-    segList
-    |> List.mapi (fun i s ->
-        match i with
-        | x when (x = 0) || (x = segList.Length - 1) -> s
-        | 1 ->
-            match segList.Length with
-            | 3 ->
-                let newSeg =
-                    {s with
-                        StartPos = posOf avgPortPos.X s.StartPos.Y 
-                        EndPos = posOf avgPortPos.X s.EndPos.Y 
-                    }
-
-                let segLeft = avoid newSeg i false
-                let segRight = avoid newSeg i true
-                let distLeft = abs (avgPortPos.X - segLeft.StartPos.X)
-                let distRight = abs (avgPortPos.X - segRight.StartPos.X)
-                let clearance = abs (halfPortDist.X) - interval
-
-                match distLeft, distRight with
-                | x, y when x >= clearance && y >= clearance -> newSeg
-                | x, _ when x < clearance -> segLeft
-                | _, y when y < clearance -> segRight
-                | _ -> if distLeft <= distRight then segLeft else segRight
-            | _ ->
-                let newSeg =
-                    {s with
-                        StartPos = posOf (srcPortPos.X + interval) s.StartPos.Y
-                        EndPos = posOf (srcPortPos.X + interval) s.EndPos.Y
-                    }
-
-                avoid newSeg i true
-        | 2 ->
-            let newSeg =
-                {s with
-                    StartPos = posOf s.StartPos.X avgPortPos.Y
-                    EndPos = posOf s.EndPos.X avgPortPos.Y
-                }
-
-
-            let segUp = avoid newSeg i false
-            let segDown = avoid newSeg i true
-            let distUp = abs (avgPortPos.Y - segUp.StartPos.Y)
-            let distDown = abs (avgPortPos.Y - segDown.StartPos.Y)
-
-            if distUp <= distDown then segUp else segDown
+    let rec routing (depth: int) (segList: WireSegment list) : WireSegment list =
+        match depth with
+        | x when x >= 5 -> segList
         | _ ->
-            let newSeg =
-                {s with
-                    StartPos = posOf (tgtPortPos.X - interval) s.StartPos.Y
-                    EndPos = posOf (tgtPortPos.X - interval) s.EndPos.Y
-                }
+            match List.exists (fun seg -> collision seg) segList with
+            | true ->
+                segList
+                |> List.mapi (fun i s ->
+                    match i with
+                    | x when (x = 0) || (x = segList.Length - 1) -> s
+                    | 1 ->
+                        match segList.Length with
+                        | 3 ->
+                            let newSeg =
+                                {s with
+                                    StartPos = posOf avgPortPos.X s.StartPos.Y 
+                                    EndPos = posOf avgPortPos.X s.EndPos.Y 
+                                }
 
-            avoid newSeg i false
-    )
-    |> autoConnect
+                            let segLeft = avoid newSeg i false 0
+                            let segRight = avoid newSeg i true 0
+                            let distLeft = abs (avgPortPos.X - segLeft.StartPos.X)
+                            let distRight = abs (avgPortPos.X - segRight.StartPos.X)
+                            let clearance = abs (halfPortDist.X) - interval
 
+                            match distLeft, distRight with
+                            | x, y when x >= clearance && y >= clearance -> newSeg
+                            | x, _ when x < clearance -> segLeft
+                            | _, y when y < clearance -> segRight
+                            | _ -> if distLeft <= distRight then segLeft else segRight
+                        | _ ->
+                            let newSeg =
+                                {s with
+                                    StartPos = posOf (srcPortPos.X + interval) s.StartPos.Y
+                                    EndPos = posOf (srcPortPos.X + interval) s.EndPos.Y
+                                }
+
+                            avoid newSeg i true 0
+                    | 2 ->
+                        let newSeg =
+                            {s with
+                                StartPos = posOf s.StartPos.X avgPortPos.Y
+                                EndPos = posOf s.EndPos.X avgPortPos.Y
+                            }
+
+                        let segUp = avoid newSeg i false 0
+                        let segDown = avoid newSeg i true 0
+                        let distUp = abs (avgPortPos.Y - segUp.StartPos.Y)
+                        let distDown = abs (avgPortPos.Y - segDown.StartPos.Y)
+
+                        if distUp <= distDown then segUp else segDown
+                    | _ ->
+                        let newSeg =
+                            {s with
+                                StartPos = posOf (tgtPortPos.X - interval) s.StartPos.Y
+                                EndPos = posOf (tgtPortPos.X - interval) s.EndPos.Y
+                            }
+
+                        avoid newSeg i false 0
+                )
+                |> autoConnect
+                |> routing (depth + 1)
+            | false -> segList
+
+    routing 0 segList
 
 let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
     let startPos = Symbol.portPos sModel wire.SrcPort
@@ -434,27 +445,10 @@ let pathDefString (w: Wire) =
     
     List.fold (fun str s -> str + s) "" strLst
 
-
 let singleWireView =
     FunctionComponent.Of
         (fun (props: WireRenderProps) ->
-            // let segBBox = createSegBB props.StartPos props.EndPos
-
             g [] [
-                // rect
-                //     [
-                //         X segBBox.Pos.X
-                //         Y segBBox.Pos.Y
-                //         Rx 5.
-                //         Ry 5.
-                //         SVGAttr.Width segBBox.Width
-                //         SVGAttr.Height segBBox.Height
-                //         SVGAttr.StrokeWidth "1px"
-                //         SVGAttr.Stroke "Black"
-                //         SVGAttr.FillOpacity 0
-                //     ] []
-
-
                 path 
                     [ 
                         SVGAttr.D props.SegPath
@@ -755,7 +749,7 @@ let init () =
     {
         WX = Map.empty
         WireAnnotation = true
-    }, Cmd.none    
+    }, Cmd.none
 
 //---------------Other interface functions--------------------//
 

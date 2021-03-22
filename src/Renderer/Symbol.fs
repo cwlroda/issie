@@ -766,7 +766,7 @@ let createNewSymbol ()  =
 
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
-    [1..10]
+    [1..50]
     |> List.map (fun x -> createNewSymbol ())
     |> List.map (fun sym -> (sym.Id, sym))
     |> Map.ofList
@@ -995,7 +995,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 }   
             }
         ), Cmd.none
-         
+
     | UnhighlightPorts ->
         model
         |> Map.map (
