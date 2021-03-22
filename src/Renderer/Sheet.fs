@@ -54,6 +54,7 @@ type KeyboardMsg =
     | CtrlShiftEqual
     | CtrlEqual
     | CtrlMinus
+    | INS
 
 type Modifier =
     | Control
@@ -195,8 +196,6 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                     rect [
                         X model.MousePosition.X
                         Y model.MousePosition.Y
-                        Rx 5.
-                        Ry 5.
                         SVGAttr.Width (textWidth + 20.)
                         SVGAttr.Height "20"
                         SVGAttr.Fill "#a11"
@@ -456,7 +455,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                       let wire = (BusWire.findWire model.Wire wId)
                       
                       Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
-                      Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort, wire.TargetPort)))
+                      Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort,wire.TargetPort)))
                       Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                   ]
               | Symbols sIdLst ->
@@ -542,6 +541,27 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     RedoList=redoList
                 }
                 , highlightingAfterUndoAndRedoCmd model
+        | INS ->
+            { model with Selection = Empty;DragState=NotDragging },
+            Cmd.batch [
+                let rng = System.Random 0
+                let pList =
+                    Symbol.allPortsInModel model.Symbol
+                    |> Map.toList
+                    |> List.map fst
+                let n = pList.Length
+
+                let s1, s2 =
+                    match rng.Next(0, n-1), rng.Next(0, n-2) with
+                    | r1, r2 when r1 = r2 -> 
+                        pList.[r1], pList.[n-1] // prevents wire target and source being same
+                    | r1, r2 -> 
+                        pList.[r1], pList.[r2]
+                
+                Cmd.ofMsg (Wire (BusWire.AddWire (s1, s2)))
+                Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
+            ]
+            
 
     let handleMouseMsg mT modifier =
         match (mT.Op, mT.Pos, modifier) with
@@ -605,7 +625,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         , Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
                     | _ -> failwithf "Can only drag if there is a selection"
                 | WireCreation (pId, _) ->
-                    { model with DragState=WireCreation (pId, p) }, highlightPortsNearCmd p
+                    { model with DragState=WireCreation (pId, p) }, Cmd.none
                 | Pan (origPan, panStart, _) ->
                     { model with
                         DragState=Pan (origPan, panStart, p)
@@ -658,6 +678,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , match targetedPort with
                   | Some pIdEnd when pIdEnd <> pIdStart ->
                       Cmd.batch [
+
                           Cmd.ofMsg (Symbol (Symbol.WidthInferrer (pIdStart, pIdEnd)))
                           Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
                           Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
