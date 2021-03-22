@@ -324,9 +324,11 @@ let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<Po
 let notAvaliableInput (wModel: Model) (inputId: PortId): bool =
     Map.exists (fun _ w -> w.TargetPort = inputId) wModel.WX
 
-let createWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) (conId: ConnectionId Option) : Wire =
-    let widthValid = checkPortWidths sModel port1 port2
-    let validSrcTgt = typesValid (port1, port2) sModel
+
+
+let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort: PortId) (conId: ConnectionId Option) : Wire =
+    let widthValid = checkPortWidths sModel srcPort tgtPort
+    let validSrcTgt = typesValid (srcPort, tgtPort) sModel
 
     let src, tgt, width, colour, err =
         match widthValid, validSrcTgt with
@@ -340,7 +342,7 @@ let createWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: Po
         | Error errStr, Ok (s, t) ->
             s, t, 5, Red, Some errStr
         | _, Error errType ->
-            port1, port2, 5, Red, Some errType
+            srcPort, tgtPort, 5, Red, Some errType
 
     let wId =
         function
@@ -463,6 +465,16 @@ let deleteWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: Compone
         match List.contains v.SrcPort pIdList, List.contains v.TargetPort pIdList with
         | true, _ -> false
         | _, true -> false
+        | _ -> true
+    )
+
+let getWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
+    let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
+
+    wModel.WX
+    |> Map.filter (fun _ v ->
+        match List.contains v.SrcPort pIdList, List.contains v.TargetPort pIdList with
+        | false, false -> false
         | _ -> true
     )
 
@@ -701,7 +713,6 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
         { model with WX = wxUpdated }, Cmd.none
     | RoutingUpdate ->
         { model with WX = routingUpdate sModel model.WX }, Cmd.none
-
 ///Dummy function to initialize for demo
 let init () =
     {

@@ -441,16 +441,30 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             , match model.Selection with
               | SelectionState.Wire wId ->
                   Cmd.batch [
+                      let wire = (BusWire.findWire model.Wire wId)
+                      
                       Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
+                      Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort,wire.TargetPort)))
                       Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                   ]
               | Symbols sIdLst ->
-                  Cmd.batch [
+                  let widthInf = 
+                    BusWire.getWiresOfSymbols model.Wire model.Symbol sIdLst
+                          |> Map.toList
+                          |> List.map (fun (_ , wire) ->
+                            Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort,wire.TargetPort)))
+                          )
+                          |> Seq.ofList
+                  let remainingMsg = 
+                    [
                       Cmd.ofMsg (Wire (BusWire.DeleteSymbols sIdLst))
                       Cmd.ofMsg (Symbol (Symbol.DeleteSymbols sIdLst))
                       Cmd.ofMsg (Wire (BusWire.RoutingUpdate))
                       Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
-                  ]
+                    ]
+                  Cmd.batch (Seq.append widthInf remainingMsg)
+                  
+                  
               | Empty -> Cmd.none
         | AltC ->
             match model.Selection with
@@ -632,6 +646,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , match targetedPort with
                   | Some pIdEnd when pIdEnd <> pIdStart ->
                       Cmd.batch [
+
+                          Cmd.ofMsg (Symbol (Symbol.WidthInferrer (pIdStart, pIdEnd)))
                           Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
                           Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                       ]
