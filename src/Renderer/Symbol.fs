@@ -790,92 +790,92 @@ let updateSymbolModelWithComponent (symModel: Model) (comp: Component) : Model =
     |> Map.add comp.Id {symModel.[comp.Id] with Component = comp}
 
 let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete: bool): Model =
-            let p1 = pid1 |> findPort symModel
-            let p2 = pid2 |> findPort symModel
-            let (srcPort, tgtPort) = 
-                match p1.PortType with
-                |PortType.Input -> (p2, p1)
-                |_ -> (p1, p2)
+    let p1 = pid1 |> findPort symModel
+    let p2 = pid2 |> findPort symModel
+    let (srcPort, tgtPort) = 
+        match p1.PortType with
+        |PortType.Input -> (p2, p1)
+        |_ -> (p1, p2)
 
-            let tgtSym =
-                tgtPort
-                |> findSymbolFromPort symModel
+    let tgtSym =
+        tgtPort
+        |> findSymbolFromPort symModel
 
-            match tgtSym.Component.Type with
-            | SplitWire n -> 
+    match tgtSym.Component.Type with
+    | SplitWire n -> 
 
-                let tgtPortNew = 
-                    {tgtPort with
-                        Width = 
-                            match addOrDelete with 
-                            | true -> srcPort.Width
-                            | false -> PortWidth 0
-                    }
-                let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
-                let variedOutputPortNew = 
-                    {variedOutputPort with
-                        Width = 
-                            match addOrDelete with
-                            | true -> subtractPortWidth tgtPortNew.Width (PortWidth n)
-                            | _ -> PortWidth 0
-                    }
-                let tgtCompNew =
-                        {tgtSym.Component with
-                            InputPorts = Map.add tgtPort.PortId tgtPortNew tgtSym.Component.InputPorts
-                            OutputPorts = Map.add variedOutputPort.PortId variedOutputPortNew tgtSym.Component.OutputPorts
-                        }
-                
-                updateSymbolModelWithComponent symModel tgtCompNew
-            | IOLabel ->
-                let tgtPortNew = 
-                    {tgtPort with
-                        Width = 
-                            match addOrDelete with 
-                            | true -> srcPort.Width
-                            | false -> PortWidth 0
-                    }
-                let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
-                let variedOutputPortNew = 
-                    {variedOutputPort with
-                        Width = 
-                            match addOrDelete with
-                            | true -> tgtPortNew.Width
-                            | _ -> PortWidth 0
-                    }
-                let tgtCompNew = 
-                    {tgtSym.Component with
-                        InputPorts = Map.add tgtPort.PortId tgtPortNew tgtSym.Component.InputPorts
-                        OutputPorts = Map.add variedOutputPort.PortId variedOutputPortNew tgtSym.Component.OutputPorts
-                    }
-                updateSymbolModelWithComponent symModel tgtCompNew
-            | MergeWires ->
-                let tgtPortNew = 
-                    {tgtPort with
-                        Width = 
-                            match addOrDelete with 
-                            | true -> srcPort.Width
-                            | false -> PortWidth 0
-                    }
-                let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
-                let otherInputPort:Port = 
-                    match tgtPort.PortNumber with
-                    | Some (PortNumber 0) -> findPortFromNumAndType tgtSym (PortNumber 1) (PortType.Input)
-                    | _ -> findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Input)
-                
-                let variedOutputPortNew = 
-                    {variedOutputPort with
-                        Width = 
-                            match addOrDelete with
-                            | true -> addPortWidth tgtPortNew.Width otherInputPort.Width
-                            | _ -> PortWidth 0
-                    }
-                let tgtCompNew = 
-                    {tgtSym.Component with
-                        InputPorts = Map.add tgtPort.PortId tgtPortNew tgtSym.Component.InputPorts
-                        OutputPorts = Map.add variedOutputPort.PortId variedOutputPortNew tgtSym.Component.OutputPorts
-                    }
-                updateSymbolModelWithComponent symModel tgtCompNew
-            |_ -> symModel
+        let tgtPortNew = 
+            {tgtPort with
+                Width = 
+                    match addOrDelete with 
+                    | true -> srcPort.Width
+                    | false -> PortWidth 0
+            }
+        let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
+        let variedOutputPortNew = 
+            {variedOutputPort with
+                Width = 
+                    match addOrDelete with
+                    | true -> subtractPortWidth tgtPortNew.Width (PortWidth n)
+                    | _ -> PortWidth 0
+            }
+        let tgtCompNew =
+                {tgtSym.Component with
+                    InputPorts = Map.add tgtPort.PortId tgtPortNew tgtSym.Component.InputPorts
+                    OutputPorts = Map.add variedOutputPort.PortId variedOutputPortNew tgtSym.Component.OutputPorts
+                }
+        
+        updateSymbolModelWithComponent symModel tgtCompNew
+    | IOLabel ->
+        let tgtPortNew = 
+            {tgtPort with
+                Width = 
+                    match addOrDelete with 
+                    | true -> srcPort.Width
+                    | false -> PortWidth 0
+            }
+        let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
+        let variedOutputPortNew = 
+            {variedOutputPort with
+                Width = 
+                    match addOrDelete with
+                    | true -> tgtPortNew.Width
+                    | _ -> PortWidth 0
+            }
+        let tgtCompNew = 
+            {tgtSym.Component with
+                InputPorts = Map.add tgtPort.PortId tgtPortNew tgtSym.Component.InputPorts
+                OutputPorts = Map.add variedOutputPort.PortId variedOutputPortNew tgtSym.Component.OutputPorts
+            }
+        updateSymbolModelWithComponent symModel tgtCompNew
+    | MergeWires ->
+        let tgtPortNew = 
+            {tgtPort with
+                Width = 
+                    match addOrDelete with 
+                    | true -> srcPort.Width
+                    | false -> PortWidth 0
+            }
+        let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
+        let otherInputPort:Port = 
+            match tgtPort.PortNumber with
+            | Some (PortNumber 0) -> findPortFromNumAndType tgtSym (PortNumber 1) (PortType.Input)
+            | _ -> findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Input)
+        
+        let variedOutputPortNew = 
+            {variedOutputPort with
+                Width = 
+                    match addOrDelete with
+                    | true -> addPortWidth tgtPortNew.Width otherInputPort.Width
+                    | _ -> PortWidth 0
+            }
+        let tgtCompNew = 
+            {tgtSym.Component with
+                InputPorts = Map.add tgtPort.PortId tgtPortNew tgtSym.Component.InputPorts
+                OutputPorts = Map.add variedOutputPort.PortId variedOutputPortNew tgtSym.Component.OutputPorts
+            }
+        updateSymbolModelWithComponent symModel tgtCompNew
+    |_ -> symModel
 /// update function which displays symbols
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
@@ -1305,7 +1305,6 @@ let private renderSymbol (model:Model) =
 
             let viewBoxType1 =
                 [
-
                     rect
                         (
                             Seq.append [
@@ -1335,37 +1334,15 @@ let private renderSymbol (model:Model) =
                     | MergeWires -> 
                         let portPos1 =
                             topLeft.Y + (findPortFromNumAndType props.Symbol (PortNumber 0) (PortType.Input)).PortPos.Y
-                         
+
                         let portPos2 = 
                             topLeft.Y + (findPortFromNumAndType props.Symbol (PortNumber 1) (PortType.Input)).PortPos.Y
                             
                         let portPos3 =
                             topLeft.Y + (findPortFromNumAndType props.Symbol (PortNumber 0) (PortType.Output)).PortPos.Y
+
+                        let midPosX = (topLeft.X + (width/2.))
                             
-                        line 
-                            (Seq.append
-                                [
-                                X1 topLeft.X
-                                X2 (topLeft.X + (width/2.))
-                                Y1 portPos1
-                                Y2 portPos1
-                                ] viewPortLinesStaticComponent2)[]
-                        line 
-                            (Seq.append
-                                [
-                                    X1 topLeft.X
-                                    X2 (topLeft.X + (width/2.))
-                                    Y1 portPos2
-                                    Y2 portPos2
-                                ] viewPortLinesStaticComponent2) []
-                        line
-                            (Seq.append
-                                [
-                                    X1 (topLeft.X + (width/2.))
-                                    X2 (topLeft.X + (width/2.))
-                                    Y1 portPos1
-                                    Y2 portPos2
-                                ] viewPortLinesStaticComponent2) []
                         line 
                             (Seq.append
                                 [
@@ -1374,52 +1351,68 @@ let private renderSymbol (model:Model) =
                                     Y1 (portPos3)
                                     Y2 (portPos3)
                                 ] viewPortLinesStaticComponent2) []
+
+                        path
+                            (Seq.append
+                                [
+                                    SVGAttr.D (sprintf
+                                        "M %f %f
+                                        L %f %f
+                                        Q %f %f %f %f
+                                        L %f %f
+                                        Q %f %f %f %f
+                                        L %f %f"
+                                        topLeft.X portPos1
+                                        (midPosX - 5.) portPos1
+                                        midPosX portPos1 midPosX (portPos1 + 5.)
+                                        midPosX (portPos2 - 5.)
+                                        midPosX portPos2 (midPosX - 5.) portPos2
+                                        topLeft.X portPos2
+                                    )
+
+                                ] viewPortLinesStaticComponent2) []
+
                     | SplitWire _ ->
                         let portPos1 =
                             topLeft.Y + (findPortFromNumAndType props.Symbol (PortNumber 0) (PortType.Input)).PortPos.Y
-                         
+                        
                         let portPos2 = 
                             topLeft.Y + (findPortFromNumAndType props.Symbol (PortNumber 0) (PortType.Output)).PortPos.Y
                             
                         let portPos3 =
                             topLeft.Y + (findPortFromNumAndType props.Symbol (PortNumber 1) (PortType.Output)).PortPos.Y
-                            
+                        
+                        let midPosX = (topLeft.X + (width/2.))
+
                         line 
                             (Seq.append
                                 [
                                 X1 topLeft.X
-                                X2 (topLeft.X + (width/2.))
+                                X2 midPosX
                                 Y1 portPos1
                                 Y2 portPos1
                                 ] viewPortLinesStaticComponent2)[]
-                        line 
-                            (Seq.append
-                                [
-                                    X1 (topLeft.X + (width/2.))
-                                    X2 (topRight.X)
-                                    Y1 portPos2
-                                    Y2 portPos2
-                                ] viewPortLinesStaticComponent2) []
-                        line
-                            (Seq.append
-                                [
-                                    X1 (topLeft.X + (width/2.))
-                                    X2 (topRight.X)
-                                    Y1 portPos3
-                                    Y2 portPos3
-                                ] viewPortLinesStaticComponent2) []
-                        line 
-                            (Seq.append
-                                [
-                                    X1 (topLeft.X + (width/2.))
-                                    X2 (topLeft.X + (width/2.))
-                                    Y1 (portPos2)
-                                    Y2 (portPos3)
-                                ] viewPortLinesStaticComponent2) []
 
+                        path
+                            (Seq.append
+                                [
+                                    SVGAttr.D (sprintf
+                                        "M %f %f
+                                        L %f %f
+                                        Q %f %f %f %f
+                                        L %f %f
+                                        Q %f %f %f %f
+                                        L %f %f"
+                                        topRight.X portPos2
+                                        (midPosX + 5.) portPos2
+                                        midPosX portPos2 midPosX (portPos2 + 5.)
+                                        midPosX (portPos3 - 5.)
+                                        midPosX portPos3 (midPosX + 5.) portPos3
+                                        topRight.X portPos3
+                                    )
+
+                                ] viewPortLinesStaticComponent2) []
                     | _ -> nothing
-
-                    
                 ]
 
             let lineLength = 15.

@@ -195,6 +195,8 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                     rect [
                         X model.MousePosition.X
                         Y model.MousePosition.Y
+                        Rx 5.
+                        Ry 5.
                         SVGAttr.Width (textWidth + 20.)
                         SVGAttr.Height "20"
                         SVGAttr.Fill "#a11"
@@ -454,7 +456,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                       let wire = (BusWire.findWire model.Wire wId)
                       
                       Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
-                      Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort,wire.TargetPort)))
+                      Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort, wire.TargetPort)))
                       Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                   ]
               | Symbols sIdLst ->
@@ -603,7 +605,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         , Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
                     | _ -> failwithf "Can only drag if there is a selection"
                 | WireCreation (pId, _) ->
-                    { model with DragState=WireCreation (pId, p) }, Cmd.none
+                    { model with DragState=WireCreation (pId, p) }, highlightPortsNearCmd p
                 | Pan (origPan, panStart, _) ->
                     { model with
                         DragState=Pan (origPan, panStart, p)
@@ -656,7 +658,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , match targetedPort with
                   | Some pIdEnd when pIdEnd <> pIdStart ->
                       Cmd.batch [
-
                           Cmd.ofMsg (Symbol (Symbol.WidthInferrer (pIdStart, pIdEnd)))
                           Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
                           Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
