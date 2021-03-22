@@ -592,8 +592,9 @@ let singleLabelView =
         (fun (props: LabelRenderProps) ->
             g [][
                 text [ 
-                        X (props.Pos.X + 7.5)
-                        Y (props.Pos.Y + 12.5)
+                        X props.Pos.X
+                        Y props.Pos.Y
+                        
                         Style [ 
                                 TextAnchor "left"
                                 DominantBaseline "middle"
@@ -604,16 +605,21 @@ let singleLabelView =
                 ]
 
                 line [
-                        X1 (props.Pos.X + 7.5 );
-                        Y1 (props.Pos.Y - 7.5);
-                        X2 (props.Pos.X + 12.5);
-                        Y2 (props.Pos.Y + 7.5 );
+                        X1 (props.Pos.X + 5.) ;
+                        Y1 (props.Pos.Y + 20.);
+                        X2 (props.Pos.X );
+                        Y2 (props.Pos.Y + 5.);
                         SVGAttr.Stroke (props.ColorLabel)
                         SVGAttr.FillOpacity 0
                         SVGAttr.StrokeWidth props.BusIdcWidth
                 ][]
             ])
 
+
+let adjLabelPos (seg: WireSegment) : XYPos =
+    match posDiff seg.StartPos seg.EndPos with
+    | relDiff when relDiff.X > 10.  ->  posDiff seg.StartPos (posOf 7.5 12.5)
+    | _ -> posDiff seg.StartPos (posOf -7.5 12.5)
 
 let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
     g [] (
@@ -626,19 +632,19 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
                     | Ok width -> 
                         {
                             key = w.Id
-                            Pos = srcSeg.StartPos 
+                            Pos = adjLabelPos srcSeg 
                             ColorLabel = w.WireColor.ToString()
                             Label =  $"%d{width}"
                             BusIdcWidth =  2. 
                         }
                     | Error str -> 
-                            {
-                                key = w.Id
-                                Pos = srcSeg.StartPos 
-                                ColorLabel = w.WireColor.ToString()
-                                Label =  $"x"
-                                BusIdcWidth =  2. 
-                            }
+                        {
+                            key = w.Id
+                            Pos = adjLabelPos srcSeg  
+                            ColorLabel = w.WireColor.ToString()
+                            Label =  $"x"
+                            BusIdcWidth =  2. 
+                        }
             
             let (props: WireRenderProps) =
                 {
