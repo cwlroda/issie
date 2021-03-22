@@ -784,6 +784,7 @@ let setSelectedFunction (topLeft: XYPos, topRight: XYPos) (symModel: Model) : Mo
             }
     )
 
+
 let updateSymbolModelWithComponent (symModel: Model) (comp: Component) : Model =
     symModel
     |> Map.add comp.Id {symModel.[comp.Id] with Component = comp}
