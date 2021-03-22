@@ -181,30 +181,35 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
     let errorOverlay =
         g [] (
             BusWire.getErrors model.Wire model.Symbol
+            |> List.filter (fun e ->
+                match BusWire.getTargetedWire model.Wire model.MousePosition with
+                | Some id when id = e.Id -> true
+                | _ -> false
+            )
             |> List.map (fun e ->
                 // Approximate the width of the text, does not work very well
                 // the good solutions are all very hacky, will look at more in
                 // the team phase per piazza
-                let textWidth = 8.8 * float e.Msg.Length
+                let textWidth = 5.9 * float e.Msg.Length
                 g [] [
                     rect [
-                        X e.Pos.X
-                        Y e.Pos.Y
+                        X model.MousePosition.X
+                        Y model.MousePosition.Y
                         SVGAttr.Width (textWidth + 20.)
-                        SVGAttr.Height "30"
+                        SVGAttr.Height "20"
                         SVGAttr.Fill "#a11"
                         SVGAttr.Stroke "black"
-                        SVGAttr.StrokeWidth "4px"
+                        SVGAttr.StrokeWidth "2px"
                     ] []
                     text [ // "Bus Decoder" header
-                        X (e.Pos.X + 5.)
-                        Y (e.Pos.Y + 20.)
+                        X (model.MousePosition.X + 5.)
+                        Y (model.MousePosition.Y + 13.)
                         Style [
                             UserSelect UserSelectOptions.None
                             TextAnchor "left"
                             DominantBaseline "baseline"
                             FontFamily "Monospace"
-                            FontSize "15px"
+                            FontSize "10px"
                             FontWeight "Bold"
                             Fill "White"
                         ]

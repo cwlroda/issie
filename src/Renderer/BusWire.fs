@@ -10,6 +10,7 @@ open CommonTypes
 
 type Error =
     {
+        Id: ConnectionId
         Msg: string
         Pos: XYPos
     }
@@ -759,7 +760,11 @@ let getErrors (wModel: Model) (sModel: Symbol.Model): Error list =
     Map.fold (fun lst _ w ->
         match w.Error with
         | Some errStr ->
-            [{ Msg = errStr; Pos = (Symbol.portPos sModel w.TargetPort)}] @ lst
+            [{
+                Id = w.Id
+                Msg = errStr
+                Pos = (Symbol.portPos sModel w.TargetPort)
+            }] @ lst
         | None -> lst
     ) [] wModel.WX
 
