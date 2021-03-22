@@ -218,12 +218,22 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
             )
         )
 
+    let cursorType =
+        match model.DragState with
+        | DragState.Symbol (_, _) -> "grabbing"
+        | DragState.Wire (_, _) -> "grabbing"
+        | DragState.Pan (_, _, _) -> "grabbing"
+        | DragState.WireCreation (_, _) -> "crosshair"
+        | DragState.AreaSelect (_, _, _) -> "crosshair"
+        | _ -> "grab"
+    
     div [ Style [
               Height heightInPixels
               Width widthInPixels
               Border (sprintf "%fpx solid green" borderSize)
               CSSProp.OverflowX OverflowOptions.Hidden
               CSSProp.OverflowY OverflowOptions.Hidden
+              CSSProp.Cursor cursorType
           ]
     ] [ svg [ Style [
                   Height heightInPixels

@@ -102,14 +102,16 @@ let createSegBB (startPos: XYPos) (endPos: XYPos) (width: float) : BBox =
 
 let checkPortWidths (sModel: Symbol.Model) (srcPort: PortId) (tgtPort: PortId) : Result<int, string> =
     let getWidth pId = Symbol.portWidth sModel pId
+    let bits p = if p < 2 then $"{p} bit" else $"{p} bits"
 
     match getWidth srcPort, getWidth tgtPort with
     | Some pW1, Some pW2 when pW1 <> pW2 ->
-        Error $"Invalid Port Selection. Wire widths dont match, port widths of {pW1} bit(s) does not match widths of {pW2} bits"
+        
+        Error $"Invalid connection! Mismatched wire widths [{bits pW1}, {bits pW2}]"
     | None, Some w ->
-        Error $"Invalid Port Selection. Wire widths dont match, port widths of None does not match {w}bits"
+        Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
     | Some w, None ->
-        Error $"Invalid Port Selection. Wire widths dont match, port widths of None does not match {w}bits"
+        Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
     | Some w, _ -> Ok w
     | _, _ -> failwithf "Should not occur"
 
@@ -186,8 +188,8 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
     let interval = gridSize * 2.
 
     // checks if bounding boxes of wire segment and symbol overlap
-    let collision (startPos: XYPos) (endPos: XYPos) : bool =
-        let segBBox = createSegBB startPos endPos interval
+    let collision (seg: WireSegment) : bool =
+        let segBBox = createSegBB seg.StartPos seg.EndPos interval
 
         Symbol.getAllSymbols sModel
         |> List.map (Symbol.getSymbolFromSymbolId sModel)
@@ -197,7 +199,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
     let rec avoid (seg: WireSegment) (index: int) (dir: bool) : WireSegment =
         let offset = if dir then gridSize else -gridSize
 
-        match collision seg.StartPos seg.EndPos with
+        match collision seg with
         | true ->
             let newSeg =
                 match seg.Direction with
@@ -317,7 +319,7 @@ let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<Po
     let getType pId = (Symbol.portType sModel pId)
 
     match getType port1, getType port2 with
-    | pT1, pT2 when pT1 = pT2 -> Error $"Invalid Port Selection. The Ports cannot be both be {pT1}s."
+    | pT1, pT2 when pT1 = pT2 -> Error $"Invalid connection! Ports cannot both be {pT1}s."
     | p, _ when p = PortType.Input -> Ok (port2, port1)
     | _ -> Ok (port1, port2)
 
@@ -334,7 +336,7 @@ let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort
         match widthValid, validSrcTgt with
         | _, Ok (s, t) when (notAvaliableInput wModel t) ->
             s, t, 5, Red,
-            Some "Invalid Input port selection. An input port cannot have multiple input wires"
+            Some "Invalid connection! Input ports cannot have multiple wires"
         | Ok w, Ok (s, t) when w < 2 ->
             s, t, 3, Blue, None
         | Ok _, Ok (s, t) ->
