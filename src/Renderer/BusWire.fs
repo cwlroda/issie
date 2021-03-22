@@ -59,11 +59,11 @@ type Msg =
     | EndDrag
     | RoutingUpdate
 
+
 type WireRenderProps =
     {
         Key: ConnectionId
-        StartPos: XYPos
-        EndPos: XYPos
+        SegPath: string
         WireColor: HighLightColor
         WireWidth: string
     }
@@ -254,6 +254,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
                     EndPos = posOf s.EndPos.X avgPortPos.Y
                 }
 
+
             let segUp = avoid newSeg i false
             let segDown = avoid newSeg i true
             let distUp = abs (avgPortPos.Y - segUp.StartPos.Y)
@@ -270,6 +271,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
             avoid newSeg i false
     )
     |> autoConnect
+
 
 let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
     let startPos = Symbol.portPos sModel wire.SrcPort
@@ -371,10 +373,49 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
         | false -> {w with Segments = smartRouting sModel w w.Segments}
     )
 
+
+
+let pathDefString (wModel: Model) (w: Wire) =  
+
+    let relMove (startSeg: WireSegment) (endSeg: WireSegment) =
+        let adjPos = 
+            match posDiff startSeg.StartPos endSeg.EndPos with
+            | relPos when  ((abs relPos.Y) <1.) ||   ((abs relPos.X) <1.)->  [posOf 0. 0.; posOf 0. 0.]      
+            | relPos when (startSeg.Direction = Horizontal) && (relPos.Y >0.) && (relPos.X > 0.) ->  [{X = -5.; Y = 0.};  {X = 0.; Y = 5.}]
+            | relPos when (startSeg.Direction = Horizontal) && (relPos.Y > 0.) -> [{X = 5.; Y = 0.};  {X = 0.; Y = 5.}]
+            | relPos when (startSeg.Direction = Horizontal) && (relPos.X > 0.) -> [{X = -5.; Y = 0.};  {X = 0.; Y = -5.}]
+            | relPos when startSeg.Direction = Horizontal -> [{X = 5.; Y = 0.};  {X = 0.; Y = -5.}]
+            | relPos when  (relPos.Y >0.) && (relPos.X > 0.) -> [{X = 0.; Y = -5.};  {X = 5.; Y = 0.}]           
+            | relPos when (relPos.Y > 0.) -> [{X = 0.; Y = -5.}; {X = -5.; Y = 0.}]
+            | relPos when relPos.X > 0. -> [{X = 0.; Y = 5.}; {X = 5.; Y = 0.}]
+            | relPos ->  [{X = 0.; Y = 5.}; {X = -5.; Y = 0.}]
+        List.map2 posDiff [startSeg.EndPos; endSeg.StartPos] adjPos
+
+    let strLst =  
+        w.Segments  
+        |> List.mapi (fun idx (s: WireSegment) -> 
+            match idx with 
+            | idx when idx = 0  -> [s.StartPos]@ (relMove s w.Segments.[1]) @ [s.EndPos]
+            | idx when idx = (List.length w.Segments - 1) ->  [s.EndPos]
+            | idx ->  (relMove s w.Segments.[idx+1]) @ [s.EndPos]
+            | _ -> failwithf "unexpected index {idx} list.length: {List.length w.Segments}"
+            )  
+        |> List.mapi (fun idx lstPos ->
+            match lstPos with
+            | [start; startCorner; endCorner; midPos] when idx = 0 -> $" M {start.X} {start.Y} L {startCorner.X} {startCorner.Y} Q {midPos.X} {midPos.Y} {endCorner.X} {endCorner.Y} L"
+            | [endPos]  when idx = (List.length w.Segments - 1) -> $" {endPos.X} {endPos.Y} " 
+            | [ startCorner; endCorner; midPos] -> $"{startCorner.X} {startCorner.Y} Q {midPos.X} {midPos.Y} {endCorner.X} {endCorner.Y} L "
+            | _ -> failwithf "Something has gone wrong in coordinate generation"
+            )
+    
+    List.fold (fun str s -> str + s) "" strLst
+
+
 let singleWireView =
     FunctionComponent.Of
         (fun (props: WireRenderProps) ->
-            // let segBBox = createSegBB props.StartPos props.EndPos 5.
+           
+            // let segBBox = createSegBB props.StartPos props.EndPos
 
             g [] [
                 // rect
@@ -390,19 +431,20 @@ let singleWireView =
                 //         SVGAttr.FillOpacity 0
                 //     ] []
 
-                line 
-                    [
-                        X1 props.StartPos.X;
-                        Y1 props.StartPos.Y;
-                        X2 props.EndPos.X;
-                        Y2 props.EndPos.Y;
+
+                path 
+                    [ 
+                        SVGAttr.D props.SegPath
                         SVGAttr.Stroke (props.WireColor.ToString())
                         SVGAttr.FillOpacity 0
                         SVGAttr.StrokeWidth props.WireWidth
-                        SVGAttr.StrokeLinecap "round"
+                        
+
                     ] []
             ]
         )
+
+
 
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
     let newWire = createWire wModel sModel port1 port2 None
@@ -573,38 +615,6 @@ let singleLabelView =
                 ][]
             ])
 
-let singleSegView =
-    FunctionComponent.Of
-        (fun (props: WireRenderProps) ->
-            // let segBBox = createSegBB props.StartPos props.EndPos 5.
-
-            g [] [
-                // rect
-                //     [
-                //         X segBBox.Pos.X
-                //         Y segBBox.Pos.Y
-                //         Rx 10.
-                //         Ry 10.
-                //         SVGAttr.Width segBBox.Width
-                //         SVGAttr.Height segBBox.Height
-                //         SVGAttr.StrokeWidth "1px"
-                //         SVGAttr.Stroke "Black"
-                //         SVGAttr.FillOpacity 0
-                //     ] []
-
-                line 
-                    [
-                        X1 props.StartPos.X;
-                        Y1 props.StartPos.Y;
-                        X2 props.EndPos.X;
-                        Y2 props.EndPos.Y;
-                        SVGAttr.Stroke (props.WireColor.ToString())
-                        SVGAttr.FillOpacity 0
-                        SVGAttr.StrokeWidth props.WireWidth
-                        SVGAttr.StrokeLinecap "round"
-                    ] []
-            ]
-        )
 
 let adjLabelPos (seg: WireSegment) : XYPos =
     match posDiff seg.StartPos seg.EndPos with
@@ -616,6 +626,7 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
         wModel.WX
         |> Map.fold (fun acc _ w ->
             let srcSeg= w.Segments.[0]
+           
             let (labelProps: LabelRenderProps) = 
                 match checkPortWidths sModel w.SrcPort w.TargetPort with 
                     | Ok width -> 
@@ -634,25 +645,18 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
                             Label =  $"x"
                             BusIdcWidth =  2. 
                         }
-
-            let segList =
-                w.Segments
-                |> List.fold (fun acc s ->
-                    let props =
-                        {
-                            Key = w.Id
-                            StartPos = s.StartPos
-                            EndPos = s.EndPos
-                            WireColor = w.WireColor
-                            WireWidth = $"%d{w.WireWidth}"
-                        }
-
-                    acc @ [singleSegView props]
-                ) []
-
-            acc @ segList
+            
+            let (props: WireRenderProps) =
+                {
+                    Key = w.Id
+                    SegPath = (pathDefString wModel w)
+                    WireColor = w.WireColor
+                    WireWidth = $"%d{w.WireWidth}"
+                }
+            acc @ [singleWireView props]
             @ if wModel.WireAnnotation && (w.WireWidth > 3) then  [(singleLabelView labelProps)] else []
-        ) [])
+        ) [] )
+
 
 let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Map<ConnectionId, Wire> =
     wireMap
