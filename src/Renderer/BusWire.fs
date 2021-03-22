@@ -546,12 +546,16 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : W
         let updatedSegs = autoRoute sModel wire
         {wire with Segments = smartRouting sModel wire updatedSegs}
 
-let updateConnections (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
-    Map.map (fun _ w -> checkPortConnections wModel sModel w) wModel.WX
-
 let updateWireValidity (wModel: Model) (sModel: Symbol.Model) (wire: Wire): Wire =
     let newWire = createWire wModel sModel wire.SrcPort wire.TargetPort (Some wire.Id)
     {newWire with Segments = wire.Segments}
+
+let updateConnections (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
+    let updatedWX = Map.map (fun _ w -> checkPortConnections wModel sModel w) wModel.WX
+    let updatedModel = {wModel with WX = updatedWX}
+
+    updatedWX
+    |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
     let newWire = createWire wModel sModel port1 port2 None
