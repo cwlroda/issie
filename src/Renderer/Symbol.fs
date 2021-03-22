@@ -323,6 +323,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             }
 
     let (inputPorts, outputPorts): (Map<PortId, Port> * Map<PortId, Port>) =
+        let offset = 10.
         match compType with
         | IOLabel ->
             let inputPortMap = 
@@ -424,7 +425,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 [{temp with 
                     PortPos =
                         {temp.PortPos with
-                            X = compW+15.
+                            X = compW + offset
                         }
                 }]
                 |> List.map (fun port -> (port.PortId, port))
@@ -442,7 +443,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 [{temp with 
                     PortPos =
                         {temp.PortPos with
-                            X = compW+15.
+                            X = compW + offset
                         }
                 }]
                 |> List.map (fun port -> (port.PortId, port))
@@ -1415,7 +1416,7 @@ let private renderSymbol (model:Model) =
                     | _ -> nothing
                 ]
 
-            let lineLength = 15.
+            let lineLength = 10.
 
             let viewPortLinesType1 (compType:ComponentType)=
                 let generateLines (portMap: Map<PortId, Port>) : ReactElement list =
@@ -1439,7 +1440,7 @@ let private renderSymbol (model:Model) =
                                     (Seq.append [
                                         Cx (absPos()).X
                                         Cy (absPos()).Y
-                                        R 3.
+                                        R 2.5
                                     ] (viewPortLinesStaticComponent port))[]
                                 let (PortWidth wid) = port.Width
                                 if selectedBool = true && (wid > 0) then
