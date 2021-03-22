@@ -549,23 +549,25 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : W
 let updateConnections (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
     Map.map (fun _ w -> checkPortConnections wModel sModel w) wModel.WX
 
+let updateWireValidity (wModel: Model) (sModel: Symbol.Model) (wire: Wire): Wire =
+    let newWire = createWire wModel sModel wire.SrcPort wire.TargetPort (Some wire.Id)
+    {newWire with Segments = wire.Segments}
+
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
     let newWire = createWire wModel sModel port1 port2 None
     let updatedSegs = autoRoute sModel newWire
-    Map.add newWire.Id {newWire with Segments = smartRouting sModel newWire updatedSegs} wModel.WX
+    let updatedWX = Map.add newWire.Id {newWire with Segments = smartRouting sModel newWire updatedSegs} wModel.WX
+    let updatedModel = {wModel with WX = updatedWX}
+
+    updatedWX
+    |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
 ///Given a connectionId deletes the given wire
 let deleteWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Map<ConnectionId, Wire> =
     let updatedModel = {wModel with WX = Map.remove wId wModel.WX}
 
     updatedModel.WX
-    |> Map.map (fun _ w ->
-        match notAvaliableInput updatedModel w.Id w.TargetPort with
-        | false ->
-            let newWire = createWire updatedModel sModel w.SrcPort w.TargetPort (Some w.Id)
-            {newWire with Segments = w.Segments}
-        | true -> w
-    )
+    |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
 let deleteWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
     let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
@@ -582,13 +584,7 @@ let deleteWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: Compone
     let updatedModel = {wModel with WX = updatedWX}
 
     updatedWX
-    |> Map.map (fun _ w ->
-        match notAvaliableInput updatedModel w.Id w.TargetPort with
-        | false ->
-            let newWire = createWire updatedModel sModel w.SrcPort w.TargetPort (Some w.Id)
-            {newWire with Segments = w.Segments}
-        | true -> w
-    )
+    |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
 let getWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
     let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
