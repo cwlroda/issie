@@ -59,7 +59,7 @@ type Msg =
     // | MouseOutPort of port : Port // Used for Dummy Code
     | HighlightPorts of pId : PortId list
     | UnhighlightPorts
-    | WidthInferrer of (PortId*PortId)
+    | CreateInference of (PortId*PortId)
     | DeleteInference of (PortId*PortId)
 
 
@@ -136,6 +136,7 @@ let allPortsInModel (symModel: Model) : Map<PortId, Port> =
             Map.add k v acc
         ) acc (combinedPortsMap elem)
     ) Map.empty
+
 
 let findSymbolFromPort (symModel: Model) (port: Port) : Symbol =
     symModel.[port.HostId]
@@ -745,13 +746,13 @@ let createNewSymbol ()  =
             let cons = rng0()
             let wid = int ((log(float cons)/log(2.))+1.)
             Constant (wid, cons)
-        | 24 -> SplitWire (rng0())
+        | 24 -> SplitWire (rng.Next(1,9))
         | _ -> Custom customComp
         
     let rng1 () = rng.Next(0,800)
     let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId ({X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName ()) + (string(rng.Next (0,10))))
+        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName ()) + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
@@ -1066,11 +1067,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         )
         ,Cmd.none
 
-    | WidthInferrer (pid1,pid2) ->
+    | CreateInference (pid1,pid2) ->
         widthInference model pid1 pid2 true, Cmd.none
 
     | DeleteInference (pid1,pid2) ->
         widthInference model pid1 pid2 false, Cmd.none
+
+    
 
     | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
 

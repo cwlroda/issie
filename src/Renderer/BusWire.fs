@@ -135,7 +135,8 @@ let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortI
         
         match srcPortWidth with
         | Some width when width <= n -> 
-            Error $"Invalid connection! Input connection requires min. {bits n}"
+            let m = n + 1
+            Error $"Invalid connection! Input connection requires min. {bits m}"
         | _ -> widthMatching
     | _ -> widthMatching
 
@@ -517,17 +518,20 @@ let fitConnection (wModel: Model) (sModel: Symbol.Model) (index: SegmentIndex) (
     let updatedWire = {wire with SelectedSegment = index; LastDragPos = segCurrentPos; Segments = wire.Segments}
     manualRouting {wModel with WX = Map.add updatedWire.Id updatedWire wModel.WX} updatedWire.Id (Symbol.portPos sModel newPortId)
 
+
+let rec findClosestPort (sModel:Symbol.Model) pos n =
+    match Symbol.portsInRange sModel pos n with
+    | [] -> None
+    | [pId] -> Some pId
+    | _ -> findClosestPort sModel pos (n-1.)
+
 let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Wire =
     let srcSegId = 0
     let tgtSegId = wire.Segments.Length - 1   
 
-    let rec findClosestPort pos n =
-        match Symbol.portsInRange sModel pos n with
-        | [] -> None
-        | [pId] -> Some pId
-        | _ -> findClosestPort pos (n-1.)
+    
 
-    match findClosestPort (wire.Segments.[srcSegId]).StartPos 15., findClosestPort (wire.Segments.[tgtSegId]).EndPos 15. with
+    match findClosestPort sModel (wire.Segments.[srcSegId]).StartPos 15., findClosestPort sModel (wire.Segments.[tgtSegId]).EndPos 15. with
     | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort ->
         fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos srcPId wire
         |> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos tgtPId
