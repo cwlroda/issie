@@ -209,8 +209,8 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
     let srcPortPos = Symbol.portPos sModel wire.SrcPort
     let tgtPortPos = Symbol.portPos sModel wire.TargetPort
     let avgPortPos = snapToGrid (midPt srcPortPos tgtPortPos)
-    let halfPortDist = snapToGrid (posHalve (posDiff tgtPortPos srcPortPos))
-    let interval = gridSize * 2.
+    let halfPortDist = posHalve (posDiff tgtPortPos srcPortPos)
+    let interval = gridSize // * 2.
 
     // checks if bounding boxes of wire segment and symbol overlap
     let collision (seg: WireSegment) : bool =
@@ -221,85 +221,96 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
         |> List.exists (fun sym -> overlaps segBBox (Symbol.symbolBBox sModel sym.Id))
 
     // reroute segments recursively
-    let rec avoid (seg: WireSegment) (index: int) (dir: bool) : WireSegment =
+    let rec avoid (seg: WireSegment) (index: int) (dir: bool) (depth: int) : WireSegment =
         let offset = if dir then gridSize else -gridSize
 
-        match collision seg with
-        | true ->
-            let newSeg =
-                match seg.Direction with
-                | Horizontal ->
-                    {seg with
-                        StartPos = posAddY seg.StartPos offset
-                        EndPos = posAddY seg.EndPos offset
-                    }
-                | Vertical ->
-                    {seg with
-                        StartPos = posAddX seg.StartPos offset
-                        EndPos = posAddX seg.EndPos offset
-                    }
+        match depth with
+        | x when x >= 50 -> seg
+        | _ ->
+            match collision seg with
+            | true ->
+                let newSeg =
+                    match seg.Direction with
+                    | Horizontal ->
+                        {seg with
+                            StartPos = posAddY seg.StartPos offset
+                            EndPos = posAddY seg.EndPos offset
+                        }
+                    | Vertical ->
+                        {seg with
+                            StartPos = posAddX seg.StartPos offset
+                            EndPos = posAddX seg.EndPos offset
+                        }
 
-            avoid newSeg index dir
-        | false -> seg
+                avoid newSeg index dir (depth + 1)
+            | false -> seg
 
     // bidirectional recursion to shorten path
-    segList
-    |> List.mapi (fun i s ->
-        match i with
-        | x when (x = 0) || (x = segList.Length - 1) -> s
-        | 1 ->
-            match segList.Length with
-            | 3 ->
-                let newSeg =
-                    {s with
-                        StartPos = posOf avgPortPos.X s.StartPos.Y 
-                        EndPos = posOf avgPortPos.X s.EndPos.Y 
-                    }
-
-                let segLeft = avoid newSeg i false
-                let segRight = avoid newSeg i true
-                let distLeft = abs (avgPortPos.X - segLeft.StartPos.X)
-                let distRight = abs (avgPortPos.X - segRight.StartPos.X)
-                let clearance = abs (halfPortDist.X) - interval
-
-                match distLeft, distRight with
-                | x, y when x >= clearance && y >= clearance -> newSeg
-                | x, _ when x < clearance -> segLeft
-                | _, y when y < clearance -> segRight
-                | _ -> if distLeft <= distRight then segLeft else segRight
-            | _ ->
-                let newSeg =
-                    {s with
-                        StartPos = posOf (srcPortPos.X + interval) s.StartPos.Y
-                        EndPos = posOf (srcPortPos.X + interval) s.EndPos.Y
-                    }
-
-                avoid newSeg i true
-        | 2 ->
-            let newSeg =
-                {s with
-                    StartPos = posOf s.StartPos.X avgPortPos.Y
-                    EndPos = posOf s.EndPos.X avgPortPos.Y
-                }
-
-
-            let segUp = avoid newSeg i false
-            let segDown = avoid newSeg i true
-            let distUp = abs (avgPortPos.Y - segUp.StartPos.Y)
-            let distDown = abs (avgPortPos.Y - segDown.StartPos.Y)
-
-            if distUp <= distDown then segUp else segDown
+    let rec routing (depth: int) (segList: WireSegment list) : WireSegment list =
+        match depth with
+        | x when x >= 5 -> segList
         | _ ->
-            let newSeg =
-                {s with
-                    StartPos = posOf (tgtPortPos.X - interval) s.StartPos.Y
-                    EndPos = posOf (tgtPortPos.X - interval) s.EndPos.Y
-                }
+            match List.exists (fun seg -> collision seg) segList with
+            | true ->
+                segList
+                |> List.mapi (fun i s ->
+                    match i with
+                    | x when (x = 0) || (x = segList.Length - 1) -> s
+                    | 1 ->
+                        match segList.Length with
+                        | 3 ->
+                            let newSeg =
+                                {s with
+                                    StartPos = posOf avgPortPos.X s.StartPos.Y 
+                                    EndPos = posOf avgPortPos.X s.EndPos.Y 
+                                }
 
-            avoid newSeg i false
-    )
-    |> autoConnect
+                            let segLeft = avoid newSeg i false 0
+                            let segRight = avoid newSeg i true 0
+                            let distLeft = abs (avgPortPos.X - segLeft.StartPos.X)
+                            let distRight = abs (avgPortPos.X - segRight.StartPos.X)
+                            let clearance = abs (halfPortDist.X) - interval
 
+                            match distLeft, distRight with
+                            | x, y when x >= clearance && y >= clearance -> newSeg
+                            | x, _ when x < clearance -> segLeft
+                            | _, y when y < clearance -> segRight
+                            | _ -> if distLeft <= distRight then segLeft else segRight
+                        | _ ->
+                            let newSeg =
+                                {s with
+                                    StartPos = posOf (srcPortPos.X + interval) s.StartPos.Y
+                                    EndPos = posOf (srcPortPos.X + interval) s.EndPos.Y
+                                }
+
+                            avoid newSeg i true 0
+                    | 2 ->
+                        let newSeg =
+                            {s with
+                                StartPos = posOf s.StartPos.X avgPortPos.Y
+                                EndPos = posOf s.EndPos.X avgPortPos.Y
+                            }
+
+                        let segUp = avoid newSeg i false 0
+                        let segDown = avoid newSeg i true 0
+                        let distUp = abs (avgPortPos.Y - segUp.StartPos.Y)
+                        let distDown = abs (avgPortPos.Y - segDown.StartPos.Y)
+
+                        if distUp <= distDown then segUp else segDown
+                    | _ ->
+                        let newSeg =
+                            {s with
+                                StartPos = posOf (tgtPortPos.X - interval) s.StartPos.Y
+                                EndPos = posOf (tgtPortPos.X - interval) s.EndPos.Y
+                            }
+
+                        avoid newSeg i false 0
+                )
+                |> autoConnect
+                |> routing (depth + 1)
+            | false -> segList
+
+    routing 0 segList
 
 let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
     let startPos = Symbol.portPos sModel wire.SrcPort
@@ -351,7 +362,7 @@ let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<Po
 let notAvaliableInput (wModel: Model) (wId: ConnectionId) (inputId: PortId): bool =
     Map.exists (fun _ w -> (w.Id <> wId) && (w.TargetPort = inputId)) wModel.WX
 
-let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort: PortId) (conId: ConnectionId Option) : Wire =
+let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort: PortId) (conId: ConnectionId Option) : Wire option =
     let createId =
         function
         | Some s -> s
@@ -359,34 +370,35 @@ let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort
 
     let wId = createId conId
 
-    let src, tgt, width, colour, err =
-        let widthValid = checkPortWidths sModel srcPort tgtPort
-        let validSrcTgt = typesValid (srcPort, tgtPort) sModel
+    let widthValid = checkPortWidths sModel srcPort tgtPort
+    let validSrcTgt = typesValid (srcPort, tgtPort) sModel
 
-        match widthValid, validSrcTgt with
-        | _, Ok (s, t) when (notAvaliableInput wModel wId t) ->
-            s, t, 5, Red,
-            Some "Invalid connection! Input ports cannot have multiple wires"
-        | Ok w, Ok (s, t) when w < 2 ->
-            s, t, 3, Blue, None
-        | Ok _, Ok (s, t) ->
-            s, t, 5, Purple, None
-        | Error errStr, Ok (s, t) ->
-            s, t, 5, Red, Some errStr
-        | _, Error errType ->
-            srcPort, tgtPort, 5, Red, Some errType
+    match validSrcTgt with
+    | Ok (s, t) ->
+        let src, tgt, width, colour, err =
+            match widthValid with
+            | _ when (notAvaliableInput wModel wId t) ->
+                s, t, 5, Red,
+                Some "Invalid connection! Input ports cannot have multiple wires"
+            | Ok w when w < 2 ->
+                s, t, 3, Blue, None
+            | Ok _ ->
+                s, t, 5, Purple, None
+            | Error errStr ->
+                s, t, 5, Red, Some errStr
 
-    {
-        Id = wId
-        SrcPort = src
-        TargetPort = tgt
-        Segments = []
-        LastDragPos = posOf 0.0 0.0
-        WireColor = colour
-        WireWidth = width
-        Error = err
-        SelectedSegment = -1
-    }
+        Some {
+            Id = wId
+            SrcPort = src
+            TargetPort = tgt
+            Segments = []
+            LastDragPos = posOf 0.0 0.0
+            WireColor = colour
+            WireWidth = width
+            Error = err
+            SelectedSegment = -1
+        }
+    | _ -> None
 
 // specific wire update when symbol updates
 let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId list) : Map<ConnectionId, Wire> =
@@ -437,27 +449,10 @@ let pathDefString (w: Wire) =
     
     List.fold (fun str s -> str + s) "" strLst
 
-
 let singleWireView =
     FunctionComponent.Of
         (fun (props: WireRenderProps) ->
-            // let segBBox = createSegBB props.StartPos props.EndPos
-
             g [] [
-                // rect
-                //     [
-                //         X segBBox.Pos.X
-                //         Y segBBox.Pos.Y
-                //         Rx 5.
-                //         Ry 5.
-                //         SVGAttr.Width segBBox.Width
-                //         SVGAttr.Height segBBox.Height
-                //         SVGAttr.StrokeWidth "1px"
-                //         SVGAttr.Stroke "Black"
-                //         SVGAttr.FillOpacity 0
-                //     ] []
-
-
                 path 
                     [ 
                         SVGAttr.D props.SegPath
@@ -537,13 +532,18 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : W
         |> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos tgtPId
     | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} //to ensure it does not get a too many wire for input port validation error triggered by itself
-        let updatedWire = createWire updatedModel sModel pId wire.TargetPort (Some wire.Id)
-        let updatedSegs = autoRoute sModel updatedWire
-        {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
+        
+        match createWire updatedModel sModel pId wire.TargetPort (Some wire.Id) with
+        | Some updatedWire ->
+            let updatedSegs = autoRoute sModel updatedWire
+            {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
+        | None -> wire
     | Some _, Some pId ->
-        let updatedWire = createWire wModel sModel pId wire.SrcPort (Some wire.Id)
-        let updatedSegs = autoRoute sModel updatedWire
-        {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
+        match createWire wModel sModel pId wire.SrcPort (Some wire.Id) with
+        | Some updatedWire ->
+            let updatedSegs = autoRoute sModel updatedWire
+            {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
+        | None -> wire
     | None, Some _ ->
         fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
     | Some _, None ->
@@ -553,8 +553,9 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : W
         {wire with Segments = smartRouting sModel wire updatedSegs}
 
 let updateWireValidity (wModel: Model) (sModel: Symbol.Model) (wire: Wire): Wire =
-    let newWire = createWire wModel sModel wire.SrcPort wire.TargetPort (Some wire.Id)
-    {newWire with Segments = wire.Segments}
+    match createWire wModel sModel wire.SrcPort wire.TargetPort (Some wire.Id) with
+    | Some newWire -> {newWire with Segments = wire.Segments}
+    | None -> wire
 
 let updateConnections (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
     let updatedWX = Map.map (fun _ w -> checkPortConnections wModel sModel w) wModel.WX
@@ -564,13 +565,15 @@ let updateConnections (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId,
     |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
-    let newWire = createWire wModel sModel port1 port2 None
-    let updatedSegs = autoRoute sModel newWire
-    let updatedWX = Map.add newWire.Id {newWire with Segments = smartRouting sModel newWire updatedSegs} wModel.WX
-    let updatedModel = {wModel with WX = updatedWX}
+    match createWire wModel sModel port1 port2 None with
+    | Some wire -> 
+        let updatedSegs = autoRoute sModel wire
+        let updatedWX = Map.add wire.Id {wire with Segments = smartRouting sModel wire updatedSegs} wModel.WX
+        let updatedModel = {wModel with WX = updatedWX}
 
-    updatedWX
-    |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
+        updatedWX
+        |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
+    | None -> wModel.WX
 
 ///Given a connectionId deletes the given wire
 let deleteWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Map<ConnectionId, Wire> =
@@ -760,7 +763,7 @@ let init () =
     {
         WX = Map.empty
         WireAnnotation = true
-    }, Cmd.none    
+    }, Cmd.none
 
 //---------------Other interface functions--------------------//
 
