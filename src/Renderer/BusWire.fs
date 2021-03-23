@@ -359,7 +359,7 @@ let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<Po
 let notAvaliableInput (wModel: Model) (wId: ConnectionId) (inputId: PortId): bool =
     Map.exists (fun _ w -> (w.Id <> wId) && (w.TargetPort = inputId)) wModel.WX
 
-let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort: PortId) (conId: ConnectionId Option) : Wire =
+let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort: PortId) (conId: ConnectionId Option) : Wire option =
     let createId =
         function
         | Some s -> s
@@ -367,34 +367,35 @@ let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort
 
     let wId = createId conId
 
-    let src, tgt, width, colour, err =
-        let widthValid = checkPortWidths sModel srcPort tgtPort
-        let validSrcTgt = typesValid (srcPort, tgtPort) sModel
+    let widthValid = checkPortWidths sModel srcPort tgtPort
+    let validSrcTgt = typesValid (srcPort, tgtPort) sModel
 
-        match widthValid, validSrcTgt with
-        | _, Ok (s, t) when (notAvaliableInput wModel wId t) ->
-            s, t, 5, Red,
-            Some "Invalid connection! Input ports cannot have multiple wires"
-        | Ok w, Ok (s, t) when w < 2 ->
-            s, t, 3, Blue, None
-        | Ok _, Ok (s, t) ->
-            s, t, 5, Purple, None
-        | Error errStr, Ok (s, t) ->
-            s, t, 5, Red, Some errStr
-        | _, Error errType ->
-            srcPort, tgtPort, 5, Red, Some errType
+    match validSrcTgt with
+    | Ok (s, t) ->
+        let src, tgt, width, colour, err =
+            match widthValid with
+            | _ when (notAvaliableInput wModel wId t) ->
+                s, t, 5, Red,
+                Some "Invalid connection! Input ports cannot have multiple wires"
+            | Ok w when w < 2 ->
+                s, t, 3, Blue, None
+            | Ok _ ->
+                s, t, 5, Purple, None
+            | Error errStr ->
+                s, t, 5, Red, Some errStr
 
-    {
-        Id = wId
-        SrcPort = src
-        TargetPort = tgt
-        Segments = []
-        LastDragPos = posOf 0.0 0.0
-        WireColor = colour
-        WireWidth = width
-        Error = err
-        SelectedSegment = -1
-    }
+        Some {
+            Id = wId
+            SrcPort = src
+            TargetPort = tgt
+            Segments = []
+            LastDragPos = posOf 0.0 0.0
+            WireColor = colour
+            WireWidth = width
+            Error = err
+            SelectedSegment = -1
+        }
+    | _ -> None
 
 // specific wire update when symbol updates
 let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId list) : Map<ConnectionId, Wire> =
@@ -525,13 +526,18 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : W
         |> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos tgtPId
     | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
         let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} //to ensure it does not get a too many wire for input port validation error triggered by itself
-        let updatedWire = createWire updatedModel sModel pId wire.TargetPort (Some wire.Id)
-        let updatedSegs = autoRoute sModel updatedWire
-        {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
+        
+        match createWire updatedModel sModel pId wire.TargetPort (Some wire.Id) with
+        | Some updatedWire ->
+            let updatedSegs = autoRoute sModel updatedWire
+            {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
+        | None -> wire
     | Some _, Some pId ->
-        let updatedWire = createWire wModel sModel pId wire.SrcPort (Some wire.Id)
-        let updatedSegs = autoRoute sModel updatedWire
-        {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
+        match createWire wModel sModel pId wire.SrcPort (Some wire.Id) with
+        | Some updatedWire ->
+            let updatedSegs = autoRoute sModel updatedWire
+            {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
+        | None -> wire
     | None, Some _ ->
         fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
     | Some _, None ->
@@ -541,8 +547,9 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : W
         {wire with Segments = smartRouting sModel wire updatedSegs}
 
 let updateWireValidity (wModel: Model) (sModel: Symbol.Model) (wire: Wire): Wire =
-    let newWire = createWire wModel sModel wire.SrcPort wire.TargetPort (Some wire.Id)
-    {newWire with Segments = wire.Segments}
+    match createWire wModel sModel wire.SrcPort wire.TargetPort (Some wire.Id) with
+    | Some newWire -> {newWire with Segments = wire.Segments}
+    | None -> wire
 
 let updateConnections (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
     let updatedWX = Map.map (fun _ w -> checkPortConnections wModel sModel w) wModel.WX
@@ -552,13 +559,15 @@ let updateConnections (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId,
     |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
-    let newWire = createWire wModel sModel port1 port2 None
-    let updatedSegs = autoRoute sModel newWire
-    let updatedWX = Map.add newWire.Id {newWire with Segments = smartRouting sModel newWire updatedSegs} wModel.WX
-    let updatedModel = {wModel with WX = updatedWX}
+    match createWire wModel sModel port1 port2 None with
+    | Some wire -> 
+        let updatedSegs = autoRoute sModel wire
+        let updatedWX = Map.add wire.Id {wire with Segments = smartRouting sModel wire updatedSegs} wModel.WX
+        let updatedModel = {wModel with WX = updatedWX}
 
-    updatedWX
-    |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
+        updatedWX
+        |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
+    | None -> wModel.WX
 
 ///Given a connectionId deletes the given wire
 let deleteWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Map<ConnectionId, Wire> =
