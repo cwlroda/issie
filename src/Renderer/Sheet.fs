@@ -596,19 +596,27 @@ let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     ) ([], localCounter)
 
                 let updatedCL =
-                    {
-                        model.CopyList with
-                            Symbols = updatedSyms
-                    }
+                    { model.CopyList with Symbols = updatedSyms }
+
+                let pasteModel =
+                    let msg = Symbol.SetSelected []
+
+                    fst (
+                        fst (
+                            {model with
+                                Symbol = fst (Symbol.update msg model.Symbol)
+                            }
+                            |> update (PasteSymbols updatedSyms)
+                        )
+                        |> update (PasteWires (offset, model.CopyList.Wires))
+                    )
+
                 let updatedModel =
                     {
-                        fst (
-                            fst (update (PasteSymbols updatedSyms) model)
-                            |> update (PasteWires (offset, model.CopyList.Wires))
-                        )
-                        with
+                        pasteModel with
                             CopyList = updatedCL
                             GlobalCounter = newCounter
+                            Selection = Symbols (Symbol.getSelectedSymbols pasteModel.Symbol)
                     }
 
                 updatedModel,

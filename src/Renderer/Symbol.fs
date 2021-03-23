@@ -165,6 +165,12 @@ let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     |> Map.toList
     |> List.map fst
 
+let getSelectedSymbols (symModel: Model) : ComponentId list =
+    symModel
+    |> Map.filter (fun _ s -> s.Selected)
+    |> Map.toList
+    |> List.map fst
+
 let findPort (symModel: Model) (portId: PortId) : Port =
     (allPortsInModel symModel).[portId]
 
@@ -926,7 +932,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 IsDragging = false
                 Id = compId
                 Component = comp
-                Selected = false
+                Selected = true
             }
         
         Map.add compId sym model, Cmd.none
