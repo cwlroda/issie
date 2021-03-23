@@ -889,10 +889,11 @@ let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         , Cmd.map Wire wCmd
     | PasteSymbols sIdLst ->
         let sModel =
-            List.fold (fun acc (sType, p, sLabel) ->
+            sIdLst
+            |> List.fold (fun acc (sType, p, sLabel) ->
                 let msg = Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)
                 fst (Symbol.update msg acc)
-            ) model.Symbol sIdLst
+            ) model.Symbol
 
         { model with Symbol = sModel }, Cmd.none
     | PasteWires (offset, pIdLst) ->
