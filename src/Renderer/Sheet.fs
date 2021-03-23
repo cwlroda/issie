@@ -31,7 +31,7 @@ type CopyElements =
     }
 
 type CopyState =
-    | Copied of CopyElements
+    | Copied
     | Uninitialized
     
 type Model = {
@@ -40,6 +40,8 @@ type Model = {
     DragState: DragState
     Selection: SelectionState
     CopyState: CopyState
+    CopyList: CopyElements
+    GlobalCounter: int
     MousePosition: XYPos
     PanX: float
     PanY: float
@@ -541,11 +543,9 @@ let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let sCopyDataLst = 
                     sIdLst
                     |> List.map (fun sId ->
-                        (
-                            Symbol.symbolType model.Symbol sId,
-                            (Symbol.symbolBBox model.Symbol sId).Pos,
-                            (Symbol.symbolLabel model.Symbol sId) + "_copy"
-                        )
+                        Symbol.symbolType model.Symbol sId,
+                        (Symbol.symbolBBox model.Symbol sId).Pos,
+                        Symbol.symbolLabel model.Symbol sId
                     )
 
                 let (_, ref, _) = sCopyDataLst.Head
@@ -568,8 +568,9 @@ let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     |> List.map (fun (sId, p, l) -> (sId, posDiff p topLeftOfSymbols, l))
 
                 { model with
-                    CopyState =
-                        Copied {
+                    CopyState = Copied 
+                    CopyList =
+                        {
                             Symbols = sCopyDataLst
                             Wires = pCopyDataLst
                             RefPt = ref
@@ -579,15 +580,38 @@ let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             , Cmd.none
         | AltV ->
             match model.CopyState with
-            | Copied state ->
+            | Copied ->
                 let offset =
-                    let (_, pos, _) = state.Symbols.Head
-                    posDiff (snapToGrid (posAdd pos model.MousePosition)) state.RefPt
-                    
-                fst (
-                    fst (update (PasteSymbols state.Symbols) model)
-                    |> update (PasteWires (offset, state.Wires))
-                ),
+                    let (_, pos, _) = model.CopyList.Symbols.Head
+                    posDiff (snapToGrid (posAdd pos model.MousePosition)) model.CopyList.RefPt
+                
+                let localCounter = model.GlobalCounter
+
+                let updatedSyms, newCounter =
+                    model.CopyList.Symbols
+                    |> List.fold (fun (lst, count) (x, y, label) ->
+                        let newCount = count + 1
+                        lst @ [(x, y, incrementLabels label newCount)],
+                        newCount
+                    ) ([], localCounter)
+
+                let updatedCL =
+                    {
+                        model.CopyList with
+                            Symbols = updatedSyms
+                    }
+                let updatedModel =
+                    {
+                        fst (
+                            fst (update (PasteSymbols updatedSyms) model)
+                            |> update (PasteWires (offset, model.CopyList.Wires))
+                        )
+                        with
+                            CopyList = updatedCL
+                            GlobalCounter = newCounter
+                    }
+
+                updatedModel,
                 Cmd.batch (
                     [
                         Cmd.ofMsg (Wire (BusWire.AddSymbol))  
@@ -659,11 +683,16 @@ let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     clickCmds
                 ]
             | MouseButton.Right ->
-                { model with Selection=Empty }
+                let localCounter = model.GlobalCounter + 1
+
+                { model with
+                    Selection = Empty
+                    GlobalCounter = localCounter
+                }
                 , Cmd.batch [
                     cmds
                     discardSelectionsCmd
-                    Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and_01")))
+                    Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and_" + string(localCounter))))
                     Cmd.ofMsg (Wire (BusWire.AddSymbol))
                     Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                 ]
@@ -939,6 +968,13 @@ let init () =
         Selection = Empty
         DragState = NotDragging
         CopyState = Uninitialized
+        CopyList =
+            {
+                Symbols = []
+                Wires = []
+                RefPt = posOf 0. 0.
+            }
+        GlobalCounter = 0
         MousePosition = posOf 0. 0.
         PanX = 0.
         PanY = 0.
@@ -952,3 +988,5 @@ let init () =
         Cmd.map Symbol sCmds
         Cmd.map Wire wCmds
     ]
+
+

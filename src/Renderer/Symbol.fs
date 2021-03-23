@@ -752,7 +752,7 @@ let createNewSymbol ()  =
     let rng1 () = rng.Next(0,800)
     let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName ()) + (string(rng.Next (0,10))))
+        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName ()) + "_" + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
@@ -1165,7 +1165,7 @@ let private renderSymbol (model:Model) =
                 seq{Style [
                         UserSelect UserSelectOptions.None
                         TextAnchor txtAnchor
-                        FontSize "14px"
+                        FontSize "10px"
                         Fill txtColor
                         // FontFamily "system-ui"
                         FontStyle "italic"
@@ -1186,26 +1186,26 @@ let private renderSymbol (model:Model) =
                 let outputString = 
                     match width with
                     | x when x < 100. ->
-                        processingString fullName 5
+                        processingString fullName 7
                     | x when x < 150. ->
-                        processingString fullName 6
-                    | x when x < 200. ->
                         processingString fullName 8
-                    | _ ->
+                    | x when x < 200. ->
                         processingString fullName 10
+                    | _ ->
+                        processingString fullName 12
 
                 match componentType with 
                 |Input _ |Constant _ ->
                     text 
                         (Seq.append [
                             X (bottomLeft.X + 3.)
-                            Y (bottomLeft.Y - 17.)
+                            Y (bottomLeft.Y - 12.)
                         ] viewboxExternalStaticLabelStyle) [str <| outputString]
                 |_ -> 
                     text 
                         (Seq.append [
                             X (bottomRight.X - 3.)
-                            Y (bottomRight.Y - 17.)
+                            Y (bottomRight.Y - 12.)
                         ] viewboxExternalStaticLabelStyle) [str <| outputString]
 
             let viewBoxClock (bottomLeft:XYPos): ReactElement =
