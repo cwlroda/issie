@@ -176,13 +176,13 @@ let portPos (symModel: Model) (portId: PortId) : XYPos =
         Y = foundPort.PortPos.Y + foundSymbol.Component.Y
     }
 
-let getTargetedPort (symModel:Model) (pos:XYPos) : PortId Option =
+let getTargetedPort (symModel: Model) (pos: XYPos) : PortId Option =
     let nearbyPorts = 
         allPortsInModel symModel
         |> Map.filter
             (fun _ port ->
                 portPos symModel port.PortId
-                |> posDist pos < 20.
+                |> posDist pos < 10.
             )
         |> Map.toList
         |> List.map snd
@@ -312,7 +312,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 Hover = PortHover false
                 Width = portWidth
             }
-        |false ->
+        | false ->
             {
                 PortId = PortId (uuid())
                 PortNumber =  None

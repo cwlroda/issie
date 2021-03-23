@@ -608,6 +608,16 @@ let getWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentI
         | _ -> true
     )
 
+let getConnectedWires (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
+    let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
+
+    wModel.WX
+    |> Map.filter (fun _ v ->
+        match List.contains v.SrcPort pIdList, List.contains v.TargetPort pIdList with
+        | true, true -> true
+        | _ -> false
+    )
+
 /// Update the colour on the given wire
 let setWireColor (wModel: Model) (wId: ConnectionId) (c: HighLightColor): Wire =
     {findWire wModel wId with WireColor = c}

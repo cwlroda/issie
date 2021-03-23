@@ -23,8 +23,15 @@ type SelectionState =
     | Symbols of CommonTypes.ComponentId list
     | Empty
 
+type CopyElements =
+    {
+        Symbols: (CommonTypes.ComponentType * XYPos * string) list
+        Wires: (XYPos * XYPos) list
+        RefPt: XYPos
+    }
+
 type CopyState =
-    | Copied of (CommonTypes.ComponentType * XYPos * string) list
+    | Copied of CopyElements
     | Uninitialized
     
 type Model = {
@@ -67,6 +74,8 @@ type Msg =
     | Symbol of Symbol.Msg
     | KeyPress of KeyboardMsg
     | MouseMsg of MouseT * Modifier
+    | PasteSymbols of (CommonTypes.ComponentType * XYPos * string) list
+    | PasteWires of XYPos * (XYPos * XYPos) list
 
 /// Constants that will be turned into settings at a later date
 let gridSize = 10
@@ -89,17 +98,21 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         dispatch
         <| MouseMsg(
             { 
-                Button = match ev.button with
-                         | 0. -> MouseButton.Left
-                         | 1. -> MouseButton.Middle
-                         | 2. -> MouseButton.Right
-                         | _ -> MouseButton.Unknown
+                Button =
+                    match ev.button with
+                    | 0. -> MouseButton.Left
+                    | 1. -> MouseButton.Middle
+                    | 2. -> MouseButton.Right
+                    | _ -> MouseButton.Unknown
                 Op = op
                 /// Have to adjust the mouse position because of the border
                 /// to ensure that the top left is (0, 0) for the mouse
                 Pos =
-                    { X = (ev.clientX - borderSize - panX) / model.Zoom
-                      Y = (ev.clientY - borderSize - panY) / model.Zoom } },
+                    {
+                        X = (ev.clientX - borderSize - panX) / model.Zoom
+                        Y = (ev.clientY - borderSize - panY) / model.Zoom
+                    } 
+            },
             if ev.ctrlKey then
                 Control
             else
@@ -230,32 +243,34 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         | _ -> "grab"
     
     div [ Style [
-              Height heightInPixels
-              Width widthInPixels
-              Border (sprintf "%fpx solid green" borderSize)
-              CSSProp.OverflowX OverflowOptions.Hidden
-              CSSProp.OverflowY OverflowOptions.Hidden
-              CSSProp.Cursor cursorType
+            Height heightInPixels
+            Width widthInPixels
+            Border (sprintf "%fpx solid green" borderSize)
+            CSSProp.OverflowX OverflowOptions.Hidden
+            CSSProp.OverflowY OverflowOptions.Hidden
+            CSSProp.Cursor cursorType
           ]
-    ] [ svg [ Style [
-                  Height heightInPixels
-                  Width widthInPixels
-              ]
-              OnMouseDown(fun ev -> (mouseOp Down ev))
-              OnMouseUp(fun ev -> (mouseOp Up ev))
-              OnMouseMove(fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
-              OnMouseLeave(fun ev -> mouseOp Leave ev)] [
+    ] [ svg [
+            Style [
+                Height heightInPixels
+                Width widthInPixels
+            ]
+            OnMouseDown(fun ev -> (mouseOp Down ev))
+            OnMouseUp(fun ev -> (mouseOp Up ev))
+            OnMouseMove(fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
+            OnMouseLeave(fun ev -> mouseOp Leave ev)
+        ] [
             g [ Style [ Transform (sprintf "translate(%fpx,%fpx) scale(%f)" model.PanX model.PanY model.Zoom) ] ] [  // top-level transform style attribute for zoom
-                    gridlines
-                    svgReact
-                    actionOverlay
-                    errorOverlay
+                gridlines
+                svgReact
+                actionOverlay
+                errorOverlay
             ]
         ]
     ]
 
 
-let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
+let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     let deselectSymbolsCmd =
         Cmd.ofMsg (Symbol (Symbol.SetSelected []))
 
@@ -487,38 +502,36 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 PanY = panY
             }, Cmd.none
         | DEL ->
-            { model with Selection = Empty;DragState=NotDragging }
-            , match model.Selection with
-              | SelectionState.Wire wId ->
-                  let wire = (BusWire.findWire model.Wire wId)
-                  let inference = batchInfer wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete []
-                  Cmd.batch 
+            { model with Selection = Empty;DragState=NotDragging },
+            match model.Selection with
+            | SelectionState.Wire wId ->
+                let wire = (BusWire.findWire model.Wire wId)
+                let inference = batchInfer wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete []
+                Cmd.batch 
                     (inference @ 
-                      [
-                        Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
-                        Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
-                      ]
+                        [
+                            Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
+                            Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
+                        ]
                     )
-              | Symbols sIdLst ->
-                  let widthInf = 
+            | Symbols sIdLst ->
+                let widthInf = 
                     BusWire.getWiresOfSymbols model.Wire model.Symbol sIdLst
-                          |> Map.toList
-                          |> List.map (fun (_ , wire) ->
-                            batchInfer wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete []
-                          )
-                          |> List.toSeq
-                          |> List.concat
-                  let remainingMsg = 
+                    |> Map.toList
+                    |> List.map (fun (_, wire) ->
+                        batchInfer wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete []
+                    )
+                    |> List.toSeq
+                    |> List.concat
+                let remainingMsg = 
                     [
-                      Cmd.ofMsg (Wire (BusWire.DeleteSymbols sIdLst))
-                      Cmd.ofMsg (Symbol (Symbol.DeleteSymbols sIdLst))
-                      Cmd.ofMsg (Wire (BusWire.RoutingUpdate))
-                      Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
+                        Cmd.ofMsg (Wire (BusWire.DeleteSymbols sIdLst))
+                        Cmd.ofMsg (Symbol (Symbol.DeleteSymbols sIdLst))
+                        Cmd.ofMsg (Wire (BusWire.RoutingUpdate))
+                        Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                     ]
-                  Cmd.batch (widthInf @ remainingMsg)
-                  
-                  
-              | Empty -> Cmd.none
+                Cmd.batch (widthInf @ remainingMsg)
+            | Empty -> Cmd.none
         | AltC ->
             match model.Selection with
             | Symbols sIdLst ->
@@ -532,6 +545,13 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         )
                     )
 
+                let (_, ref, _) = sCopyDataLst.Head
+
+                let pCopyDataLst =
+                    BusWire.getConnectedWires model.Wire model.Symbol sIdLst
+                    |> Map.toList
+                    |> List.map (fun (_, w) -> Symbol.portPos model.Symbol w.SrcPort, Symbol.portPos model.Symbol w.TargetPort)
+
                 let topLeftOfSymbols =
                     let middle lst = List.min lst + (List.max lst - List.min lst) / 2.
 
@@ -544,23 +564,34 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     sCopyDataLst
                     |> List.map (fun (sId, p, l) -> (sId, posDiff p topLeftOfSymbols, l))
 
-                { model with CopyState=CopyState.Copied sCopyDataLst }
+                { model with
+                    CopyState =
+                        Copied {
+                            Symbols = sCopyDataLst
+                            Wires = pCopyDataLst
+                            RefPt = ref
+                        }
+                }
             | _ -> model
             , Cmd.none
         | AltV ->
-            model,
             match model.CopyState with
-            | Copied sIdLst ->
+            | Copied state ->
+                let offset =
+                    let (_, pos, _) = state.Symbols.Head
+                    posDiff (snapToGrid (posAdd pos model.MousePosition)) state.RefPt
+                    
+                fst (
+                    fst (update (PasteSymbols state.Symbols) model)
+                    |> update (PasteWires (offset, state.Wires))
+                ),
                 Cmd.batch (
-                    List.map (fun (sType, p, sLabel) ->
-                        Cmd.ofMsg (Symbol (Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)))
-                    ) sIdLst
-                    @ [
-                            Cmd.ofMsg (Wire (BusWire.AddSymbol))  
-                            Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
-                        ]
+                    [
+                        Cmd.ofMsg (Wire (BusWire.AddSymbol))  
+                        Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
+                    ]                    
                 )
-            | Uninitialized -> Cmd.none
+            | Uninitialized -> model, Cmd.none
         | AltZ ->
             match model.UndoList with
             | [] -> model, Cmd.none
@@ -606,9 +637,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             
 
     let handleMouseMsg mT modifier =
-        
-
-
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, mods) ->
             let discardSelectionsCmd =
@@ -808,13 +836,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                                 [saveStateIfDraggedCmd didDrag prevWireModel]
                             )
                     | None -> nullCase
-
-                
-                
-
-                
-
-                
             | DragState.Symbol (didDrag, prevWireModel) ->
                 newModel, Cmd.batch [
                     Cmd.ofMsg (Symbol (Symbol.EndDragging))
@@ -823,18 +844,18 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 ]
             | DragState.WireCreation (pIdStart, p) ->
                 let targetedPort = Symbol.getTargetedPort model.Symbol p
-                { newModel with Selection = Empty }
-                , match targetedPort with
-                  | Some pIdEnd when pIdEnd <> pIdStart ->
-                      let inferred = batchInfer pIdStart pIdEnd CommonTypes.CreateOrDelete.Create []
+                { newModel with Selection = Empty },
+                match targetedPort with
+                | Some pIdEnd when pIdEnd <> pIdStart ->
+                    let inferred = batchInfer pIdStart pIdEnd CommonTypes.CreateOrDelete.Create []
 
-                      Cmd.batch 
+                    Cmd.batch 
                         (inferred @ [
-                          Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
-                          Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
+                            Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
+                            Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                         ])
-                      
-                  | _ -> Cmd.none
+
+                | _ -> Cmd.none
             | DragState.Pan (origPan, panStart, panEnd) ->
                 updatePan newModel origPan panStart panEnd
                 , Cmd.none
@@ -853,8 +874,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     match msg with
     | SaveState savedSubModel ->
         { model with
-            UndoList=List.truncate undoHistorySize <| savedSubModel :: model.UndoList
-            RedoList=[]
+            UndoList = List.truncate undoHistorySize <| savedSubModel :: model.UndoList
+            RedoList = []
         }, Cmd.none
     | Symbol sMsg ->
         let sModel, sCmd = Symbol.update sMsg model.Symbol
@@ -866,6 +887,27 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
         { model with Wire = wModel }
         , Cmd.map Wire wCmd
+    | PasteSymbols sIdLst ->
+        let sModel =
+            List.fold (fun acc (sType, p, sLabel) ->
+                let msg = Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)
+                fst (Symbol.update msg acc)
+            ) model.Symbol sIdLst
+
+        { model with Symbol = sModel }, Cmd.none
+    | PasteWires (offset, pIdLst) ->
+        let wModel =
+            pIdLst
+            |> List.fold (fun acc (srcPos, tgtPos) ->
+                match Symbol.getTargetedPort model.Symbol (posAdd srcPos offset),
+                    Symbol.getTargetedPort model.Symbol (posAdd tgtPos offset) with
+                | Some srcPort, Some tgtPort ->
+                    let msg = BusWire.AddWire (srcPort, tgtPort)
+                    fst (BusWire.update msg acc model.Symbol)
+                | _ -> acc
+            ) model.Wire
+
+        { model with Wire = wModel }, Cmd.none
     | KeyPress k -> handleKeyPress k
     | MouseMsg (mT, modifier) -> handleMouseMsg mT modifier
 
