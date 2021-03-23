@@ -66,7 +66,7 @@ type BBox = {
 
 let toBBox x y w h: BBox =
     {
-        Pos = snapToGrid (posOf x y)
+        Pos = posOf x y
         Width = w
         Height = h
     }
@@ -196,9 +196,4 @@ let printStats() =
 /// these determine the size of the canvas relative to the objects on it.
 let canvasUnscaledDimensions : XYPos = 
     {X = 1000. ; Y = 1000.}
-
-
-
-
-    
 

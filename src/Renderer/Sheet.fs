@@ -65,6 +65,7 @@ type KeyboardMsg =
     | CtrlEqual
     | CtrlMinus
     | INS
+    | AltShiftD
 
 type Modifier =
     | Control
@@ -653,23 +654,26 @@ let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             { model with Selection = Empty;DragState=NotDragging },
             Cmd.batch [
                 let rng = System.Random 0
-                let pList =
+                let inList, outList =
                     Symbol.allPortsInModel model.Symbol
                     |> Map.toList
-                    |> List.map fst
-                let n = pList.Length
+                    |> List.partition (fun (_, p) -> p.PortType = CommonTypes.PortType.Output)
+
+                let inList, outList =
+                    inList |> List.map fst,
+                    outList |> List.map fst
+
+                let n = min inList.Length outList.Length
 
                 let s1, s2 =
-                    match rng.Next(0, n-1), rng.Next(0, n-2) with
-                    | r1, r2 when r1 = r2 -> 
-                        pList.[r1], pList.[n-1] // prevents wire target and source being same
-                    | r1, r2 -> 
-                        pList.[r1], pList.[r2]
+                    outList.[rng.Next(0, n-1)],
+                    inList.[rng.Next(0, n-1)]
                 
                 Cmd.ofMsg (Wire (BusWire.AddWire (s1, s2)))
                 Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
             ]
-            
+        | AltShiftD ->
+            model, Cmd.ofMsg (Wire (BusWire.Debug))
 
     let handleMouseMsg mT modifier =
         match (mT.Op, mT.Pos, modifier) with

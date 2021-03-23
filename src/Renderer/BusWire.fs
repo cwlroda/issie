@@ -43,6 +43,7 @@ type Model =
     {
         WX: Map<ConnectionId, Wire>
         WireAnnotation: bool
+        Debug: bool
     }
 
 type Msg =
@@ -59,6 +60,7 @@ type Msg =
     | Dragging of wId: ConnectionId * pos: XYPos
     | EndDrag
     | RoutingUpdate
+    | Debug
 
 
 type WireRenderProps =
@@ -76,6 +78,13 @@ type LabelRenderProps =
         ColorLabel: string
         Pos: XYPos
         BusIdcWidth: float
+    }
+
+type SegBBRenderProps =
+    {
+        key: ConnectionId
+        StartPos: XYPos
+        EndPos: XYPos
     }
 
 /// Takes as input a relative position between two points and outputs true if the two original points are horzontal and false otherwise
@@ -210,7 +219,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
     let tgtPortPos = Symbol.portPos sModel wire.TargetPort
     let avgPortPos = snapToGrid (midPt srcPortPos tgtPortPos)
     let halfPortDist = posHalve (posDiff tgtPortPos srcPortPos)
-    let interval = gridSize // * 2.
+    let interval = gridSize
 
     // checks if bounding boxes of wire segment and symbol overlap
     let collision (seg: WireSegment) : bool =
@@ -225,7 +234,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
         let offset = if dir then gridSize else -gridSize
 
         match depth with
-        | x when x >= 50 -> seg
+        | x when x >= 40 -> seg
         | _ ->
             match collision seg with
             | true ->
@@ -248,7 +257,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
     // bidirectional recursion to shorten path
     let rec routing (depth: int) (segList: WireSegment list) : WireSegment list =
         match depth with
-        | x when x >= 5 -> segList
+        | x when x >= 3 -> segList
         | _ ->
             match List.exists (fun seg -> collision seg) segList with
             | true ->
@@ -524,8 +533,6 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : W
     let srcSegId = 0
     let tgtSegId = wire.Segments.Length - 1   
 
-    
-
     match findClosestPort sModel (wire.Segments.[srcSegId]).StartPos 15., findClosestPort sModel (wire.Segments.[tgtSegId]).EndPos 15. with
     | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort ->
         fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos srcPId wire
@@ -548,9 +555,9 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : W
         fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
     | Some _, None ->
         fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos wire.TargetPort wire
-    | None, None ->
-        let updatedSegs = autoRoute sModel wire
-        {wire with Segments = smartRouting sModel wire updatedSegs}
+    | None, None -> wire
+        // let updatedSegs = autoRoute sModel wire
+        // {wire with Segments = smartRouting sModel wire updatedSegs}
 
 let updateWireValidity (wModel: Model) (sModel: Symbol.Model) (wire: Wire): Wire =
     match createWire wModel sModel wire.SrcPort wire.TargetPort (Some wire.Id) with
@@ -656,6 +663,27 @@ let endDrag (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
     let updatedModel = {wModel with WX = updateConnections wModel sModel}
     setUnselectedColor updatedModel
 
+let singleSegBBView =
+    FunctionComponent.Of
+        (fun (props: SegBBRenderProps) ->
+            let segBBox = createSegBB props.StartPos props.EndPos 5.
+
+            g [] [
+                rect
+                    [
+                        X segBBox.Pos.X
+                        Y segBBox.Pos.Y
+                        Rx 5.
+                        Ry 5.
+                        SVGAttr.Width segBBox.Width
+                        SVGAttr.Height segBBox.Height
+                        SVGAttr.StrokeWidth "1px"
+                        SVGAttr.Stroke "Black"
+                        SVGAttr.FillOpacity 0
+                    ] []
+            ]
+        )
+
 let singleLabelView =
     FunctionComponent.Of
         (fun (props: LabelRenderProps) ->
@@ -694,7 +722,7 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
         wModel.WX
         |> Map.fold (fun acc _ w ->
             let srcSeg= w.Segments.[0]
-           
+
             let (labelProps: LabelRenderProps) = 
                 match checkPortWidths sModel w.SrcPort w.TargetPort with 
                     | Ok width -> 
@@ -721,8 +749,22 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
                     WireColor = w.WireColor
                     WireWidth = $"%d{w.WireWidth}"
                 }
+
+            let segBBox =
+                w.Segments
+                |> List.fold (fun acc s ->
+                    let (segBBProps: SegBBRenderProps) =
+                        {
+                            key = ConnectionId (uuid())
+                            StartPos = s.StartPos
+                            EndPos = s.EndPos
+                        }
+                    acc @ [singleSegBBView segBBProps]
+                ) []
+                
             acc @ [singleWireView props]
             @ if wModel.WireAnnotation && (w.WireWidth > 3) then  [(singleLabelView labelProps)] else []
+            @ if wModel.Debug then segBBox else []
         ) [] )
 
 
@@ -768,11 +810,14 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
         { model with WX = wxUpdated }, Cmd.none
     | RoutingUpdate ->
         { model with WX = routingUpdate sModel model.WX }, Cmd.none
+    | Debug ->
+        { model with Debug = not model.Debug }, Cmd.none
 ///Dummy function to initialize for demo
 let init () =
     {
         WX = Map.empty
         WireAnnotation = true
+        Debug = false
     }, Cmd.none
 
 //---------------Other interface functions--------------------//
