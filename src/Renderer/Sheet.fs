@@ -41,6 +41,7 @@ type Model = {
     Height: float
     UndoList: SubModel list
     RedoList: SubModel list
+    Offset: (XYPos * CommonTypes.PortType) Option
 }
 
 type KeyboardMsg =
@@ -289,14 +290,16 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
     let handleInterruptAction model =
         let newModel = {model with DragState=NotDragging}
-
+//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         match model.DragState with
         | AreaSelect _ -> newModel, Cmd.none
         | DragState.Wire (didDrag, prevSubModel) ->
+            
             newModel, Cmd.batch [
                 Cmd.ofMsg (Wire (BusWire.EndDrag))
                 saveStateIfDraggedCmd didDrag prevSubModel
             ]
+
         | DragState.Symbol (didDrag, prevSubModel) ->
             newModel, Cmd.batch [
                 Cmd.ofMsg (Symbol (Symbol.EndDragging))
@@ -364,7 +367,43 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 deselectSymbolsCmd
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
+    let rec batchInfer (pIdStart:CommonTypes.PortId) (pIdEnd:CommonTypes.PortId) (createOrDelete:CommonTypes.CreateOrDelete) (visited:CommonTypes.PortId list): Cmd<Msg> List =
+        let createDeleteMsg = 
+            match createOrDelete with
+            | CommonTypes.CreateOrDelete.Create -> Symbol.CreateInference (pIdStart,pIdEnd)
+            | CommonTypes.CreateOrDelete.Delete -> Symbol.DeleteInference (pIdStart,pIdEnd)
 
+        let tgtSymbol = 
+            Symbol.findPort model.Symbol pIdEnd
+            |> Symbol.findSymbolFromPort model.Symbol
+
+        let listOfConnections = 
+            tgtSymbol.Component.OutputPorts
+            |> Map.toList
+            |> List.map (fun (newSrcPId, _) -> 
+                newSrcPId
+                |> BusWire.getAllPidEnds model.Wire
+                |> List.filter (fun newTgtPort -> 
+                    let newTgtSymbol = 
+                        Symbol.findPort model.Symbol newTgtPort
+                        |> Symbol.findSymbolFromPort model.Symbol
+                    match newTgtSymbol.Component.Type with
+                    | CommonTypes.SplitWire _ | CommonTypes.BusSelection _  -> true
+                    | comp when comp = CommonTypes.MergeWires -> true
+                    | comp when comp = CommonTypes.IOLabel -> true
+                    | _ -> false
+                )
+                |> List.map (fun newTgtPId -> (newSrcPId, newTgtPId))
+            )
+            |> List.toSeq
+            |> List.concat
+        match listOfConnections with
+        | [] -> [Cmd.ofMsg (Symbol createDeleteMsg)]
+        | _ -> 
+            match (List.tryFind (fun i -> i=pIdStart) visited) with
+            |None ->
+                List.fold (fun acc (newPIdStart, newPIdEnd) -> acc @ (batchInfer newPIdStart newPIdEnd createOrDelete (visited @ [pIdStart]))) [Cmd.ofMsg (Symbol createDeleteMsg)] listOfConnections
+            |Some _ -> [Cmd.ofMsg (Symbol createDeleteMsg)]
     let handleKeyPress key =
         let highlightingAfterUndoAndRedoCmd model =
             Cmd.batch [
@@ -386,7 +425,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     ]
             ]
-
+    
         match key with
         | AltA ->
             let selectedSymbols = Symbol.getAllSymbols model.Symbol
@@ -451,21 +490,24 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             { model with Selection = Empty;DragState=NotDragging }
             , match model.Selection with
               | SelectionState.Wire wId ->
-                  Cmd.batch [
-                      let wire = (BusWire.findWire model.Wire wId)
-                      
-                      Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
-                      Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort,wire.TargetPort)))
-                      Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
-                  ]
+                  let wire = (BusWire.findWire model.Wire wId)
+                  let inference = batchInfer wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete []
+                  Cmd.batch 
+                    (inference @ 
+                      [
+                        Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
+                        Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
+                      ]
+                    )
               | Symbols sIdLst ->
                   let widthInf = 
                     BusWire.getWiresOfSymbols model.Wire model.Symbol sIdLst
                           |> Map.toList
                           |> List.map (fun (_ , wire) ->
-                            Cmd.ofMsg (Symbol (Symbol.DeleteInference (wire.SrcPort,wire.TargetPort)))
+                            batchInfer wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete []
                           )
-                          |> Seq.ofList
+                          |> List.toSeq
+                          |> List.concat
                   let remainingMsg = 
                     [
                       Cmd.ofMsg (Wire (BusWire.DeleteSymbols sIdLst))
@@ -473,7 +515,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                       Cmd.ofMsg (Wire (BusWire.RoutingUpdate))
                       Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                     ]
-                  Cmd.batch (Seq.append widthInf remainingMsg)
+                  Cmd.batch (widthInf @ remainingMsg)
                   
                   
               | Empty -> Cmd.none
@@ -564,6 +606,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             
 
     let handleMouseMsg mT modifier =
+        
+
+
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, mods) ->
             let discardSelectionsCmd =
@@ -621,7 +666,20 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 | DragState.Wire (_, prevWireModel) ->
                     match model.Selection with
                     | SelectionState.Wire wId ->
-                        { model with DragState=DragState.Wire (true, prevWireModel) }
+                        let currentMousePos = model.MousePosition
+                        let w = BusWire.findWire model.Wire wId
+                        let selSeg = w.SelectedSegment
+                        let offset = 
+                            match selSeg with
+                            | x when x = 0 -> 
+                                Some ((posDiff currentMousePos (List.item x w.Segments).StartPos),CommonTypes.PortType.Output)
+                            | x when x = w.Segments.Length - 1 -> 
+                                Some ((posDiff (List.item x w.Segments).EndPos currentMousePos),CommonTypes.PortType.Input)
+                            |_ -> None 
+                        { model with 
+                            DragState=DragState.Wire (true, prevWireModel)
+                            Offset = offset 
+                        }
                         , Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
                     | _ -> failwithf "Can only drag if there is a selection"
                 | WireCreation (pId, _) ->
@@ -639,7 +697,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 highlightPortsNearCmd p
             ]
         | (Up, _, _) ->
-            let newModel = { model with DragState=NotDragging }
+            let newModel = {model with DragState=NotDragging }
 
             match model.DragState with
             | AreaSelect (p1, p2, additive) ->
@@ -662,10 +720,101 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 { newModel with Selection = Symbols selectedSymbols }
                 , Cmd.ofMsg (Symbol (Symbol.SetSelected selectedSymbols))
             | DragState.Wire (didDrag, prevWireModel) ->
-                newModel, Cmd.batch [
-                    Cmd.ofMsg (Wire (BusWire.EndDrag))
-                    saveStateIfDraggedCmd didDrag prevWireModel
-                ]
+                let nullCase = 
+                    newModel, Cmd.batch (
+                        [
+                            Cmd.ofMsg (Wire (BusWire.EndDrag))
+                            saveStateIfDraggedCmd didDrag prevWireModel
+                        ]
+                    )
+                let wireInQuestion =
+                    match model.Selection with
+                    |SelectionState.Wire x -> x
+                    |_ -> failwithf "idk what to do now boise"            
+                let oldModel = newModel.Wire.WX
+                let oldWire = Map.find wireInQuestion oldModel
+                let oldSrcPortId = oldWire.SrcPort
+                let oldTgtPortId = oldWire.TargetPort
+                let inferredDelete = batchInfer oldSrcPortId oldTgtPortId CommonTypes.CreateOrDelete.Delete []
+
+                match newModel.Offset with
+                | None -> nullCase
+                | Some (offset, CommonTypes.PortType.Input) ->
+                    let findingPort = BusWire.findClosestPort model.Symbol (posAdd model.MousePosition offset) 15.
+                    match findingPort with
+                    | Some portId -> 
+                        let foundPort = Symbol.findPort model.Symbol portId
+                        match foundPort.PortType with
+                        | CommonTypes.PortType.Input ->
+                            let inferredCreate = batchInfer oldSrcPortId foundPort.PortId CommonTypes.CreateOrDelete.Create []
+                            let newerModel = 
+                                {newModel with
+                                    Offset = None
+                                }
+                            newerModel, Cmd.batch (
+                                inferredDelete @ inferredCreate @
+                                [
+                                    Cmd.ofMsg (Wire (BusWire.EndDrag))
+                                ]  
+                                @
+                                [saveStateIfDraggedCmd didDrag prevWireModel]
+                            )
+                        | _ -> 
+                            let newerModel = 
+                                {newModel with
+                                    Offset = None
+                                }
+                            newerModel, Cmd.batch (
+                                inferredDelete @ 
+                                [
+                                    Cmd.ofMsg (Wire (BusWire.EndDrag))
+                                ]  
+                                @
+                                [saveStateIfDraggedCmd didDrag prevWireModel]
+                            )
+
+                    | None -> nullCase
+                | Some (offset, CommonTypes.PortType.Output) ->
+                    let findingPort = BusWire.findClosestPort model.Symbol (posDiff model.MousePosition offset) 15.
+                    match findingPort with
+                    | Some portId ->
+                        let foundPort = Symbol.findPort model.Symbol portId
+                        match foundPort.PortType with
+                        | CommonTypes.PortType.Output ->
+                            let inferredCreate = batchInfer foundPort.PortId oldTgtPortId CommonTypes.CreateOrDelete.Create []
+                            let newerModel = 
+                                {newModel with
+                                    Offset = None
+                                }
+                            newerModel, Cmd.batch (
+                                inferredDelete @ inferredCreate @
+                                [
+                                    Cmd.ofMsg (Wire (BusWire.EndDrag))
+                                ]  
+                                @
+                                [saveStateIfDraggedCmd didDrag prevWireModel]
+                            )
+                        | _ -> 
+                            let newerModel = 
+                                {newModel with
+                                    Offset = None
+                                }
+                            newerModel, Cmd.batch (
+                                inferredDelete @ 
+                                [
+                                    Cmd.ofMsg (Wire (BusWire.EndDrag))
+                                ]  
+                                @
+                                [saveStateIfDraggedCmd didDrag prevWireModel]
+                            )
+                    | None -> nullCase
+
+                
+                
+
+                
+
+                
             | DragState.Symbol (didDrag, prevWireModel) ->
                 newModel, Cmd.batch [
                     Cmd.ofMsg (Symbol (Symbol.EndDragging))
@@ -677,12 +826,14 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 { newModel with Selection = Empty }
                 , match targetedPort with
                   | Some pIdEnd when pIdEnd <> pIdStart ->
-                      Cmd.batch [
+                      let inferred = batchInfer pIdStart pIdEnd CommonTypes.CreateOrDelete.Create []
 
-                          Cmd.ofMsg (Symbol (Symbol.WidthInferrer (pIdStart, pIdEnd)))
+                      Cmd.batch 
+                        (inferred @ [
                           Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
                           Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
-                      ]
+                        ])
+                      
                   | _ -> Cmd.none
             | DragState.Pan (origPan, panStart, panEnd) ->
                 updatePan newModel origPan panStart panEnd
@@ -747,9 +898,10 @@ let init () =
         PanY = 0.
         Zoom = 1.
         Width = 1000.
-        Height = 500.
+        Height = 800.
         UndoList = []
         RedoList = []
+        Offset = None
     }, Cmd.batch [
         Cmd.map Symbol sCmds
         Cmd.map Wire wCmds

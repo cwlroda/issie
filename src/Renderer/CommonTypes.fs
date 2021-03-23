@@ -55,6 +55,10 @@ module CommonTypes
     [<Erase>]
     type SegmentIndex     =  int
 
+    [<Erase>]
+    type CreateOrDelete = 
+        | Create
+        | Delete
 
 // Specify the position and type of a port in a JSComponent.
 

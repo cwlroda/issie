@@ -59,7 +59,7 @@ type Msg =
     // | MouseOutPort of port : Port // Used for Dummy Code
     | HighlightPorts of pId : PortId list
     | UnhighlightPorts
-    | WidthInferrer of (PortId*PortId)
+    | CreateInference of (PortId*PortId)
     | DeleteInference of (PortId*PortId)
 
 
@@ -136,6 +136,7 @@ let allPortsInModel (symModel: Model) : Map<PortId, Port> =
             Map.add k v acc
         ) acc (combinedPortsMap elem)
     ) Map.empty
+
 
 let findSymbolFromPort (symModel: Model) (port: Port) : Symbol =
     symModel.[port.HostId]
@@ -676,7 +677,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
 let createNewSymbol ()  =
     let rng0 () = rng.Next (1,10)
-    let rngComponent () = rng.Next(0,26)
+    let rngComponent () = rng.Next(20,26)
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
 
     let randomName () = 
@@ -711,7 +712,7 @@ let createNewSymbol ()  =
                     |false -> "TestOutput"
 
                 [0..rng.Next(1,5)]
-                |> List.map (fun i -> ((string i + inOrOut), rng.Next(0,10)))
+                |> List.map (fun i -> ((string i + inOrOut), rng.Next(1,10)))
             {
                 Name = "\"Our\" Custom Component"
                 InputLabels = labels true
@@ -737,21 +738,21 @@ let createNewSymbol ()  =
         | 16 -> Decode4
         | 17 -> Input (rng0 ())
         | 18 -> Output (rng0 ())
-        | 19 -> IOLabel
-        | 20 -> Demux2
+        | 19 -> Demux2
+        | 20 -> IOLabel
         | 21 -> MergeWires
         | 22 -> BusSelection (rng0(),rng0())
         | 23 -> 
             let cons = rng0()
             let wid = int ((log(float cons)/log(2.))+1.)
             Constant (wid, cons)
-        | 24 -> SplitWire (rng0())
+        | 24 -> SplitWire (rng.Next(1,9))
         | _ -> Custom customComp
         
     let rng1 () = rng.Next(0,800)
     let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId ({X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName ()) + (string(rng.Next (0,10))))
+        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName ()) + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
@@ -809,7 +810,9 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             {tgtPort with
                 Width = 
                     match addOrDelete with 
-                    | true -> srcPort.Width
+                    | true -> 
+                        let (PortWidth wid) = srcPort.Width
+                        if wid >= 0 then srcPort.Width else PortWidth -1
                     | false -> PortWidth 0
             }
         let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
@@ -817,7 +820,9 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             {variedOutputPort with
                 Width = 
                     match addOrDelete with
-                    | true -> subtractPortWidth tgtPortNew.Width (PortWidth n)
+                    | true -> 
+                        if tgtPortNew.Width = (PortWidth -1) then PortWidth 0 
+                        else subtractPortWidth tgtPortNew.Width (PortWidth n)
                     | _ -> PortWidth 0
             }
         let tgtCompNew =
@@ -832,7 +837,9 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             {tgtPort with
                 Width = 
                     match addOrDelete with 
-                    | true -> srcPort.Width
+                    | true -> 
+                        let (PortWidth wid) = srcPort.Width
+                        if wid >= 0 then srcPort.Width else PortWidth -1
                     | false -> PortWidth 0
             }
         let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
@@ -840,7 +847,9 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             {variedOutputPort with
                 Width = 
                     match addOrDelete with
-                    | true -> tgtPortNew.Width
+                    | true -> 
+                        if tgtPortNew.Width = (PortWidth -1) then PortWidth 0 
+                        else tgtPortNew.Width
                     | _ -> PortWidth 0
             }
         let tgtCompNew = 
@@ -849,12 +858,32 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
                 OutputPorts = Map.add variedOutputPort.PortId variedOutputPortNew tgtSym.Component.OutputPorts
             }
         updateSymbolModelWithComponent symModel tgtCompNew
+
+    | BusSelection (outWid,outSelWid) ->
+        let (PortWidth srcWid) = srcPort.Width
+        let tgtPortNew = 
+            {tgtPort with
+                Width = 
+                    match addOrDelete with
+                    | true -> 
+                        if srcWid >= outWid + outSelWid then srcPort.Width
+                        else PortWidth (outWid + outSelWid)
+                    | false -> PortWidth (outWid + outSelWid)
+            }
+        let tgtCompNew = 
+            {tgtSym.Component with
+                InputPorts = Map.add tgtPort.PortId tgtPortNew tgtSym.Component.InputPorts
+            }
+        updateSymbolModelWithComponent symModel tgtCompNew
+
     | MergeWires ->
         let tgtPortNew = 
             {tgtPort with
                 Width = 
                     match addOrDelete with 
-                    | true -> srcPort.Width
+                    | true -> 
+                        let (PortWidth wid) = srcPort.Width
+                        if wid >= 0 then srcPort.Width else PortWidth -1
                     | false -> PortWidth 0
             }
         let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
@@ -867,8 +896,16 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             {variedOutputPort with
                 Width = 
                     match addOrDelete with
-                    | true -> addPortWidth tgtPortNew.Width otherInputPort.Width
-                    | _ -> PortWidth 0
+                    | true -> 
+                        if ((tgtPortNew.Width = (PortWidth -1)) || (otherInputPort.Width = (PortWidth -1)))  then PortWidth 0 
+                        else (addPortWidth tgtPortNew.Width otherInputPort.Width)
+                    | _ -> 
+                        let (PortWidth port1Width) = tgtPortNew.Width
+                        let (PortWidth port2Width) = otherInputPort.Width
+
+                        match port1Width with
+                            | wid when wid < port2Width -> PortWidth port2Width
+                            | _ -> PortWidth port1Width 
             }
         let tgtCompNew = 
             {tgtSym.Component with
@@ -1030,11 +1067,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         )
         ,Cmd.none
 
-    | WidthInferrer (pid1,pid2) ->
+    | CreateInference (pid1,pid2) ->
         widthInference model pid1 pid2 true, Cmd.none
 
     | DeleteInference (pid1,pid2) ->
         widthInference model pid1 pid2 false, Cmd.none
+
+    
 
     | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
 

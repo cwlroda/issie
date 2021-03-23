@@ -114,6 +114,8 @@ let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortI
 
     let widthMatching =
         match getWidth srcPortId, getWidth tgtPortId with
+        | Some x, _ when x<=0 ->
+            Error $"Invalid connection! Invalid Driver"
         | Some pW1, Some pW2 when pW1 <> pW2 ->
             Error $"Invalid connection! Mismatched wire widths [{bits pW1}, {bits pW2}]"
         | None, Some w ->
@@ -133,7 +135,8 @@ let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortI
         
         match srcPortWidth with
         | Some width when width <= n -> 
-            Error $"Invalid connection! Input connection requires min. {bits n}"
+            let m = n + 1
+            Error $"Invalid connection! Input connection requires min. {bits m}"
         | _ -> widthMatching
     | _ -> widthMatching
 
@@ -510,17 +513,20 @@ let fitConnection (wModel: Model) (sModel: Symbol.Model) (index: SegmentIndex) (
     let updatedWire = {wire with SelectedSegment = index; LastDragPos = segCurrentPos; Segments = wire.Segments}
     manualRouting {wModel with WX = Map.add updatedWire.Id updatedWire wModel.WX} updatedWire.Id (Symbol.portPos sModel newPortId)
 
+
+let rec findClosestPort (sModel:Symbol.Model) pos n =
+    match Symbol.portsInRange sModel pos n with
+    | [] -> None
+    | [pId] -> Some pId
+    | _ -> findClosestPort sModel pos (n-1.)
+
 let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Wire =
     let srcSegId = 0
     let tgtSegId = wire.Segments.Length - 1   
 
-    let rec findClosestPort pos n =
-        match Symbol.portsInRange sModel pos n with
-        | [] -> None
-        | [pId] -> Some pId
-        | _ -> findClosestPort pos (n-1.)
+    
 
-    match findClosestPort (wire.Segments.[srcSegId]).StartPos 15., findClosestPort (wire.Segments.[tgtSegId]).EndPos 15. with
+    match findClosestPort sModel (wire.Segments.[srcSegId]).StartPos 15., findClosestPort sModel (wire.Segments.[tgtSegId]).EndPos 15. with
     | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort ->
         fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos srcPId wire
         |> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos tgtPId
@@ -572,7 +578,6 @@ let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortI
 ///Given a connectionId deletes the given wire
 let deleteWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Map<ConnectionId, Wire> =
     let updatedModel = {wModel with WX = Map.remove wId wModel.WX}
-
     updatedModel.WX
     |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
@@ -818,6 +823,14 @@ let getErrors (wModel: Model) (sModel: Symbol.Model): Error list =
             }] @ lst
         | None -> lst
     ) [] wModel.WX
+
+let getAllPidEnds (wModel: Model) (pIdSrc: PortId) : PortId List =
+    wModel.WX
+    |> Map.toList
+    |> List.filter (fun (_,w) ->
+        w.SrcPort = pIdSrc
+    )
+    |> List.map (fun (_,w) -> w.TargetPort) 
 
 //----------------------interface to Issie-----------------------//
 let extractWire (wModel: Model) (sId:ComponentId) : Component =
