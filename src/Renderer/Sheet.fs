@@ -403,7 +403,10 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | _ -> 
             match (List.tryFind (fun i -> i=pIdStart) visited) with
             |None ->
-                List.fold (fun acc (newPIdStart, newPIdEnd) -> acc @ (batchInfer newPIdStart newPIdEnd createOrDelete (visited @ [pIdStart]))) [Cmd.ofMsg (Symbol createDeleteMsg)] listOfConnections
+                match tgtSymbol.Component.Type with
+                | CommonTypes.SplitWire _ | CommonTypes.BusSelection _ | CommonTypes.MergeWires | CommonTypes.IOLabel ->
+                    List.fold (fun acc (newPIdStart, newPIdEnd) -> acc @ (batchInfer newPIdStart newPIdEnd createOrDelete (visited @ [pIdStart]))) [Cmd.ofMsg (Symbol createDeleteMsg)] listOfConnections
+                | _ -> []
             |Some _ -> [Cmd.ofMsg (Symbol createDeleteMsg)]
     let handleKeyPress key =
         let highlightingAfterUndoAndRedoCmd model =
