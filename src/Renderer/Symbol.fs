@@ -1720,24 +1720,25 @@ let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) 
         | Some sIdLst -> Set.ofList sIdLst
         | None -> Set.empty
 
-    let (unselectedSyms, selectedSyms) =
+    let (selectedSyms, unselectedSyms) =
         model
         |> Map.partition (fun _ sym -> Set.contains sym.Id selectedSet)
 
-    let renderView (symMap: Map<ComponentId, Symbol>) : ReactElement list =
+    let renderView (symMap: Map<ComponentId, Symbol>) selected : ReactElement list =
         symMap
         |> Map.map (fun _ ({Id = ComponentId id} as symbol) ->
             renderSymbol
                 {
                     Symbol = symbol
                     Dispatch = dispatch
+                    Selected = selected
                     key = id
                 }
         )
         |> Map.toList
         |> List.map snd
 
-    (renderView selectedSyms @ renderView unselectedSyms)
+    (renderView selectedSyms true @ renderView unselectedSyms false)
     |> ofList
 
 
