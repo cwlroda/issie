@@ -740,7 +740,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     UndoList=undoList
                     RedoList= (model.Wire, model.Symbol) :: model.RedoList
                 }
-                , highlightingAfterUndoAndRedoCmd model
+                , Cmd.none
         | AltShiftZ ->
             match model.RedoList with
             | [] -> model, Cmd.none
@@ -751,7 +751,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     UndoList=(model.Wire, model.Symbol) :: model.UndoList
                     RedoList=redoList
                 }
-                , highlightingAfterUndoAndRedoCmd model
+                , Cmd.none
         | INS ->
             { model with Selection = Empty;DragState=NotDragging },
             Cmd.batch [
@@ -796,7 +796,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 }
                 , Cmd.batch [
                     cmds
-                    discardSelectionsCmd
                     Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and1")))
                     Cmd.ofMsg (Wire (BusWire.AddSymbol))
                     Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
@@ -806,10 +805,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , cmds
             | _ ->
                 { model with Selection=Empty }
-                , Cmd.batch [
-                    cmds
-                    discardSelectionsCmd
-                ]
+                , cmds
         | (Drag, p, _) ->
             processDrag p
         | (Up, _, _) ->
