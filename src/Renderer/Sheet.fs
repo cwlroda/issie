@@ -676,8 +676,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     let wModel =
                         model.CopyList.Wires
                         |> List.fold (fun acc (srcPos, tgtPos) ->
-                            match Symbol.getTargetedOutput updatedModelS.Symbol (posAdd srcPos offset),
-                                Symbol.getTargetedInput updatedModelS.Symbol (posAdd tgtPos offset) with
+                            match Symbol.getSpecificPort updatedModelS.Symbol (posAdd srcPos offset) CommonTypes.PortType.Output,
+                                Symbol.getSpecificPort updatedModelS.Symbol (posAdd tgtPos offset) CommonTypes.PortType.Input with
                             | Some srcPort, Some tgtPort ->
                                 let msg = BusWire.AddWire (srcPort, tgtPort)
                                 fst (BusWire.update msg acc updatedModelS.Symbol)
