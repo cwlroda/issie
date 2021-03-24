@@ -27,6 +27,7 @@ type Symbol =
         Id : ComponentId
         Component : Component
         Selected : bool
+        Shadow : bool
     }
 
 
@@ -275,6 +276,15 @@ let portsInRange (model: Model) (mousePos: XYPos) (range: float) : PortId list =
 
     List.map(fun port -> port.PortId) nearbyPorts
 
+let symbolsCollide (idLst : ComponentId list) (model : Model) : bool = 
+    idLst
+    |> List.collect (fun sId ->
+        let symBBox = symbolBBox model sId
+        getSymbolsInTargetArea model symBBox
+        |> List.collect (fun matchedId -> if List.contains matchedId idLst then [] else [matchedId])
+    )
+    |> List.length
+    |> (<) 0
 
 let mulOfFive (input:float)  : float = 
     10. * float (int (input / 10.))
@@ -778,11 +788,13 @@ let createNewSymbol ()  =
             | 0-> false
             | 1 -> true
             | _ -> true
+        Shadow = false
     }
 
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
-    [1..50]
+    [1..10]
+    
     |> List.map (fun x -> createNewSymbol ())
     |> List.map (fun sym -> (sym.Id, sym))
     |> Map.ofList
@@ -942,6 +954,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 Id = compId
                 Component = comp
                 Selected = true
+                Shadow = false
             }
         
         Map.add compId sym model, Cmd.none
@@ -978,39 +991,38 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         ) , Cmd.none
 
     | Dragging (sIdLst, pagePos) -> 
-        model
-        |> Map.map (fun _ sym -> 
-            if List.contains sym.Id sIdLst then
-                let diff = posDiff pagePos sym.LastDragPos
-                let symBBox = symbolBBox model sym.Id
-                let symsInNewBBox = getSymbolsInTargetArea model {symBBox with Pos = posAdd symBBox.Pos diff}
-
-                let movedSym =
+        let newModel = 
+            model
+            |> Map.map(fun _ sym ->
+                if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
+                    let diff = posDiff pagePos sym.LastDragPos
                     {sym with
                         Component = {sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
                         LastDragPos = pagePos
                     }
+                else
+                    sym
+            )
 
-                match symsInNewBBox with
-                | [id] when id = sym.Id -> movedSym
-                | [] -> movedSym
-                | _ -> sym
-            else
-                sym
-            ), Cmd.none
+        let collision = (symbolsCollide sIdLst newModel)        
+        newModel
+        |> Map.map (fun _ sym ->
+            if collision then 
+                if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
+                    {sym with Shadow = true}
+                else
+                    {sym with Shadow = false}
+            else 
+                {sym with Shadow = false}
+        ),
+
+        Cmd.none
     
     | EndDragging ->
         model
         |> Map.map (fun _ sym ->
             if sym.IsDragging then
-                {sym with
-                    IsDragging = false
-                    Component=
-                        {sym.Component with 
-                            X = mulOfFive sym.Component.X
-                            Y = mulOfFive sym.Component.Y
-                        }
-                }
+                { sym with IsDragging = false }
             else sym
         ), Cmd.none
 
@@ -1108,7 +1120,8 @@ let private renderSymbol (model:Model) =
     
     FunctionComponent.Of(
         fun (props : RenderSymbolProps) ->
-
+            let opacity = if props.Symbol.Shadow then "20%" else "100%"
+             
             let fillColor =
                 if props.Symbol.Selected then
                 //if props.Symbol.IsDragging then
@@ -1164,6 +1177,7 @@ let private renderSymbol (model:Model) =
                                 TextAnchor "left" 
                                 FontSize "14px"
                                 UserSelect UserSelectOptions.None
+                                Opacity opacity
                             ]
                     }
             let viewboxExternalStaticLabelStyle: IProp seq = 
@@ -1184,6 +1198,7 @@ let private renderSymbol (model:Model) =
                         Fill txtColor
                         // FontFamily "system-ui"
                         FontStyle "italic"
+                        Opacity opacity
                     ]
                 }
                 
@@ -1192,6 +1207,7 @@ let private renderSymbol (model:Model) =
                             UserSelect UserSelectOptions.None
                             TextAnchor "middle"
                             FontSize "20px"
+                            Opacity opacity
                         ]
                 }
 
@@ -1232,6 +1248,7 @@ let private renderSymbol (model:Model) =
                                 SVGAttr.Fill "black"
                                 SVGAttr.Stroke "black"
                                 SVGAttr.StrokeWidth 2
+                                SVGAttr.Opacity opacity
                             ] viewBoxStaticComponent) []
                     
                         text 
@@ -1252,6 +1269,7 @@ let private renderSymbol (model:Model) =
                         FontSize "18px"
                         FontWeight "Bold"
                         Fill "black" // demo font color
+                        Opacity opacity
                         UserSelect UserSelectOptions.None
                     ]
                 }
@@ -1261,17 +1279,20 @@ let private renderSymbol (model:Model) =
                     match x.Hover with
                     |PortHover false ->
                         SVGAttr.Fill fillColor
+                        SVGAttr.Opacity opacity
                         SVGAttr.Stroke outlineColor
                         SVGAttr.StrokeWidth 6
                     |_ -> 
                         SVGAttr.Fill "red"
                         SVGAttr.Stroke "red"
                         SVGAttr.StrokeWidth 8
+                        SVGAttr.Opacity opacity
                 }
             
             let viewPortLinesStaticComponent2 : IProp seq = 
                 seq {
                         SVGAttr.Fill fillColor
+                        SVGAttr.Opacity opacity
                         SVGAttr.Stroke outlineColor
                         SVGAttr.StrokeWidth 3
                 }
@@ -1281,12 +1302,14 @@ let private renderSymbol (model:Model) =
                 match x.Hover with
                 |PortHover false ->
                     SVGAttr.Fill fillColor
+                    SVGAttr.Opacity opacity
                     SVGAttr.Stroke outlineColor
                     SVGAttr.StrokeWidth 3
                 |_ -> 
                     SVGAttr.Fill "red"
                     SVGAttr.Stroke "red"
                     SVGAttr.StrokeWidth 4
+                    SVGAttr.Opacity opacity
             }
 
             let viewPortBusIndicatorTextStaticComponent (x:Port) : IProp seq =
@@ -1298,6 +1321,7 @@ let private renderSymbol (model:Model) =
                         FontSize "12px"
                         FontWeight "Bold"
                         Fill "Blue" // demo font color
+                        Opacity opacity
                         UserSelect UserSelectOptions.None
                     ]
             }
@@ -1309,6 +1333,7 @@ let private renderSymbol (model:Model) =
                         (Seq.append [
                             SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  (0.5*(topLeft.Y+bottomLeft.Y)) (topLeft.X+10.) topLeft.Y topRight.X topRight.Y bottomRight.X bottomRight.Y (bottomLeft.X+10.) bottomLeft.Y )
                             SVGAttr.Fill fillColor
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle))  []
@@ -1327,6 +1352,7 @@ let private renderSymbol (model:Model) =
                         (Seq.append [
                             SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  topLeft.Y (topRight.X-10.) topRight.Y topRight.X (0.5*(topRight.Y+bottomRight.Y)) (bottomRight.X-10.) bottomRight.Y bottomLeft.X bottomLeft.Y)
                             SVGAttr.Fill fillColor
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle))  []
@@ -1344,7 +1370,8 @@ let private renderSymbol (model:Model) =
                     polygon
                         (Seq.append [
                             SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  topLeft.Y (topRight.X-10.) topRight.Y topRight.X (0.5*(topRight.Y+bottomRight.Y)) (bottomRight.X-10.) bottomRight.Y bottomLeft.X bottomLeft.Y)
-                            SVGAttr.Fill fillColor
+                            SVGAttr.Fill fillColor 
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle))  []
@@ -1370,6 +1397,7 @@ let private renderSymbol (model:Model) =
                             SVGAttr.Width width
                             SVGAttr.Height height
                             SVGAttr.Fill fillColor
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                             
