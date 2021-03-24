@@ -41,7 +41,6 @@ type Model = {
     Selection: SelectionState
     CopyState: CopyState
     CopyList: CopyElements
-    GlobalCounter: int
     MousePosition: XYPos
     ClickPosition: XYPos
     PanX: float
@@ -555,7 +554,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     |> List.map (fun sId ->
                         Symbol.symbolType model.Symbol sId,
                         (Symbol.symbolBBox model.Symbol sId).Pos,
-                        Symbol.symbolLabel model.Symbol sId
+                        (Symbol.symbolLabel model.Symbol sId) + "_copy"
                     )
 
                 let (_, ref, _) = sCopyDataLst.Head
@@ -594,23 +593,10 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let offset =
                     let (_, pos, _) = model.CopyList.Symbols.Head
                     posDiff (snapToGrid (posAdd pos model.ClickPosition)) model.CopyList.RefPt
-                
-                let localCounter = model.GlobalCounter
-
-                let updatedSyms, newCounter =
-                    model.CopyList.Symbols
-                    |> List.fold (fun (lst, count) (x, y, label) ->
-                        let newCount = count + 1
-                        lst @ [(x, y, incrementLabels label newCount)],
-                        newCount
-                    ) ([], localCounter)
-
-                let updatedCL =
-                    { model.CopyList with Symbols = updatedSyms }
 
                 let updatedModelS =
                     let sModel =
-                        updatedSyms
+                        model.CopyList.Symbols
                         |> List.fold (fun acc (sType, p, sLabel) ->
                             let msg = Symbol.AddSymbol (sType, snapToGrid (posAdd p model.ClickPosition), sLabel)
                             fst (Symbol.update msg acc)
@@ -620,7 +606,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
                 let updatedModelW =
                     let wModel =
-                        updatedCL.Wires
+                        model.CopyList.Wires
                         |> List.fold (fun acc (srcPos, tgtPos) ->
                             match Symbol.getTargetedPort updatedModelS.Symbol (posAdd srcPos offset),
                                 Symbol.getTargetedPort updatedModelS.Symbol (posAdd tgtPos offset) with
@@ -635,8 +621,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let updatedModel =
                     {
                         updatedModelW with
-                            CopyList = updatedCL
-                            GlobalCounter = newCounter
                             Selection = Symbols (Symbol.getSelectedSymbols updatedModelW.Symbol)
                     }
 
@@ -715,16 +699,13 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     clickCmds
                 ]
             | MouseButton.Right ->
-                let localCounter = model.GlobalCounter + 1
-
                 { model with
                     Selection = Empty
-                    GlobalCounter = localCounter
                 }
                 , Cmd.batch [
                     cmds
                     discardSelectionsCmd
-                    Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and_" + string(localCounter))))
+                    Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and_1")))
                     Cmd.ofMsg (Wire (BusWire.AddSymbol))
                     Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                 ]
@@ -984,7 +965,6 @@ let init () =
                 Wires = []
                 RefPt = posOf 0. 0.
             }
-        GlobalCounter = 0
         MousePosition = posOf 0. 0.
         ClickPosition = posOf 0. 0.
         PanX = 0.

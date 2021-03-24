@@ -102,9 +102,6 @@ let overlaps (b1: BBox) (b2: BBox): bool =
         || isLeftOf b2 b1
     )
 
-let incrementLabels (label: string) (count: int) : string =
-    Array.head (label.Split("_")) + "_" + string (count)
-
 type MouseOp = 
     /// button up
     | Up

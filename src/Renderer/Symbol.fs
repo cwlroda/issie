@@ -683,7 +683,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
 let createNewSymbol ()  =
     let rng0 () = rng.Next (1,10)
-    let rngComponent () = rng.Next(20,26)
+    let rngComponent () = rng.Next(0,26)
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
 
     let randomName () = 
@@ -758,7 +758,7 @@ let createNewSymbol ()  =
     let rng1 () = rng.Next(0,800)
     let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName ()) + "_" + (string(rng.Next (0,10))))
+        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType (randomName() + "_" + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
@@ -1192,13 +1192,13 @@ let private renderSymbol (model:Model) =
                 let outputString = 
                     match width with
                     | x when x < 100. ->
-                        processingString fullName 7
+                        processingString fullName 6
                     | x when x < 150. ->
-                        processingString fullName 8
+                        processingString fullName 7
                     | x when x < 200. ->
-                        processingString fullName 10
+                        processingString fullName 9
                     | _ ->
-                        processingString fullName 12
+                        processingString fullName 11
 
                 match componentType with 
                 |Input _ |Constant _ ->
