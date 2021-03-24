@@ -365,7 +365,6 @@ let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<Po
 
     match getType port1, getType port2 with
     | pT1, pT2 when pT1 = pT2 -> Error $"Invalid connection! Ports cannot both be {pT1}s."
-    | p, _ when p = PortType.Input -> Ok (port2, port1)
     | _ -> Ok (port1, port2)
 
 let notAvaliableInput (wModel: Model) (wId: ConnectionId) (inputId: PortId): bool =
@@ -522,42 +521,32 @@ let fitConnection (wModel: Model) (sModel: Symbol.Model) (index: SegmentIndex) (
     let updatedWire = {wire with SelectedSegment = index; LastDragPos = segCurrentPos; Segments = wire.Segments}
     manualRouting {wModel with WX = Map.add updatedWire.Id updatedWire wModel.WX} updatedWire.Id (Symbol.portPos sModel newPortId)
 
-
-let rec findClosestPort (sModel:Symbol.Model) pos n =
-    match Symbol.portsInRange sModel pos n with
-    | [] -> None
-    | [pId] -> Some pId
-    | _ -> findClosestPort sModel pos (n-1.)
-
 let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Wire =
-    let srcSegId = 0
-    let tgtSegId = wire.Segments.Length - 1   
+    match wire.SelectedSegment with
+    | x when x = 0 || x = wire.Segments.Length - 1 ->
+        let srcSegId = 0
+        let tgtSegId = wire.Segments.Length - 1
 
-    match findClosestPort sModel (wire.Segments.[srcSegId]).StartPos 15., findClosestPort sModel (wire.Segments.[tgtSegId]).EndPos 15. with
-    | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort ->
-        fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos srcPId wire
-        |> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos tgtPId
-    | Some pId, Some tgtPId when tgtPId = wire.TargetPort ->
-        let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} //to ensure it does not get a too many wire for input port validation error triggered by itself
-        
-        match createWire updatedModel sModel pId wire.TargetPort (Some wire.Id) with
-        | Some updatedWire ->
-            let updatedSegs = autoRoute sModel updatedWire
-            {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
-        | None -> wire
-    | Some _, Some pId ->
-        match createWire wModel sModel pId wire.SrcPort (Some wire.Id) with
-        | Some updatedWire ->
-            let updatedSegs = autoRoute sModel updatedWire
-            {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
-        | None -> wire
-    | None, Some _ ->
-        fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
-    | Some _, None ->
-        fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos wire.TargetPort wire
-    | None, None -> wire
-        // let updatedSegs = autoRoute sModel wire
-        // {wire with Segments = smartRouting sModel wire updatedSegs}
+        match Symbol.getTargetedPort sModel (wire.Segments.[srcSegId]).StartPos, Symbol.getTargetedPort sModel (wire.Segments.[tgtSegId]).EndPos with
+        | Some srcPId, Some tgtPId when srcPId = wire.SrcPort && tgtPId = wire.TargetPort ->
+            fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos srcPId wire
+            |> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos tgtPId
+        | Some srcPId, Some tgtPId ->
+            let updatedModel = {wModel with WX = Map.remove wire.Id wModel.WX} //to ensure it does not get a too many wire for input port validation error triggered by itself
+            
+            match createWire updatedModel sModel srcPId tgtPId (Some wire.Id) with
+            | Some updatedWire ->
+                let updatedSegs = autoRoute sModel updatedWire
+                {updatedWire with Segments = smartRouting sModel updatedWire updatedSegs}
+            | None ->
+                fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
+                |> fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos wire.TargetPort
+        | None, Some _ ->
+            fitConnection wModel sModel srcSegId (wire.Segments.[srcSegId]).StartPos wire.SrcPort wire
+        | Some _, None ->
+            fitConnection wModel sModel tgtSegId (wire.Segments.[tgtSegId]).EndPos wire.TargetPort wire
+        | _ -> failwithf "Stray wire!"
+    | _ -> wire
 
 let updateWireValidity (wModel: Model) (sModel: Symbol.Model) (wire: Wire): Wire =
     match createWire wModel sModel wire.SrcPort wire.TargetPort (Some wire.Id) with
@@ -595,9 +584,8 @@ let deleteWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: Compone
         wModel.WX
         |> Map.filter (fun _ v ->
             match List.contains v.SrcPort pIdList, List.contains v.TargetPort pIdList with
-            | true, _ -> false
-            | _, true -> false
-            | _ -> true
+            | false, false -> true
+            | _ -> false
         )
 
     let updatedModel = {wModel with WX = updatedWX}
@@ -677,7 +665,7 @@ let singleSegBBView =
                         Ry 5.
                         SVGAttr.Width segBBox.Width
                         SVGAttr.Height segBBox.Height
-                        SVGAttr.StrokeWidth "1px"
+                        SVGAttr.StrokeWidth "0.75px"
                         SVGAttr.Stroke "Black"
                         SVGAttr.FillOpacity 0
                     ] []

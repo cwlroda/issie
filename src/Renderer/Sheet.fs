@@ -823,7 +823,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 match newModel.Offset with
                 | None -> nullCase
                 | Some (offset, CommonTypes.PortType.Input) ->
-                    let findingPort = BusWire.findClosestPort model.Symbol (posAdd model.MousePosition offset) 15.
+                    let findingPort = Symbol.getTargetedPort model.Symbol (posAdd model.MousePosition offset)
                     match findingPort with
                     | Some portId -> 
                         let foundPort = Symbol.findPort model.Symbol portId
@@ -858,7 +858,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
                     | None -> nullCase
                 | Some (offset, CommonTypes.PortType.Output) ->
-                    let findingPort = BusWire.findClosestPort model.Symbol (posDiff model.MousePosition offset) 15.
+                    let findingPort = Symbol.getTargetedPort model.Symbol (posDiff model.MousePosition offset)
                     match findingPort with
                     | Some portId ->
                         let foundPort = Symbol.findPort model.Symbol portId
