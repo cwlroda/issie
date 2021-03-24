@@ -39,23 +39,12 @@ type Model = Map<ComponentId, Symbol>
 /// a production system, where we need to drag groups of symbols as well,
 /// and also select and deselect symbols, and specify real symbols, not circles
 type Msg =
-    /// Mouse info with coords adjusted form top-level zoom
-    | MouseMsg of MouseT
-    /// coords not adjusted for top-level zoom
-    // | StartDraggingDummy of sId : ComponentId * pagePos: XYPos
-    // | DraggingDummy of sId : ComponentId * pagePos: XYPos
     | StartDragging of sId : ComponentId list * pagePos: XYPos
     | Dragging of sIdLst: ComponentId list * pagePos: XYPos
-    // | EndDraggingDummy of sId : ComponentId
     | EndDragging
-    // | AddSymbol of comp:Component*pos:XYPos // used by demo code to add a circle
-    //| DeleteSymbol of sId:ComponentId 
     | AddSymbol of sType: ComponentType * pos: XYPos * label: string
     | DeleteSymbols of sIdLst: ComponentId list
     | UpdateSymbolModelWithComponent of Component // Issie interface
-    // | SetSelectedDummy of topLeft:XYPos * bottomRight:XYPos // 
-    // | MouseOverPort of port : Port // Used for Dummy Code
-    // | MouseOutPort of port : Port // Used for Dummy Code
     | HighlightPorts of pId : PortId list
     | UnhighlightPorts
     | CreateInference of (PortId*PortId)
@@ -694,7 +683,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
 let createNewSymbol ()  =
     let rng0 () = rng.Next (1,10)
-    let rngComponent () = rng.Next(20,26)
+    let rngComponent () = rng.Next(0,26)
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
 
     let randomName () = 
@@ -780,7 +769,7 @@ let createNewSymbol ()  =
 
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
-    [1..10]
+    [1..50]
     
     |> List.map (fun x -> createNewSymbol ())
     |> List.map (fun sym -> (sym.Id, sym))
@@ -1061,10 +1050,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     | DeleteInference (pid1,pid2) ->
         widthInference model pid1 pid2 false, Cmd.none
 
-    
-
-    | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
-
 //----------------------------View Function for Symbols----------------------------//
 
 /// Input to react component (which does not re-evaluate when inputs stay the same)
@@ -1083,7 +1068,7 @@ let private renderSymbol =
     FunctionComponent.Of(
         fun (props : RenderSymbolProps) ->
             let opacity = if props.Symbol.Shadow then "20%" else "100%"
-             
+
             let fillColor =
                 if props.Selected then
                 //if props.Symbol.IsDragging then
@@ -1740,7 +1725,7 @@ let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) 
         |> List.map snd
 
 
-    (renderView selectedSyms true @ renderView unselectedSyms false)
+    (renderView unselectedSyms false @ renderView selectedSyms true )
     |> ofList
 
 
