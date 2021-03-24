@@ -1116,7 +1116,7 @@ type private RenderSymbolProps =
     }
 
 /// View for one symbol with caching for efficient execution when input does not change
-let private renderSymbol (model:Model) =
+let private renderSymbol =
     
     FunctionComponent.Of(
         fun (props : RenderSymbolProps) ->
@@ -1753,17 +1753,24 @@ let private renderSymbol (model:Model) =
 
 /// View function for symbol layer of SVG
 let view (model : Model) (dispatch : Msg -> unit) = 
-    model
-    |> Map.map (fun _ ({Id = ComponentId id} as symbol) ->
-        renderSymbol model
-            {
-                Symbol = symbol
-                Dispatch = dispatch
-                key = id
-            }
-    )
-    |> Map.toList
-    |> List.map snd
+    let (unselectedSyms, selectedSyms) =
+        model
+        |> Map.partition (fun _ sym -> sym.Selected)
+
+    let renderView (symMap: Map<ComponentId, Symbol>) : ReactElement list =
+        symMap
+        |> Map.map (fun _ ({Id = ComponentId id} as symbol) ->
+            renderSymbol
+                {
+                    Symbol = symbol
+                    Dispatch = dispatch
+                    key = id
+                }
+        )
+        |> Map.toList
+        |> List.map snd
+
+    (renderView selectedSyms @ renderView unselectedSyms)
     |> ofList
 
 
