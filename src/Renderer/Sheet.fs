@@ -697,6 +697,12 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         ) (model.Symbol)
 
                     { model with Symbol = sModel }
+                
+                let symIdLst =
+                    updatedModelS.Symbol
+                    |> Map.filter (fun _ sym -> not (Map.containsKey sym.Id model.Symbol))
+                    |> Map.toList
+                    |> List.map fst
 
                 let updatedModelW =
                     let wModel =
@@ -712,7 +718,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                                 let wireModel = fst (BusWire.update msg wire symbolModel)
                                 wireModel,symbolModel
                             | _ -> wire, sym
-                        ) (updatedModelS.Wire,updatedModelS.Symbol)
+                        ) (updatedModelS.Wire, updatedModelS.Symbol)
 
                     { updatedModelS with 
                         Wire = fst wModel 
@@ -722,7 +728,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let updatedModel =
                     {
                         updatedModelW with
-                            Selection = Empty
+                            Selection = Symbols symIdLst
                     }
 
                 updatedModel,
@@ -795,12 +801,24 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     clickCmds
                 ]
             | MouseButton.Right ->
+                let msg = Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and1")
+                let sModel = fst (Symbol.update msg model.Symbol)
+
+                let symId =
+                    let sym =
+                        sModel
+                        |> Map.tryFindKey (fun _ sym -> not (Map.containsKey sym.Id model.Symbol))
+
+                    match sym with
+                    | Some x -> x
+                    | None -> failwithf "Symbol was not created"
+
                 { model with
-                    Selection = Empty
+                    Symbol = sModel
+                    Selection = Symbols [symId]
                 }
                 , Cmd.batch [
                     cmds
-                    Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and1")))
                     Cmd.ofMsg (Wire (BusWire.AddSymbol))
                     Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                 ]

@@ -339,7 +339,7 @@ let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
 
     let defSeg pos vPos hPos =
         match wireDir.X, wireDir.Y with
-        | x, _ when x > 1. ->
+        | x, y when (x >= 40.) || (x < 40. && y = 0.) ->
             [
                 pos
                 posOf midPos.X pos.Y
@@ -698,7 +698,12 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
     g [] (
         wModel.WX
         |> Map.fold (fun acc _ w ->
-            let srcSeg= w.Segments.[0]
+            let srcSeg = w.Segments.[0]
+
+            let color =
+                match selectedWire with
+                | Some wId when wId = w.Id -> Green
+                | _ -> w.WireColor
 
             let (labelProps: LabelRenderProps) = 
                 match checkPortWidths sModel w.SrcPort w.TargetPort with 
@@ -706,26 +711,24 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
                         {
                             key = w.Id
                             Pos = adjLabelPos srcSeg 
-                            ColorLabel = w.WireColor.ToString()
-                            Label =  $"%d{width}"
-                            BusIdcWidth =  2. 
+                            ColorLabel = color.ToString()
+                            Label = $"%d{width}"
+                            BusIdcWidth = 2. 
                         }
-                    | Error str -> 
+                    | Error _ -> 
                         {
                             key = w.Id
                             Pos = adjLabelPos srcSeg  
-                            ColorLabel = w.WireColor.ToString()
-                            Label =  $"x"
-                            BusIdcWidth =  2. 
+                            ColorLabel = color.ToString()
+                            Label = $"x"
+                            BusIdcWidth = 2. 
                         }
             
             let (props: WireRenderProps) =
                 {
                     Key = w.Id
                     SegPath = (pathDefString w)
-                    WireColor = match selectedWire with
-                                | Some wId when wId = w.Id -> Green
-                                | _ -> w.WireColor
+                    WireColor = color
                     WireWidth = $"%d{w.WireWidth}"
                 }
 
@@ -741,9 +744,10 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
                     acc @ [singleSegBBView segBBProps]
                 ) []
                 
-            acc @ [singleWireView props]
-            @ if wModel.WireAnnotation && (w.WireWidth > 3) then  [(singleLabelView labelProps)] else []
+            acc 
+            @ if wModel.WireAnnotation && (w.WireWidth > 3) then [(singleLabelView labelProps)] else []
             @ if wModel.Debug then segBBox else []
+            @ [singleWireView props]
         ) [] )
 
 
