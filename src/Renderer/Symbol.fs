@@ -1161,7 +1161,8 @@ let private renderSymbol (model:Model) =
     
     FunctionComponent.Of(
         fun (props : RenderSymbolProps) ->
-
+            let opacity = if props.Symbol.Shadow then "20%" else "100%"
+             
             let fillColor =
                 if props.Symbol.Selected then
                 //if props.Symbol.IsDragging then
@@ -1217,6 +1218,7 @@ let private renderSymbol (model:Model) =
                                 TextAnchor "left" 
                                 FontSize "14px"
                                 UserSelect UserSelectOptions.None
+                                Opacity opacity
                             ]
                     }
             let viewboxExternalStaticLabelStyle: IProp seq = 
@@ -1237,6 +1239,7 @@ let private renderSymbol (model:Model) =
                         Fill txtColor
                         // FontFamily "system-ui"
                         FontStyle "italic"
+                        Opacity opacity
                     ]
                 }
                 
@@ -1245,6 +1248,7 @@ let private renderSymbol (model:Model) =
                             UserSelect UserSelectOptions.None
                             TextAnchor "middle"
                             FontSize "20px"
+                            Opacity opacity
                         ]
                 }
 
@@ -1285,6 +1289,7 @@ let private renderSymbol (model:Model) =
                                 SVGAttr.Fill "black"
                                 SVGAttr.Stroke "black"
                                 SVGAttr.StrokeWidth 2
+                                SVGAttr.Opacity opacity
                             ] viewBoxStaticComponent) []
                     
                         text 
@@ -1305,6 +1310,7 @@ let private renderSymbol (model:Model) =
                         FontSize "18px"
                         FontWeight "Bold"
                         Fill "black" // demo font color
+                        Opacity opacity
                         UserSelect UserSelectOptions.None
                     ]
                 }
@@ -1314,17 +1320,20 @@ let private renderSymbol (model:Model) =
                     match x.Hover with
                     |PortHover false ->
                         SVGAttr.Fill fillColor
+                        SVGAttr.Opacity opacity
                         SVGAttr.Stroke outlineColor
                         SVGAttr.StrokeWidth 6
                     |_ -> 
                         SVGAttr.Fill "red"
                         SVGAttr.Stroke "red"
                         SVGAttr.StrokeWidth 8
+                        SVGAttr.Opacity opacity
                 }
             
             let viewPortLinesStaticComponent2 : IProp seq = 
                 seq {
                         SVGAttr.Fill fillColor
+                        SVGAttr.Opacity opacity
                         SVGAttr.Stroke outlineColor
                         SVGAttr.StrokeWidth 3
                 }
@@ -1334,12 +1343,14 @@ let private renderSymbol (model:Model) =
                 match x.Hover with
                 |PortHover false ->
                     SVGAttr.Fill fillColor
+                    SVGAttr.Opacity opacity
                     SVGAttr.Stroke outlineColor
                     SVGAttr.StrokeWidth 3
                 |_ -> 
                     SVGAttr.Fill "red"
                     SVGAttr.Stroke "red"
                     SVGAttr.StrokeWidth 4
+                    SVGAttr.Opacity opacity
             }
 
             let viewPortBusIndicatorTextStaticComponent (x:Port) : IProp seq =
@@ -1351,6 +1362,7 @@ let private renderSymbol (model:Model) =
                         FontSize "12px"
                         FontWeight "Bold"
                         Fill "Blue" // demo font color
+                        Opacity opacity
                         UserSelect UserSelectOptions.None
                     ]
             }
@@ -1362,6 +1374,7 @@ let private renderSymbol (model:Model) =
                         (Seq.append [
                             SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  (0.5*(topLeft.Y+bottomLeft.Y)) (topLeft.X+10.) topLeft.Y topRight.X topRight.Y bottomRight.X bottomRight.Y (bottomLeft.X+10.) bottomLeft.Y )
                             SVGAttr.Fill fillColor
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle))  []
@@ -1380,6 +1393,7 @@ let private renderSymbol (model:Model) =
                         (Seq.append [
                             SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  topLeft.Y (topRight.X-10.) topRight.Y topRight.X (0.5*(topRight.Y+bottomRight.Y)) (bottomRight.X-10.) bottomRight.Y bottomLeft.X bottomLeft.Y)
                             SVGAttr.Fill fillColor
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle))  []
@@ -1397,7 +1411,8 @@ let private renderSymbol (model:Model) =
                     polygon
                         (Seq.append [
                             SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  topLeft.Y (topRight.X-10.) topRight.Y topRight.X (0.5*(topRight.Y+bottomRight.Y)) (bottomRight.X-10.) bottomRight.Y bottomLeft.X bottomLeft.Y)
-                            SVGAttr.Fill fillColor
+                            SVGAttr.Fill fillColor 
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle))  []
@@ -1423,6 +1438,7 @@ let private renderSymbol (model:Model) =
                             SVGAttr.Width width
                             SVGAttr.Height height
                             SVGAttr.Fill fillColor
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                             
