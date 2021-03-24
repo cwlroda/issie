@@ -72,6 +72,7 @@ type Modifier =
     | NoModifier
 
 type Msg =
+    | UpdateSize of float * float
     | SaveState of SubModel
     | Wire of BusWire.Msg
     | Symbol of Symbol.Msg
@@ -120,6 +121,10 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                 NoModifier
         )
 
+    let updateSize (rect: Types.ClientRect) =
+        dispatch
+        <| UpdateSize (System.Math.Round rect.width, System.Math.Round rect.height)
+
     let gridlines =
         let pan =
             snapToGrid {
@@ -131,7 +136,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         let height = int (ceil (model.Height / model.Zoom))
 
         let getGridCoords size =
-            [0..gridSize..size]
+            [0..gridSize..size+2*gridSize]
 
         let getColorAndOpacity gc offset =
             if (gc - offset) % (gridSize * 10) = 0 then
@@ -157,8 +162,8 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
 
         g [] (
             [
-                createHalfGrid width (int pan.X) (fun x -> makeLine x -gridSize x height <| getColorAndOpacity x)
-                createHalfGrid height (int pan.Y) (fun y -> makeLine -gridSize y width y <| getColorAndOpacity y)
+                createHalfGrid width (int pan.X) (fun x -> makeLine x -gridSize x (height+gridSize) <| getColorAndOpacity x)
+                createHalfGrid height (int pan.Y) (fun y -> makeLine -gridSize y (width+gridSize) y <| getColorAndOpacity y)
             ]
             |> List.concat
         )
@@ -244,18 +249,29 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         | _ -> "grab"
     
     div [ Style [
-            Height heightInPixels
-            Width widthInPixels
-            Border (sprintf "%fpx solid green" borderSize)
-            CSSProp.OverflowX OverflowOptions.Hidden
-            CSSProp.OverflowY OverflowOptions.Hidden
-            CSSProp.Cursor cursorType
-          ]
+        Position PositionOptions.Fixed
+        Height "100%"
+        Width "100%"
+        CSSProp.Top 0.
+        CSSProp.Bottom 0.
+        CSSProp.Left 0.
+        CSSProp.Right 0.
+        Border (sprintf "%fpx solid green" borderSize)
+        CSSProp.OverflowX OverflowOptions.Hidden
+        CSSProp.OverflowY OverflowOptions.Hidden
+        CSSProp.Cursor cursorType
+      ]
     ] [ svg [
             Style [
-                Height heightInPixels
-                Width widthInPixels
+                Height "100%"
+                Width "100%"
             ]
+            Ref (fun html ->
+                if html = null then
+                    ()
+                else
+                    (updateSize (html.getBoundingClientRect()))
+                )
             OnMouseDown(fun ev -> (mouseOp Down ev))
             OnMouseUp(fun ev -> (mouseOp Up ev))
             OnMouseMove(fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
@@ -939,6 +955,13 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | (Move, p, _) -> processDrag p
 
     match msg with
+    | UpdateSize (w, h) ->
+        printfn "w: %A" w
+        printfn "h: %A" h
+        { model with
+            Width=w
+            Height=h
+        }, Cmd.none
     | SaveState savedSubModel ->
         { model with
             UndoList = List.truncate undoHistorySize <| savedSubModel :: model.UndoList
@@ -993,7 +1016,7 @@ let init () =
         PanY = 0.
         Zoom = 1.
         Width = 1000.
-        Height = 800.
+        Height = 1000.
         UndoList = []
         RedoList = []
         Offset = None
