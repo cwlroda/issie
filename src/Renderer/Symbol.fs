@@ -51,7 +51,7 @@ type Msg =
     | EndDragging
     // | AddSymbol of comp:Component*pos:XYPos // used by demo code to add a circle
     //| DeleteSymbol of sId:ComponentId 
-    | AddSymbol of sType: ComponentType * pos: XYPos * label: string
+    | AddSymbol of comp: Component
     | DeleteSymbols of sIdLst: ComponentId list
     | UpdateSymbolModelWithComponent of Component // Issie interface
     // | SetSelectedDummy of topLeft:XYPos * bottomRight:XYPos // 
@@ -294,7 +294,8 @@ let mulOfFive (input:float)  : float =
 //------------------------------Create Symbols---------------------//
 let rng = System.Random 0
 let rng2() = rng.Next(0,2)
-let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:ComponentType) (labelName:string) : Component =
+let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName:string) : Component =
+    let compId = ComponentId (uuid())
     let compX = position.X
     let compY = position.Y
     let compW,compH =
@@ -333,7 +334,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 PortNumber =  Some (PortNumber (portNumber))
                 PortType = portType
                 PortPos = {X=offset; Y = mulOfFive yPosCalc }
-                HostId = hostID
+                HostId = compId
                 Hover = PortHover false
                 Width = portWidth
             }
@@ -343,7 +344,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 PortNumber =  None
                 PortType = portType
                 PortPos = {X=0.; Y=0. }//(20. + ((float portNumber) + 1.) * portPos ) }
-                HostId = hostID
+                HostId = compId
                 Hover = PortHover false
                 Width = portWidth
             }
@@ -689,7 +690,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             inputPortMap, outputPortMap
 
     {
-        Id = hostID
+        Id = compId
         Type = compType
         Label = labelName
         InputPorts = inputPorts
@@ -699,6 +700,43 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         H = compH
         W = compW
     }
+
+let updateCompoment (comp: Component) (p: XYPos) (label: string) : Component =
+    { comp with
+        Label = label
+        X = p.X
+        Y = p.Y
+    }
+
+let createDeepCopyOfComponent (comp: Component): Component * Map<PortId, PortId> =
+    let compId = ComponentId (uuid())
+
+    let createCopyOfPortMap portMap =
+        let createDeepCopyOfPort (p: Port) (sId: ComponentId) =
+            { p with
+                HostId = sId
+                PortId = PortId (uuid())
+            }
+
+        let (newPortList, conversionList) =
+            portMap
+            |> Map.toList
+            |> List.map (fun (oldId, oldPort) -> 
+                let newPort = createDeepCopyOfPort oldPort compId
+                (newPort.PortId, newPort), (oldId, newPort.PortId)
+            )
+            |> List.unzip
+
+        Map.ofList newPortList, conversionList
+
+    let (inputPorts, inputPortConversion) = createCopyOfPortMap comp.InputPorts
+    let (outputPorts, outputPortConversion) = createCopyOfPortMap comp.OutputPorts
+
+    { comp with
+        Id = compId
+        InputPorts = inputPorts
+        OutputPorts = outputPorts
+    }, Map.ofList <| inputPortConversion @ outputPortConversion
 
 let createNewSymbol ()  =
     let rng0 () = rng.Next (1,10)
@@ -775,13 +813,12 @@ let createNewSymbol ()  =
         | _ -> Custom customComp
         
     let rng1 () = rng.Next(0,800)
-    let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType (randomName() + (string(rng.Next (0,10))))
+        createSpecificComponent (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType (randomName() + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
-        Id = compId
+        Id = comp.Id
         Component = comp
         Selected =
             match rng.Next(0,2) with
@@ -944,20 +981,18 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
 /// update function which displays symbols
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
-    | AddSymbol (sType, pos, label) ->
-        let compId = ComponentId (uuid())
-        let comp = createSpecificComponent compId pos sType label
+    | AddSymbol comp ->
         let sym = 
             {
                 LastDragPos = {X=0. ; Y=0.}
                 IsDragging = false
-                Id = compId
+                Id = comp.Id
                 Component = comp
                 Selected = true
                 Shadow = false
             }
         
-        Map.add compId sym model, Cmd.none
+        Map.add comp.Id sym model, Cmd.none
 
     | DeleteSymbols _ ->
         Map.filter (fun _ sym -> not sym.Selected) model , Cmd.none
