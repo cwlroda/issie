@@ -165,6 +165,12 @@ let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     |> Map.toList
     |> List.map fst
 
+let getSelectedSymbols (symModel: Model) : ComponentId list =
+    symModel
+    |> Map.filter (fun _ s -> s.Selected)
+    |> Map.toList
+    |> List.map fst
+
 let findPort (symModel: Model) (portId: PortId) : Port =
     (allPortsInModel symModel).[portId]
 
@@ -176,13 +182,13 @@ let portPos (symModel: Model) (portId: PortId) : XYPos =
         Y = foundPort.PortPos.Y + foundSymbol.Component.Y
     }
 
-let getTargetedPort (symModel:Model) (pos:XYPos) : PortId Option =
+let getTargetedPort (symModel: Model) (pos: XYPos) : PortId Option =
     let nearbyPorts = 
         allPortsInModel symModel
         |> Map.filter
             (fun _ port ->
                 portPos symModel port.PortId
-                |> posDist pos < 20.
+                |> posDist pos <= 10.
             )
         |> Map.toList
         |> List.map snd
@@ -195,6 +201,49 @@ let getTargetedPort (symModel:Model) (pos:XYPos) : PortId Option =
     match nearbyPorts with
     | nearestPort::_ -> Some nearestPort.PortId
     | [] -> None
+
+let getTargetedInput (symModel: Model) (pos: XYPos) : PortId Option =
+    let nearbyPorts = 
+        allPortsInModel symModel
+        |> Map.filter
+            (fun _ port ->
+                portPos symModel port.PortId
+                |> posDist pos <= 10.
+                || port.PortType <> PortType.Input
+            )
+        |> Map.toList
+        |> List.map snd
+        |> List.sortBy
+            (fun port ->
+                portPos symModel port.PortId
+                |> posDist pos
+            )
+    
+    match nearbyPorts with
+    | nearestPort::_ -> Some nearestPort.PortId
+    | [] -> None
+
+let getTargetedOutput (symModel: Model) (pos: XYPos) : PortId Option =
+    let nearbyPorts = 
+        allPortsInModel symModel
+        |> Map.filter
+            (fun _ port ->
+                portPos symModel port.PortId
+                |> posDist pos <= 10.
+                || port.PortType <> PortType.Output
+            )
+        |> Map.toList
+        |> List.map snd
+        |> List.sortBy
+            (fun port ->
+                portPos symModel port.PortId
+                |> posDist pos
+            )
+    
+    match nearbyPorts with
+    | nearestPort::_ -> Some nearestPort.PortId
+    | [] -> None
+
 
 let symbolPos (symModel: Model) (sId: ComponentId) : XYPos = 
     Map.find sId symModel
@@ -312,7 +361,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 Hover = PortHover false
                 Width = portWidth
             }
-        |false ->
+        | false ->
             {
                 PortId = PortId (uuid())
                 PortNumber =  None
@@ -677,7 +726,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
 let createNewSymbol ()  =
     let rng0 () = rng.Next (1,10)
-    let rngComponent () = rng.Next(20,26)
+    let rngComponent () = rng.Next(0,26)
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
 
     let randomName () = 
@@ -752,7 +801,7 @@ let createNewSymbol ()  =
     let rng1 () = rng.Next(0,800)
     let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName ()) + (string(rng.Next (0,10))))
+        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType (randomName() + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
@@ -926,7 +975,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 IsDragging = false
                 Id = compId
                 Component = comp
-                Selected = false
+                Selected = true
             }
         
         Map.add compId sym model, Cmd.none
@@ -1165,7 +1214,7 @@ let private renderSymbol (model:Model) =
                 seq{Style [
                         UserSelect UserSelectOptions.None
                         TextAnchor txtAnchor
-                        FontSize "14px"
+                        FontSize "13px"
                         Fill txtColor
                         // FontFamily "system-ui"
                         FontStyle "italic"
@@ -1198,14 +1247,14 @@ let private renderSymbol (model:Model) =
                 |Input _ |Constant _ ->
                     text 
                         (Seq.append [
-                            X (bottomLeft.X + 3.)
-                            Y (bottomLeft.Y - 17.)
+                            X (bottomLeft.X + 5.)
+                            Y (bottomLeft.Y - 14.)
                         ] viewboxExternalStaticLabelStyle) [str <| outputString]
                 |_ -> 
                     text 
                         (Seq.append [
-                            X (bottomRight.X - 3.)
-                            Y (bottomRight.Y - 17.)
+                            X (bottomRight.X - 5.)
+                            Y (bottomRight.Y - 14.)
                         ] viewboxExternalStaticLabelStyle) [str <| outputString]
 
             let viewBoxClock (bottomLeft:XYPos): ReactElement =
