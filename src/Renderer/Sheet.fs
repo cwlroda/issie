@@ -608,8 +608,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     let wModel =
                         model.CopyList.Wires
                         |> List.fold (fun acc (srcPos, tgtPos) ->
-                            match Symbol.getTargetedPort updatedModelS.Symbol (posAdd srcPos offset),
-                                Symbol.getTargetedPort updatedModelS.Symbol (posAdd tgtPos offset) with
+                            match Symbol.getTargetedOutput updatedModelS.Symbol (posAdd srcPos offset),
+                                Symbol.getTargetedInput updatedModelS.Symbol (posAdd tgtPos offset) with
                             | Some srcPort, Some tgtPort ->
                                 let msg = BusWire.AddWire (srcPort, tgtPort)
                                 fst (BusWire.update msg acc updatedModelS.Symbol)
@@ -705,7 +705,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , Cmd.batch [
                     cmds
                     discardSelectionsCmd
-                    Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and_1")))
+                    Cmd.ofMsg (Symbol (Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and1")))
                     Cmd.ofMsg (Wire (BusWire.AddSymbol))
                     Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                 ]

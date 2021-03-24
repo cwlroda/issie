@@ -188,7 +188,7 @@ let getTargetedPort (symModel: Model) (pos: XYPos) : PortId Option =
         |> Map.filter
             (fun _ port ->
                 portPos symModel port.PortId
-                |> posDist pos < 10.
+                |> posDist pos <= 10.
             )
         |> Map.toList
         |> List.map snd
@@ -201,6 +201,49 @@ let getTargetedPort (symModel: Model) (pos: XYPos) : PortId Option =
     match nearbyPorts with
     | nearestPort::_ -> Some nearestPort.PortId
     | [] -> None
+
+let getTargetedInput (symModel: Model) (pos: XYPos) : PortId Option =
+    let nearbyPorts = 
+        allPortsInModel symModel
+        |> Map.filter
+            (fun _ port ->
+                portPos symModel port.PortId
+                |> posDist pos <= 10.
+                || port.PortType <> PortType.Input
+            )
+        |> Map.toList
+        |> List.map snd
+        |> List.sortBy
+            (fun port ->
+                portPos symModel port.PortId
+                |> posDist pos
+            )
+    
+    match nearbyPorts with
+    | nearestPort::_ -> Some nearestPort.PortId
+    | [] -> None
+
+let getTargetedOutput (symModel: Model) (pos: XYPos) : PortId Option =
+    let nearbyPorts = 
+        allPortsInModel symModel
+        |> Map.filter
+            (fun _ port ->
+                portPos symModel port.PortId
+                |> posDist pos <= 10.
+                || port.PortType <> PortType.Output
+            )
+        |> Map.toList
+        |> List.map snd
+        |> List.sortBy
+            (fun port ->
+                portPos symModel port.PortId
+                |> posDist pos
+            )
+    
+    match nearbyPorts with
+    | nearestPort::_ -> Some nearestPort.PortId
+    | [] -> None
+
 
 let symbolPos (symModel: Model) (sId: ComponentId) : XYPos = 
     Map.find sId symModel
