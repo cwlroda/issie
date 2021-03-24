@@ -365,12 +365,14 @@ let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<Po
 
     match getType port1, getType port2 with
     | pT1, pT2 when pT1 = pT2 -> Error $"Invalid connection! Ports cannot both be {pT1}s."
-    | _ -> Ok (port1, port2)
+    | PortType.Output, PortType.Input -> Ok (port1, port2)
+    | PortType.Input, PortType.Output -> Ok (port2, port1)
+    | _ -> failwithf "Invalid connection!"
 
 let notAvaliableInput (wModel: Model) (wId: ConnectionId) (inputId: PortId): bool =
     Map.exists (fun _ w -> (w.Id <> wId) && (w.TargetPort = inputId)) wModel.WX
 
-let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort: PortId) (conId: ConnectionId Option) : Wire option =
+let createWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) (conId: ConnectionId Option) : Wire option =
     let createId =
         function
         | Some s -> s
@@ -378,10 +380,9 @@ let createWire (wModel: Model) (sModel: Symbol.Model) (srcPort: PortId) (tgtPort
 
     let wId = createId conId
 
-    let widthValid = checkPortWidths sModel srcPort tgtPort
-    let validSrcTgt = typesValid (srcPort, tgtPort) sModel
+    let widthValid = checkPortWidths sModel port1 port2 
 
-    match validSrcTgt with
+    match typesValid (port1, port2) sModel with
     | Ok (s, t) ->
         let src, tgt, width, colour, err =
             match widthValid with
