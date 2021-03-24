@@ -368,7 +368,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
     let handleInterruptAction model =
         let newModel = {model with DragState=NotDragging}
-//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
         match model.DragState with
         | AreaSelect _ -> newModel, Cmd.none
         | DragState.Wire (didDrag, prevSubModel) ->
@@ -446,15 +446,18 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 deselectSymbolsCmd
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
-    let rec batchInfer (pIdStart:CommonTypes.PortId) (pIdEnd:CommonTypes.PortId) (createOrDelete:CommonTypes.CreateOrDelete) (visited:CommonTypes.PortId list): Cmd<Msg> List =
+    let rec batchInfer (symModel:Symbol.Model) (pIdStart:CommonTypes.PortId) (pIdEnd:CommonTypes.PortId) (createOrDelete:CommonTypes.CreateOrDelete) (visited:CommonTypes.PortId list) (iterations:int): Symbol.Model =
+        if iterations > 100 then symModel else
+        let createMsg = Symbol.CreateInference (pIdStart,pIdEnd)
+        let deleteMsg = Symbol.DeleteInference (pIdStart,pIdEnd)
         let createDeleteMsg = 
             match createOrDelete with
-            | CommonTypes.CreateOrDelete.Create -> Symbol.CreateInference (pIdStart,pIdEnd)
-            | CommonTypes.CreateOrDelete.Delete -> Symbol.DeleteInference (pIdStart,pIdEnd)
+            | CommonTypes.CreateOrDelete.Create -> createMsg
+            | CommonTypes.CreateOrDelete.Delete -> deleteMsg
 
         let tgtSymbol = 
-            Symbol.findPort model.Symbol pIdEnd
-            |> Symbol.findSymbolFromPort model.Symbol
+            Symbol.findPort symModel pIdEnd
+            |> Symbol.findSymbolFromPort symModel
 
         let listOfConnections = 
             tgtSymbol.Component.OutputPorts
@@ -464,8 +467,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 |> BusWire.getAllPidEnds model.Wire
                 |> List.filter (fun newTgtPort -> 
                     let newTgtSymbol = 
-                        Symbol.findPort model.Symbol newTgtPort
-                        |> Symbol.findSymbolFromPort model.Symbol
+                        Symbol.findPort symModel newTgtPort
+                        |> Symbol.findSymbolFromPort symModel
                     match newTgtSymbol.Component.Type with
                     | CommonTypes.SplitWire _ | CommonTypes.BusSelection _  -> true
                     | comp when comp = CommonTypes.MergeWires -> true
@@ -477,29 +480,58 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             |> List.toSeq
             |> List.concat
         match listOfConnections with
-        | [] -> [Cmd.ofMsg (Symbol createDeleteMsg)]
+        | [] -> fst (Symbol.update createDeleteMsg symModel) 
         | _ -> 
             match (List.tryFind (fun i -> i=pIdStart) visited) with
             |None ->
                 match tgtSymbol.Component.Type with
                 | CommonTypes.MergeWires | CommonTypes.IOLabel ->
-                    List.fold (fun acc (newPIdStart, newPIdEnd) -> acc @ (batchInfer newPIdStart newPIdEnd createOrDelete (visited @ [pIdStart]))) [Cmd.ofMsg (Symbol createDeleteMsg)] listOfConnections
+                    let firstUpdatedModel = fst (Symbol.update createDeleteMsg symModel)
+                    let finalUpdatedModel = 
+                        List.fold (fun acc (newPIdStart, newPIdEnd) -> 
+                            batchInfer acc  newPIdStart newPIdEnd CommonTypes.CreateOrDelete.Create (visited @ [pIdStart]) (iterations + 1)
+                        ) firstUpdatedModel listOfConnections
+                    finalUpdatedModel
                 | CommonTypes.SplitWire _ ->
-                    List.fold (fun acc (newPIdStart, newPIdEnd) -> 
-                        let pStart = Symbol.findPort model.Symbol newPIdStart 
-                        if pStart.PortNumber <> Some (CommonTypes.PortNumber 1) then
-                            acc @ (batchInfer newPIdStart newPIdEnd createOrDelete (visited @ [pIdStart]))
-                        else acc   
-                    ) [Cmd.ofMsg (Symbol createDeleteMsg)] listOfConnections
+                    let firstUpdatedModel = fst (Symbol.update createDeleteMsg symModel)
+                    let finalUpdatedModel = 
+                        List.fold (fun acc (newPIdStart, newPIdEnd) -> 
+                            let pStart = Symbol.findPort symModel newPIdStart 
+                            if pStart.PortNumber <> Some (CommonTypes.PortNumber 1) then
+                                batchInfer acc newPIdStart newPIdEnd CommonTypes.CreateOrDelete.Create (visited @ [pIdStart]) (iterations + 1)
+                            else acc   
+                        ) firstUpdatedModel listOfConnections
+                    finalUpdatedModel
                 |CommonTypes.BusSelection _ -> 
-                    List.fold (fun acc (newPIdStart, newPIdEnd) -> 
-                        let pStart = Symbol.findPort model.Symbol newPIdStart 
-                        if pStart.PortNumber <> Some (CommonTypes.PortNumber 0) then
-                            acc @ (batchInfer newPIdStart newPIdEnd createOrDelete (visited @ [pIdStart]))
-                        else acc   
-                    ) [Cmd.ofMsg (Symbol createDeleteMsg)] listOfConnections
-                | _ -> []
-            |Some _ -> [Cmd.ofMsg (Symbol createDeleteMsg)]
+                    let firstUpdatedModel = fst (Symbol.update createDeleteMsg symModel)
+                    let finalUpdatedModel = 
+                        List.fold (fun acc (newPIdStart, newPIdEnd) -> 
+                            let pStart = Symbol.findPort symModel newPIdStart 
+                            if pStart.PortNumber <> Some (CommonTypes.PortNumber 0) then
+                                batchInfer acc newPIdStart newPIdEnd CommonTypes.CreateOrDelete.Create (visited @ [pIdStart]) (iterations + 1)
+                            else acc   
+                        ) firstUpdatedModel listOfConnections
+                    finalUpdatedModel
+                | _ -> symModel
+            |Some _ ->
+                
+                let port = Symbol.findPort symModel pIdStart
+                if port.Width <> (CommonTypes.PortWidth 0) then
+                    let sym = Symbol.findSymbolFromPort symModel port
+                    let newOutput = 
+                        sym.Component.OutputPorts
+                        |> Map.add pIdStart 
+                            {port with
+                                Width = CommonTypes.PortWidth 0
+                            }
+                    let newComp = 
+                        {sym.Component with
+                            OutputPorts = newOutput
+                        }
+                    let newModel = Symbol.updateSymbolModelWithComponent symModel newComp
+                    batchInfer newModel pIdStart pIdEnd CommonTypes.CreateOrDelete.Create [] (iterations + 1)
+                else symModel
+
 
     let handleKeyPress key =
         let highlightingAfterUndoAndRedoCmd model =
@@ -584,27 +616,29 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 PanY = panY
             }, Cmd.none
         | DEL ->
-            { model with Selection = Empty;DragState=NotDragging },
             match model.Selection with
             | SelectionState.Wire wId ->
                 let wire = (BusWire.findWire model.Wire wId)
-                let inference = batchInfer wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete []
+                let inference = 
+                    batchInfer model.Symbol wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete [] 0
+                    
+                { model with 
+                    Selection = Empty;DragState=NotDragging 
+                    Symbol = inference
+                },
                 Cmd.batch 
-                    (inference @ 
                         [
                             Cmd.ofMsg (Wire (BusWire.DeleteWire wId))
                             Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                         ]
-                    )
             | Symbols sIdLst ->
-                let widthInf = 
+                let inference = 
                     BusWire.getWiresOfSymbols model.Wire model.Symbol sIdLst
                     |> Map.toList
-                    |> List.map (fun (_, wire) ->
-                        batchInfer wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete []
-                    )
-                    |> List.toSeq
-                    |> List.concat
+                    |> List.fold (fun acc (_, wire) ->
+                        batchInfer acc wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete [] 0
+                    ) model.Symbol
+
                 let remainingMsg = 
                     [
                         Cmd.ofMsg (Wire (BusWire.DeleteSymbols sIdLst))
@@ -612,8 +646,16 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         Cmd.ofMsg (Wire (BusWire.RoutingUpdate))
                         Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                     ]
-                Cmd.batch (widthInf @ remainingMsg)
-            | Empty -> Cmd.none
+                { model with 
+                    Selection = Empty;DragState=NotDragging 
+                    Symbol = inference
+                },
+                Cmd.batch (remainingMsg)
+            | Empty -> 
+                { model with 
+                    Selection = Empty;DragState=NotDragging
+                },
+                Cmd.none
         | AltC ->
             match model.Selection with
             | Symbols sIdLst ->
@@ -672,7 +714,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
                     { model with Symbol = sModel }
 
-                let updatedModelW =
+                let updatedModelW=
                     let wModel =
                         model.CopyList.Wires
                         |> List.fold (fun acc (srcPos, tgtPos) ->
@@ -680,11 +722,22 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                                 Symbol.getSpecificPort updatedModelS.Symbol (posAdd tgtPos offset) CommonTypes.PortType.Input with
                             | Some srcPort, Some tgtPort ->
                                 let msg = BusWire.AddWire (srcPort, tgtPort)
-                                fst (BusWire.update msg acc updatedModelS.Symbol)
-                            | _ -> acc
-                        ) updatedModelS.Wire
+                                let symbolModel = 
+                                    batchInfer updatedModelS.Symbol srcPort tgtPort CommonTypes.CreateOrDelete.Create [] 0
+                                // let symbolModel = 
+                                //     List.fold(fun acc elem -> 
+                                //         fst (Symbol.update elem acc )
+                                //     ) updatedModelS.Symbol inferred
+                                
+                                let wireModel = fst (BusWire.update msg accWire symbolModel)
+                                wireModel,symbolModel
+                            | _ -> accWire,accSymbol
+                        ) (updatedModelS.Wire,updatedModelS.Symbol)
 
-                    { updatedModelS with Wire = wModel }
+                    { updatedModelS with 
+                        Wire = fst wModel 
+                        Symbol = snd wModel
+                    }
 
                 let updatedModel =
                     {
@@ -827,24 +880,26 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let oldWire = Map.find wireInQuestion oldModel
                 let oldSrcPortId = oldWire.SrcPort
                 let oldTgtPortId = oldWire.TargetPort
-                let inferredDelete = batchInfer oldSrcPortId oldTgtPortId CommonTypes.CreateOrDelete.Delete []
+                let inferredDelete = 
+                    batchInfer newModel.Symbol oldSrcPortId oldTgtPortId CommonTypes.CreateOrDelete.Delete [] 0
 
                 match newModel.Offset with
                 | None -> nullCase
                 | Some (offset, CommonTypes.PortType.Input) ->
-                    let findingPort = Symbol.getTargetedPort model.Symbol (posAdd model.MousePosition offset)
+                    let findingPort = Symbol.getTargetedPort newModel.Symbol (posAdd model.MousePosition offset)
                     match findingPort with
                     | Some portId -> 
-                        let foundPort = Symbol.findPort model.Symbol portId
+                        let foundPort = Symbol.findPort newModel.Symbol portId
                         match foundPort.PortType with
                         | CommonTypes.PortType.Input ->
-                            let inferredCreate = batchInfer oldSrcPortId foundPort.PortId CommonTypes.CreateOrDelete.Create []
+                            let inferredCreate = 
+                                batchInfer inferredDelete oldSrcPortId foundPort.PortId CommonTypes.CreateOrDelete.Create [] 0
                             let newerModel = 
                                 {newModel with
                                     Offset = None
+                                    Symbol = inferredCreate
                                 }
                             newerModel, Cmd.batch (
-                                inferredDelete @ inferredCreate @
                                 [
                                     Cmd.ofMsg (Wire (BusWire.EndDrag))
                                 ]  
@@ -855,9 +910,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                             let newerModel = 
                                 {newModel with
                                     Offset = None
+                                    Symbol = inferredDelete
                                 }
                             newerModel, Cmd.batch (
-                                inferredDelete @ 
                                 [
                                     Cmd.ofMsg (Wire (BusWire.EndDrag))
                                 ]  
@@ -867,19 +922,21 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
                     | None -> nullCase
                 | Some (offset, CommonTypes.PortType.Output) ->
-                    let findingPort = Symbol.getTargetedPort model.Symbol (posDiff model.MousePosition offset)
+                    let findingPort = Symbol.getTargetedPort newModel.Symbol (posDiff model.MousePosition offset)
                     match findingPort with
                     | Some portId ->
-                        let foundPort = Symbol.findPort model.Symbol portId
+                        let foundPort = Symbol.findPort newModel.Symbol portId
                         match foundPort.PortType with
                         | CommonTypes.PortType.Output ->
-                            let inferredCreate = batchInfer foundPort.PortId oldTgtPortId CommonTypes.CreateOrDelete.Create []
+                            let inferredCreate = 
+                                batchInfer inferredDelete foundPort.PortId oldTgtPortId CommonTypes.CreateOrDelete.Create [] 0
                             let newerModel = 
                                 {newModel with
                                     Offset = None
+                                    Symbol = inferredCreate
                                 }
                             newerModel, Cmd.batch (
-                                inferredDelete @ inferredCreate @
+                                
                                 [
                                     Cmd.ofMsg (Wire (BusWire.EndDrag))
                                 ]  
@@ -890,9 +947,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                             let newerModel = 
                                 {newModel with
                                     Offset = None
+                                    Symbol = inferredDelete
                                 }
                             newerModel, Cmd.batch (
-                                inferredDelete @ 
                                 [
                                     Cmd.ofMsg (Wire (BusWire.EndDrag))
                                 ]  
@@ -912,19 +969,27 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         saveStateIfDraggedCmd didDrag prevWireModel
                     ]
             | DragState.WireCreation (pIdStart, p) ->
-                let targetedPort = Symbol.getTargetedPort model.Symbol p
-                { newModel with Selection = Empty },
+                let targetedPort = Symbol.getTargetedPort newModel.Symbol p
+                
                 match targetedPort with
                 | Some pIdEnd when pIdEnd <> pIdStart ->
-                    let inferred = batchInfer pIdStart pIdEnd CommonTypes.CreateOrDelete.Create []
-
+                    let inferred = 
+                        batchInfer newModel.Symbol pIdStart pIdEnd CommonTypes.CreateOrDelete.Create [] 0
+                        
+                    { newModel with 
+                        Selection = Empty
+                        Symbol = inferred 
+                    },
                     Cmd.batch 
-                        (inferred @ [
+                        ([
                             Cmd.ofMsg (Wire (BusWire.AddWire (pIdStart, pIdEnd)))
                             Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                         ])
 
-                | _ -> Cmd.none
+                | _ -> 
+                    { newModel with 
+                        Selection = Empty
+                    },Cmd.none
             | DragState.Pan (origPan, panStart, panEnd) ->
                 updatePan newModel origPan panStart panEnd
                 , Cmd.none
