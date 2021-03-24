@@ -273,9 +273,6 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
 
     
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
-    let deselectSymbolsCmd =
-        Cmd.ofMsg (Symbol (Symbol.SetSelected []))
-
     let highlightPortsNearCmd p =
         let currentType = 
             match model.DragState with
@@ -399,7 +396,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         match (targetedPort, selectedSymbol, selectedWire, m) with
         | (Some pId, _, _, _) ->
             { model with DragState=WireCreation (pId, p) }
-            , deselectSymbolsCmd
+            , Cmd.none
         | (None, Some sym, _, m) ->
             let isSelected =
                 match model.Selection with
@@ -419,7 +416,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 Selection = Symbols selectedSymbols
                 DragState = DragState.Symbol (false, (model.Wire, model.Symbol))
             }, Cmd.batch [
-                Cmd.ofMsg (Symbol (Symbol.SetSelected selectedSymbols))
                 Cmd.ofMsg (Symbol (Symbol.StartDragging (selectedSymbols, snapToGrid p)))
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
@@ -428,7 +424,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 Selection = SelectionState.Wire wId
                 DragState = DragState.Wire (false, (model.Wire, model.Symbol))
             }, Cmd.batch [
-                deselectSymbolsCmd
                 Cmd.ofMsg (Wire (BusWire.SetSelected wId))
                 Cmd.ofMsg (Wire (BusWire.StartDrag (wId, snapToGrid p)))
             ]
@@ -436,7 +431,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             { model with
                 DragState = AreaSelect (p, p, true)
             }, Cmd.batch [
-                deselectSymbolsCmd
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
         | (None, None, None, NoModifier) ->
@@ -445,7 +439,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 DragState = AreaSelect (p, p, false)
                 ClickPosition = p
             }, Cmd.batch [
-                deselectSymbolsCmd
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
     let rec batchInfer (symModel:Symbol.Model) (pIdStart:CommonTypes.PortId) (pIdEnd:CommonTypes.PortId) (createOrDelete:CommonTypes.CreateOrDelete) (visited:CommonTypes.PortId list) (iterations:int): Symbol.Model =
@@ -540,19 +533,16 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             Cmd.batch [
                 highlightPortsNearCmd model.MousePosition
                 match model.Selection with
-                | Symbols sIdLst ->
+                | Symbols _ ->
                     Cmd.batch [
-                        Cmd.ofMsg (Symbol (Symbol.SetSelected sIdLst))
                         Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     ]
                 | SelectionState.Wire wId ->
                     Cmd.batch [
-                        deselectSymbolsCmd
                         Cmd.ofMsg (Wire (BusWire.SetSelected wId))
                     ]
                 | SelectionState.Empty ->
                     Cmd.batch [
-                        deselectSymbolsCmd
                         Cmd.ofMsg (Wire (BusWire.UnselectAll))
                     ]
             ]
@@ -562,13 +552,12 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             let selectedSymbols = Symbol.getAllSymbols model.Symbol
 
             { model with Selection = Symbols selectedSymbols }
-            , Cmd.ofMsg (Symbol (Symbol.SetSelected selectedSymbols))
+            , Cmd.none
         | Escape ->
             match model.DragState with
             | NotDragging ->
                 { model with Selection = Empty }
                 , Cmd.batch [
-                    deselectSymbolsCmd
                     Cmd.ofMsg (Wire (BusWire.UnselectAll))
                 ]
             | DragState.Symbol (_, (prevWireModel, prevSymbolModel)) ->
@@ -712,7 +701,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         |> List.fold (fun acc (sType, p, sLabel) ->
                             let msg = Symbol.AddSymbol (sType, snapToGrid (posAdd p model.ClickPosition), sLabel)
                             fst (Symbol.update msg acc)
-                        ) (fst (Symbol.update (Symbol.SetSelected []) model.Symbol))
+                        ) (model.Symbol)
 
                     { model with Symbol = sModel }
 
@@ -740,7 +729,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let updatedModel =
                     {
                         updatedModelW with
-                            Selection = Symbols (Symbol.getSelectedSymbols updatedModelW.Symbol)
+                            Selection = Empty
                     }
 
                 updatedModel,
@@ -748,7 +737,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     [
                         Cmd.ofMsg (Wire (BusWire.AddSymbol))  
                         Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
-                    ]                    
+                    ]
                 )
             | Uninitialized -> model, Cmd.none
         | AltZ ->
@@ -801,11 +790,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     let handleMouseMsg mT modifier =
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, mods) ->
-            let discardSelectionsCmd =
-                Cmd.batch [
-                    deselectSymbolsCmd
-                    Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                ]
+            let discardSelectionsCmd = Cmd.ofMsg (Wire (BusWire.UnselectAll))
             
             let (model, cmds) = handleInterruptAction model
 
@@ -861,7 +846,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         targetedSymbols
 
                 { newModel with Selection = Symbols selectedSymbols }
-                , Cmd.ofMsg (Symbol (Symbol.SetSelected selectedSymbols))
+                , Cmd.none
             | DragState.Wire (didDrag, prevWireModel) ->
                 let nullCase = 
                     newModel, Cmd.batch (
@@ -1023,7 +1008,12 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
 let view (model: Model) (dispatch: Msg -> unit) =
     let sDispatch sMsg = dispatch (Symbol sMsg)
-    let symbolSvg = Symbol.view model.Symbol sDispatch
+    let selectedSymbols =
+        match model.Selection with
+        | SelectionState.Symbols sIdLst -> Some sIdLst
+        | _ -> None
+
+    let symbolSvg = Symbol.view model.Symbol selectedSymbols sDispatch
     let wDispatch wMsg = dispatch (Wire wMsg)
     let wireSvg = BusWire.view model.Wire model.Symbol wDispatch
     let symbolsAndWiresSvg =

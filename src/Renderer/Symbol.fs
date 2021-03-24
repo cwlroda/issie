@@ -26,7 +26,6 @@ type Symbol =
         IsDragging : bool
         Id : ComponentId
         Component : Component
-        Selected : bool
         Shadow : bool
     }
 
@@ -55,7 +54,6 @@ type Msg =
     | DeleteSymbols of sIdLst: ComponentId list
     | UpdateSymbolModelWithComponent of Component // Issie interface
     // | SetSelectedDummy of topLeft:XYPos * bottomRight:XYPos // 
-    | SetSelected of sIdLst:ComponentId list
     // | MouseOverPort of port : Port // Used for Dummy Code
     // | MouseOutPort of port : Port // Used for Dummy Code
     | HighlightPorts of pId : PortId list
@@ -163,12 +161,6 @@ let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
             let symBBox = pointsToBBox (posOf sym.Component.X sym.Component.Y) (posOf (sym.Component.X+sym.Component.W) (sym.Component.Y+sym.Component.H))
             overlaps symBBox bbox
         )
-    |> Map.toList
-    |> List.map fst
-
-let getSelectedSymbols (symModel: Model) : ComponentId list =
-    symModel
-    |> Map.filter (fun _ s -> s.Selected)
     |> Map.toList
     |> List.map fst
 
@@ -783,11 +775,6 @@ let createNewSymbol ()  =
         IsDragging = false
         Id = compId
         Component = comp
-        Selected =
-            match rng.Next(0,2) with
-            | 0-> false
-            | 1 -> true
-            | _ -> true
         Shadow = false
     }
 
@@ -799,20 +786,6 @@ let init () =
     |> List.map (fun sym -> (sym.Id, sym))
     |> Map.ofList
     , Cmd.none
-
-let setSelectedFunction (topLeft: XYPos, topRight: XYPos) (symModel: Model) : Model =
-    symModel
-    |> Map.map (fun _ sym ->
-        if (withinSelectedBoundary {X=sym.Component.X; Y=sym.Component.Y} {X=sym.Component.X + sym.Component.W; Y=sym.Component.Y + sym.Component.H} topLeft topRight) then
-            {sym with
-                Selected = true  
-            }
-        else
-            {sym with
-                Selected = false
-            }
-    )
-
 
 let updateSymbolModelWithComponent (symModel: Model) (comp: Component) : Model =
     symModel
@@ -953,30 +926,18 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 IsDragging = false
                 Id = compId
                 Component = comp
-                Selected = true
                 Shadow = false
             }
         
         Map.add compId sym model, Cmd.none
 
-    | DeleteSymbols _ ->
-        Map.filter (fun _ sym -> not sym.Selected) model , Cmd.none
+    | DeleteSymbols sIdLst ->
+        let sIdSet = Set.ofList sIdLst
+        Map.filter (fun _ sym -> not <| Set.contains sym.Id sIdSet) model
+        , Cmd.none
     
     | UpdateSymbolModelWithComponent comp ->
         updateSymbolModelWithComponent model comp, Cmd.none
-
-    | SetSelected (sIdLst) ->
-        model
-        |> Map.map (fun _ sym -> 
-            if List.contains sym.Id sIdLst then
-                {sym with
-                    Selected = true
-                }
-            else 
-                {sym with
-                    Selected = false
-                }
-        ) , Cmd.none
 
     | StartDragging (sIdLst, pagePos) ->
         model
@@ -1111,6 +1072,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
 type private RenderSymbolProps =
     {
         Symbol : Symbol // name works for the demo!
+        Selected: bool
         Dispatch : Dispatch<Msg>
         key: string // special field used by react to detect whether lists have changed, set to symbol Id
     }
@@ -1123,7 +1085,7 @@ let private renderSymbol (model:Model) =
             let opacity = if props.Symbol.Shadow then "20%" else "100%"
              
             let fillColor =
-                if props.Symbol.Selected then
+                if props.Selected then
                 //if props.Symbol.IsDragging then
                     "#00d1b2"
                 else
@@ -1143,7 +1105,7 @@ let private renderSymbol (model:Model) =
             let outputPorts = props.Symbol.Component.OutputPorts
             
             let componentType = props.Symbol.Component.Type
-            let selectedBool = props.Symbol.Selected
+            let selectedBool = props.Selected
 
             let componentName =
                 match props.Symbol.Component.Type with
@@ -1752,13 +1714,19 @@ let private renderSymbol (model:Model) =
     )
 
 /// View function for symbol layer of SVG
-let view (model : Model) (dispatch : Msg -> unit) = 
+let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (dispatch : Msg -> unit) = 
+    let selectedSet =
+        match selectedSymbols with
+        | Some sIdLst -> Set.ofList sIdLst
+        | None -> Set.empty
+
     model
     |> Map.map (fun _ ({Id = ComponentId id} as symbol) ->
         renderSymbol model
             {
                 Symbol = symbol
                 Dispatch = dispatch
+                Selected = Set.contains symbol.Id selectedSet
                 key = id
             }
     )
