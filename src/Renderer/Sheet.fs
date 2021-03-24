@@ -444,7 +444,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 DragState = DragState.Wire (false, (model.Wire, model.Symbol))
             }, Cmd.batch [
                 deselectSymbolsCmd
-                Cmd.ofMsg (Wire (BusWire.StartDrag (wId, snapToGrid p)))
+                Cmd.ofMsg (Wire (BusWire.StartDrag (wId, p)))
             ]
         | (None, None, None, Control) ->
             { model with

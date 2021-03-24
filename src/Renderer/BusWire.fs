@@ -162,7 +162,7 @@ let ptCloseToSeg (width: float) (pos:XYPos) (startPt: XYPos) (endPt: XYPos): boo
 let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
     let index =
         wire.Segments
-        |> List.tryFindIndex (fun s -> ptCloseToSeg 11. pos s.StartPos s.EndPos )
+        |> List.tryFindIndex (fun s -> ptCloseToSeg 5. pos s.StartPos s.EndPos )
 
     match index with
     | Some x ->  
@@ -474,7 +474,7 @@ let singleWireView =
 
 let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
     let wire = findWire wModel wId
-    let diff = posDiff pos wire.LastDragPos
+    let diff = snapToGrid (posDiff pos wire.LastDragPos)
 
     let seg =
         match List.tryItem wire.SelectedSegment wire.Segments with
