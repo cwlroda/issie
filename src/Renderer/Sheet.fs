@@ -278,9 +278,18 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
     let highlightPortsNearCmd p =
         let currentType = 
-                match model.DragState with
-                | WireCreation (pId, _) -> Some <| Symbol.portType model.Symbol pId
+            match model.DragState with
+            | WireCreation (pId, _) -> Some <| Symbol.portType model.Symbol pId
+            | DragState.Wire _ ->
+                match model.Selection with
+                | SelectionState.Wire wId ->
+                    let wire = BusWire.findWire model.Wire wId
+                    match wire.SelectedSegment with
+                    | x when (x = 0) -> Some <| Symbol.portType model.Symbol wire.TargetPort
+                    | x when x = wire.Segments.Length - 1 -> Some <| Symbol.portType model.Symbol wire.SrcPort
+                    | _ -> None
                 | _ -> None
+            | _ -> None
         let portsNearMouse =
             Symbol.portsInRange model.Symbol p portHighlightRange
             |> List.filter (fun pId ->
