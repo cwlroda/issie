@@ -53,8 +53,6 @@ type Msg =
     | EndDragSymbols
     | AddWire of (PortId * PortId)
     | DeleteWire of ConnectionId
-    | SetSelected of ConnectionId
-    | UnselectAll
     | SetColor of color: HighLightColor
     | StartDrag of wId: ConnectionId * pos: XYPos
     | Dragging of wId: ConnectionId * pos: XYPos
@@ -618,22 +616,11 @@ let getConnectedWires (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentI
 let setWireColor (wModel: Model) (wId: ConnectionId) (c: HighLightColor): Wire =
     {findWire wModel wId with WireColor = c}
 
-/// Update the colour
-let setSelectedColor (wModel: Model) (wId: ConnectionId): Map<ConnectionId, Wire> =
-    wModel.WX
-    |> Map.add wId (setWireColor wModel wId Green)
-
 let getWireColor (w: Wire): HighLightColor =
     match w with
     | w when w.Error <> None -> Red
     | w when  w.WireWidth < 4 -> Blue
     | _ -> Purple
-
-/// Reset the color of all the wires except those set in red to highlight error
-let setUnselectedColor (wModel: Model) : Map<ConnectionId, Wire> =
-    Map.map (fun wId w ->
-        getWireColor w |> setWireColor wModel wId
-    ) wModel.WX
 
 let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionId, Wire> =
     let wire = findWire wModel wId
@@ -649,8 +636,7 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionId
     |> Map.add wId (manualRouting wModel wId pos)
 
 let endDrag (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
-    let updatedModel = {wModel with WX = updateConnections wModel sModel}
-    setUnselectedColor updatedModel
+    updateConnections wModel sModel
 
 let singleSegBBView =
     FunctionComponent.Of
@@ -706,7 +692,7 @@ let adjLabelPos (seg: WireSegment) : XYPos =
     | relDiff when relDiff.X > 10.  ->  posDiff seg.StartPos (posOf 7.5 12.5)
     | _ -> posDiff seg.StartPos (posOf -7.5 12.5)
 
-let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
+let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
     g [] (
         wModel.WX
         |> Map.fold (fun acc _ w ->
@@ -735,7 +721,9 @@ let view (wModel: Model) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
                 {
                     Key = w.Id
                     SegPath = (pathDefString w)
-                    WireColor = w.WireColor
+                    WireColor = match selectedWire with
+                                | Some wId when wId = w.Id -> Green
+                                | _ -> w.WireColor
                     WireWidth = $"%d{w.WireWidth}"
                 }
 
@@ -779,11 +767,6 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     | DeleteWire wMsg ->
         let wxUpdated = deleteWire model sModel wMsg
         { model with WX = wxUpdated }, Cmd.none
-    | SetSelected wMsg ->
-        let wxUpdated = setSelectedColor model wMsg
-        { model with WX = wxUpdated }, Cmd.none
-    | UnselectAll ->
-        { model with WX = setUnselectedColor model }, Cmd.none
     | Dragging (wMsgId, wMsgPos) ->
         let wxUpdated = dragging model wMsgId wMsgPos
         { model with WX = wxUpdated }, Cmd.none

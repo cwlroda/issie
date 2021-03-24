@@ -72,6 +72,7 @@ type Modifier =
     | NoModifier
 
 type Msg =
+    | UpdateSize of float * float
     | SaveState of SubModel
     | Wire of BusWire.Msg
     | Symbol of Symbol.Msg
@@ -120,6 +121,10 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                 NoModifier
         )
 
+    let updateSize (rect: Types.ClientRect) =
+        dispatch
+        <| UpdateSize (System.Math.Round rect.width, System.Math.Round rect.height)
+
     let gridlines =
         let pan =
             snapToGrid {
@@ -131,7 +136,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         let height = int (ceil (model.Height / model.Zoom))
 
         let getGridCoords size =
-            [0..gridSize..size]
+            [0..gridSize..size+2*gridSize]
 
         let getColorAndOpacity gc offset =
             if (gc - offset) % (gridSize * 10) = 0 then
@@ -157,8 +162,8 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
 
         g [] (
             [
-                createHalfGrid width (int pan.X) (fun x -> makeLine x -gridSize x height <| getColorAndOpacity x)
-                createHalfGrid height (int pan.Y) (fun y -> makeLine -gridSize y width y <| getColorAndOpacity y)
+                createHalfGrid width (int pan.X) (fun x -> makeLine x -gridSize x (height+gridSize) <| getColorAndOpacity x)
+                createHalfGrid height (int pan.Y) (fun y -> makeLine -gridSize y (width+gridSize) y <| getColorAndOpacity y)
             ]
             |> List.concat
         )
@@ -244,18 +249,29 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         | _ -> "grab"
     
     div [ Style [
-            Height heightInPixels
-            Width widthInPixels
-            Border (sprintf "%fpx solid green" borderSize)
-            CSSProp.OverflowX OverflowOptions.Hidden
-            CSSProp.OverflowY OverflowOptions.Hidden
-            CSSProp.Cursor cursorType
-          ]
+        Position PositionOptions.Fixed
+        Height "100%"
+        Width "100%"
+        CSSProp.Top 0.
+        CSSProp.Bottom 0.
+        CSSProp.Left 0.
+        CSSProp.Right 0.
+        Border (sprintf "%fpx solid green" borderSize)
+        CSSProp.OverflowX OverflowOptions.Hidden
+        CSSProp.OverflowY OverflowOptions.Hidden
+        CSSProp.Cursor cursorType
+      ]
     ] [ svg [
             Style [
-                Height heightInPixels
-                Width widthInPixels
+                Height "100%"
+                Width "100%"
             ]
+            Ref (fun html ->
+                if html = null then
+                    ()
+                else
+                    (updateSize (html.getBoundingClientRect()))
+                )
             OnMouseDown(fun ev -> (mouseOp Down ev))
             OnMouseUp(fun ev -> (mouseOp Up ev))
             OnMouseMove(fun ev -> mouseOp (if mDown ev then Drag else Move) ev)
@@ -417,30 +433,24 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 DragState = DragState.Symbol (false, (model.Wire, model.Symbol))
             }, Cmd.batch [
                 Cmd.ofMsg (Symbol (Symbol.StartDragging (selectedSymbols, snapToGrid p)))
-                Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
         | (None, None, Some wId, _) ->
             { model with
                 Selection = SelectionState.Wire wId
                 DragState = DragState.Wire (false, (model.Wire, model.Symbol))
             }, Cmd.batch [
-                Cmd.ofMsg (Wire (BusWire.SetSelected wId))
                 Cmd.ofMsg (Wire (BusWire.StartDrag (wId, snapToGrid p)))
             ]
         | (None, None, None, Control) ->
             { model with
                 DragState = AreaSelect (p, p, true)
-            }, Cmd.batch [
-                Cmd.ofMsg (Wire (BusWire.UnselectAll))
-            ]
+            }, Cmd.none
         | (None, None, None, NoModifier) ->
             { model with
                 Selection = Empty
                 DragState = AreaSelect (p, p, false)
                 ClickPosition = p
-            }, Cmd.batch [
-                Cmd.ofMsg (Wire (BusWire.UnselectAll))
-            ]
+            }, Cmd.none
     let rec batchInfer (symModel:Symbol.Model) (pIdStart:CommonTypes.PortId) (pIdEnd:CommonTypes.PortId) (createOrDelete:CommonTypes.CreateOrDelete) (visited:CommonTypes.PortId list) (iterations:int): Symbol.Model =
         if iterations > 100 then symModel else
         let createMsg = Symbol.CreateInference (pIdStart,pIdEnd)
@@ -529,24 +539,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
 
     let handleKeyPress key =
-        let highlightingAfterUndoAndRedoCmd model =
-            Cmd.batch [
-                highlightPortsNearCmd model.MousePosition
-                match model.Selection with
-                | Symbols _ ->
-                    Cmd.batch [
-                        Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                    ]
-                | SelectionState.Wire wId ->
-                    Cmd.batch [
-                        Cmd.ofMsg (Wire (BusWire.SetSelected wId))
-                    ]
-                | SelectionState.Empty ->
-                    Cmd.batch [
-                        Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                    ]
-            ]
-    
         match key with
         | AltA ->
             let selectedSymbols = Symbol.getAllSymbols model.Symbol
@@ -557,9 +549,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             match model.DragState with
             | NotDragging ->
                 { model with Selection = Empty }
-                , Cmd.batch [
-                    Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                ]
+                , Cmd.none
             | DragState.Symbol (_, (prevWireModel, prevSymbolModel)) ->
                 {model with
                     Wire=prevWireModel
@@ -790,8 +780,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     let handleMouseMsg mT modifier =
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, mods) ->
-            let discardSelectionsCmd = Cmd.ofMsg (Wire (BusWire.UnselectAll))
-            
             let (model, cmds) = handleInterruptAction model
 
             match mT.Button with
@@ -987,6 +975,13 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | (Move, p, _) -> processDrag p
 
     match msg with
+    | UpdateSize (w, h) ->
+        printfn "w: %A" w
+        printfn "h: %A" h
+        { model with
+            Width=w
+            Height=h
+        }, Cmd.none
     | SaveState savedSubModel ->
         { model with
             UndoList = List.truncate undoHistorySize <| savedSubModel :: model.UndoList
@@ -1015,7 +1010,12 @@ let view (model: Model) (dispatch: Msg -> unit) =
 
     let symbolSvg = Symbol.view model.Symbol selectedSymbols sDispatch
     let wDispatch wMsg = dispatch (Wire wMsg)
-    let wireSvg = BusWire.view model.Wire model.Symbol wDispatch
+    let selectedWire =
+        match model.Selection with
+        | SelectionState.Wire wId -> Some wId
+        | _ -> None
+
+    let wireSvg = BusWire.view model.Wire selectedWire model.Symbol wDispatch
     let symbolsAndWiresSvg =
         g [] [
             wireSvg
@@ -1046,7 +1046,7 @@ let init () =
         PanY = 0.
         Zoom = 1.
         Width = 1000.
-        Height = 800.
+        Height = 1000.
         UndoList = []
         RedoList = []
         Offset = None
