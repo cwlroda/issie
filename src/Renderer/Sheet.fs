@@ -43,6 +43,7 @@ type Model = {
     CopyList: CopyElements
     GlobalCounter: int
     MousePosition: XYPos
+    ClickPosition: XYPos
     PanX: float
     PanY: float
     Zoom: float
@@ -372,13 +373,14 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             ]
         | (None, None, None, Control) ->
             { model with
-                DragState=AreaSelect (p, p, true)
+                DragState = AreaSelect (p, p, true)
             }
             , Cmd.ofMsg (Wire (BusWire.UnselectAll))
         | (None, None, None, NoModifier) ->
             { model with
                 Selection = Empty
                 DragState = AreaSelect (p, p, false)
+                ClickPosition = p
             }, Cmd.batch [
                 deselectSymbolsCmd
                 Cmd.ofMsg (Wire (BusWire.UnselectAll))
@@ -582,7 +584,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             | Copied ->
                 let offset =
                     let (_, pos, _) = model.CopyList.Symbols.Head
-                    posDiff (snapToGrid (posAdd pos model.MousePosition)) model.CopyList.RefPt
+                    posDiff (snapToGrid (posAdd pos model.ClickPosition)) model.CopyList.RefPt
                 
                 let localCounter = model.GlobalCounter
 
@@ -601,7 +603,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     let sModel =
                         updatedSyms
                         |> List.fold (fun acc (sType, p, sLabel) ->
-                            let msg = Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)
+                            let msg = Symbol.AddSymbol (sType, snapToGrid (posAdd p model.ClickPosition), sLabel)
                             fst (Symbol.update msg acc)
                         ) (fst (Symbol.update (Symbol.SetSelected []) model.Symbol))
 
@@ -975,6 +977,7 @@ let init () =
             }
         GlobalCounter = 0
         MousePosition = posOf 0. 0.
+        ClickPosition = posOf 0. 0.
         PanX = 0.
         PanY = 0.
         Zoom = 1.
