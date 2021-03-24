@@ -936,16 +936,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 cmd
                 Cmd.ofMsg (Symbol (Symbol.HighlightPorts []))
             ]
-        | (Move, p, _) ->
-            let selectedSymbols =
-                match model.Selection with
-                | Symbols s -> s
-                | _ -> failwithf "Can only stop dragging if there is a selection"
-
-            if Symbol.symbolsCollide selectedSymbols model.Symbol then processDrag p     
-            else 
-                { model with MousePosition=p}
-                , highlightPortsNearCmd p
+        | (Move, p, _) -> processDrag p
 
     match msg with
     | SaveState savedSubModel ->
