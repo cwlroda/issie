@@ -700,7 +700,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     sCopyDataLst
                     |> List.map (fun comp ->
                         let p = posOf comp.X comp.Y
-                        let snappedPos = snapToGrid (posAdd p model.MousePosition)
+                        let snappedPos = snapToGrid (posAdd p model.ClickPosition)
                         Symbol.updateCompoment comp snappedPos comp.Label
                     )
                     |> List.map (Symbol.AddSymbol >> Symbol >> Cmd.ofMsg)
