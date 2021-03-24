@@ -27,6 +27,7 @@ type Symbol =
         Id : ComponentId
         Component : Component
         Selected : bool
+        Shadow : bool
     }
 
 
@@ -309,6 +310,15 @@ let portsInRange (model: Model) (mousePos: XYPos) (range: float) : PortId list =
 
     List.map(fun port -> port.PortId) nearbyPorts
 
+let symbolsCollide (idLst : ComponentId list) (model : Model) : bool = 
+    idLst
+    |> List.collect (fun sId ->
+        let symBBox = symbolBBox model sId
+        getSymbolsInTargetArea model symBBox
+        |> List.collect (fun matchedId -> if List.contains matchedId idLst then [] else [matchedId])
+    )
+    |> List.length
+    |> (<) 0
 
 let mulOfFive (input:float)  : float = 
     10. * float (int (input / 10.))
@@ -812,6 +822,7 @@ let createNewSymbol ()  =
             | 0-> false
             | 1 -> true
             | _ -> true
+        Shadow = false
     }
 
 /// Dummy function for test. The real init would probably have no symbols.
@@ -977,6 +988,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 Id = compId
                 Component = comp
                 Selected = true
+                Shadow = false
             }
         
         Map.add compId sym model, Cmd.none
@@ -1013,17 +1025,32 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         ) , Cmd.none
 
     | Dragging (sIdLst, pagePos) -> 
-        model
-        |> Map.map(fun _ sym ->
-            if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
-                let diff = posDiff pagePos sym.LastDragPos
-                {sym with
-                    Component = {sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
-                    LastDragPos = pagePos
-                }
+        let newModel = 
+            model
+            |> Map.map(fun _ sym ->
+                if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
+                    let diff = posDiff pagePos sym.LastDragPos
+                    {sym with
+                        Component = {sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
+                        LastDragPos = pagePos
+                    }
                 else
                     sym
-            ), Cmd.none
+            )
+
+        let collision = (symbolsCollide sIdLst newModel)        
+        newModel
+        |> Map.map (fun _ sym ->
+            if collision then 
+                if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
+                    {sym with Shadow = true}
+                else
+                    {sym with Shadow = false}
+            else 
+                {sym with Shadow = false}
+        ),
+
+        Cmd.none
     
     | EndDragging ->
         model
