@@ -155,18 +155,20 @@ let findWire (wModel: Model) (wId: ConnectionId): Wire =
 let isSegmentAtPort (pos1: XYPos) (pos2: XYPos) =
     if pos1 = pos2 then true else false
 
-let isTargetSeg pos startPos endPos =
-    (createSegBB startPos endPos 5.) |> (containsPoint pos)
+let ptCloseToSeg (width: float) (pos:XYPos) (startPt: XYPos) (endPt: XYPos): bool =
+        createSegBB startPt endPt width |> (containsPoint pos)
 
 // finds closest wire segment to mouse position
 let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
     let index =
         wire.Segments
-        |> List.tryFindIndex (fun s -> isTargetSeg pos s.StartPos s.EndPos)
+        |> List.tryFindIndex (fun s -> ptCloseToSeg 5. pos s.StartPos s.EndPos )
 
     match index with
-    | Some x -> x
-    | None -> failwithf "This shouldn't happen!"
+    | Some x ->  
+        x
+    | None ->      
+        failwithf $"This shouldn't happen! - WireSegements: {wire.Segments} and pos: {pos}"
 
 // creates deafult wire segment
 let makeWireSegment (startPos: XYPos) (endPos: XYPos) : WireSegment =
@@ -472,7 +474,7 @@ let singleWireView =
 
 let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
     let wire = findWire wModel wId
-    let diff = posDiff pos wire.LastDragPos
+    let diff = snapToGrid (posDiff pos wire.LastDragPos)
 
     let seg =
         match List.tryItem wire.SelectedSegment wire.Segments with
@@ -490,17 +492,17 @@ let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
             match wire.SelectedSegment with
             | index when ((index = i) && (index = 0)) ->
                 {s with
-                    StartPos = posAdd seg.StartPos diff
-                    EndPos = posAdd seg.EndPos offset
+                    StartPos = posAdd seg.StartPos diff 
+                    EndPos =  posAdd seg.EndPos offset 
                 }
             | index when ((index = i) && (index = (wire.Segments.Length  - 1))) ->
                 {s with
-                    StartPos = posAdd seg.StartPos offset
+                    StartPos = posAdd seg.StartPos offset 
                     EndPos = posAdd seg.EndPos diff
                 }
             | index when index = i ->
                 {s with
-                    StartPos = posAdd seg.StartPos offset
+                    StartPos = posAdd  seg.StartPos offset
                     EndPos = posAdd seg.EndPos offset
                 }
             | index when (index - 1) = i ->
@@ -817,15 +819,16 @@ let distPtToWire (pt: XYPos) (wire: Wire) =
     |> List.maxBy (~-)
 
 let isTargetWire (pt: XYPos) (wire: Wire) =
-    let ptCloseToSeg (startPt: XYPos) (endPt: XYPos): bool =
-        createSegBB startPt endPt 5. |> (containsPoint pt)
+    //let ptCloseToSeg (pos:XYPos) (startPt: XYPos) (endPt: XYPos): bool =
+    //    createSegBB startPt endPt 5. |> (containsPoint pos)
 
     let res =
         wire.Segments
-        |> List.tryFindIndex (fun s -> ptCloseToSeg s.StartPos s.EndPos)
+        |> List.tryFindIndex (fun s -> (ptCloseToSeg 5. pt) s.StartPos s.EndPos)
 
     match res with
-    | Some _ -> true
+    | Some idx ->
+        true
     | None -> false
 
 /// Give position finds the wire which is within a few pixels. If there are multiple chooses the closest one

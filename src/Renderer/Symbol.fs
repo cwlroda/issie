@@ -324,7 +324,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 PortId = PortId (uuid())
                 PortNumber =  Some (PortNumber (portNumber))
                 PortType = portType
-                PortPos = {X=offset; Y = mulOfFive yPosCalc }
+                PortPos = (snapToGrid {X=offset; Y =  yPosCalc })//{X=offset; Y = mulOfFive yPosCalc }
                 HostId = hostID
                 Hover = PortHover false
                 Width = portWidth
@@ -958,7 +958,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
                     let diff = posDiff pagePos sym.LastDragPos
                     {sym with
-                        Component = {sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
+                        Component ={sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
                         LastDragPos = pagePos
                     }
                 else
@@ -1714,6 +1714,7 @@ let private renderSymbol =
     )
 
 /// View function for symbol layer of SVG
+
 let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (dispatch : Msg -> unit) = 
     let selectedSet =
         match selectedSymbols with
@@ -1737,6 +1738,7 @@ let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) 
         )
         |> Map.toList
         |> List.map snd
+
 
     (renderView selectedSyms true @ renderView unselectedSyms false)
     |> ofList

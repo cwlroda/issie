@@ -439,7 +439,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 Selection = SelectionState.Wire wId
                 DragState = DragState.Wire (false, (model.Wire, model.Symbol))
             }, Cmd.batch [
-                Cmd.ofMsg (Wire (BusWire.StartDrag (wId, snapToGrid p)))
+                Cmd.ofMsg (Wire (BusWire.StartDrag (wId, p)))
+
             ]
         | (None, None, None, Control) ->
             { model with
@@ -451,6 +452,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 DragState = AreaSelect (p, p, false)
                 ClickPosition = p
             }, Cmd.none
+
     let rec batchInfer (symModel:Symbol.Model) (pIdStart:CommonTypes.PortId) (pIdEnd:CommonTypes.PortId) (createOrDelete:CommonTypes.CreateOrDelete) (visited:CommonTypes.PortId list) (iterations:int): Symbol.Model =
         if iterations > 100 then symModel else
         let createMsg = Symbol.CreateInference (pIdStart,pIdEnd)
@@ -537,8 +539,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     batchInfer newModel pIdStart pIdEnd CommonTypes.CreateOrDelete.Create [] (iterations + 1)
                 else symModel
 
-
     let handleKeyPress key =
+
         match key with
         | AltA ->
             let selectedSymbols = Symbol.getAllSymbols model.Symbol
@@ -550,6 +552,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             | NotDragging ->
                 { model with Selection = Empty }
                 , Cmd.none
+
             | DragState.Symbol (_, (prevWireModel, prevSymbolModel)) ->
                 {model with
                     Wire=prevWireModel
@@ -734,6 +737,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         Cmd.ofMsg (Wire (BusWire.AddSymbol))  
                         Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                     ]
+
                 )
             | Uninitialized -> model, Cmd.none
         | AltZ ->
@@ -1023,6 +1027,7 @@ let view (model: Model) (dispatch: Msg -> unit) =
         | _ -> None
 
     let symbolSvg = Symbol.view model.Symbol selectedSymbols sDispatch
+
     let wDispatch wMsg = dispatch (Wire wMsg)
     let selectedWire =
         match model.Selection with
