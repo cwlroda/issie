@@ -638,7 +638,6 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionId
     |> Map.add wId (manualRouting wModel wId pos)
 
 let endDrag (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
-    printf "Draging ended fine"
     updateConnections wModel sModel
 
 let singleSegBBView =
@@ -775,7 +774,6 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
         { model with WX = wxUpdated }, Cmd.none
     | StartDrag (wMsgId, wMsgPos) ->
         let wxUpdated = startDrag model wMsgId wMsgPos
-        printf$"pt which causes drag: {wMsgPos}"
         { model with WX = wxUpdated }, Cmd.none
     | EndDrag ->
         let wxUpdated = endDrag model sModel
@@ -825,8 +823,7 @@ let isTargetWire (pt: XYPos) (wire: Wire) =
         |> List.tryFindIndex (fun s -> (ptCloseToSeg 5. pt) s.StartPos s.EndPos)
 
     match res with
-    | Some idx -> 
-        printf $"pos which caused select: {pt}"
+    | Some idx ->
         true
     | None -> false
 
