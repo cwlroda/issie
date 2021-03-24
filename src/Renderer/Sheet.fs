@@ -211,7 +211,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                 g [] [
                     rect [
                         X model.MousePosition.X
-                        Y model.MousePosition.Y
+                        Y (model.MousePosition.Y - 20.)
                         SVGAttr.Width (textWidth + 20.)
                         SVGAttr.Height "20"
                         SVGAttr.Fill "#a11"
@@ -220,7 +220,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
                     ] []
                     text [ // "Bus Decoder" header
                         X (model.MousePosition.X + 5.)
-                        Y (model.MousePosition.Y + 13.)
+                        Y (model.MousePosition.Y - 7.)
                         Style [
                             UserSelect UserSelectOptions.None
                             TextAnchor "left"
