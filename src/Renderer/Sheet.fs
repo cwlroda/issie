@@ -421,7 +421,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             }, Cmd.batch [
                 Cmd.ofMsg (Symbol (Symbol.SetSelected selectedSymbols))
                 Cmd.ofMsg (Symbol (Symbol.StartDragging (selectedSymbols, snapToGrid p)))
-                Cmd.ofMsg (Wire (BusWire.UnselectAll))
             ]
         | (None, None, Some wId, _) ->
             { model with
@@ -429,25 +428,18 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 DragState = DragState.Wire (false, (model.Wire, model.Symbol))
             }, Cmd.batch [
                 deselectSymbolsCmd
-                Cmd.ofMsg (Wire (BusWire.SetSelected wId))
                 Cmd.ofMsg (Wire (BusWire.StartDrag (wId, snapToGrid p)))
             ]
         | (None, None, None, Control) ->
             { model with
                 DragState = AreaSelect (p, p, true)
-            }, Cmd.batch [
-                deselectSymbolsCmd
-                Cmd.ofMsg (Wire (BusWire.UnselectAll))
-            ]
+            }, deselectSymbolsCmd
         | (None, None, None, NoModifier) ->
             { model with
                 Selection = Empty
                 DragState = AreaSelect (p, p, false)
                 ClickPosition = p
-            }, Cmd.batch [
-                deselectSymbolsCmd
-                Cmd.ofMsg (Wire (BusWire.UnselectAll))
-            ]
+            }, deselectSymbolsCmd
     let rec batchInfer (symModel:Symbol.Model) (pIdStart:CommonTypes.PortId) (pIdEnd:CommonTypes.PortId) (createOrDelete:CommonTypes.CreateOrDelete) (visited:CommonTypes.PortId list) (iterations:int): Symbol.Model =
         if iterations > 100 then symModel else
         let createMsg = Symbol.CreateInference (pIdStart,pIdEnd)
@@ -540,21 +532,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             Cmd.batch [
                 highlightPortsNearCmd model.MousePosition
                 match model.Selection with
-                | Symbols sIdLst ->
-                    Cmd.batch [
-                        Cmd.ofMsg (Symbol (Symbol.SetSelected sIdLst))
-                        Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                    ]
-                | SelectionState.Wire wId ->
-                    Cmd.batch [
-                        deselectSymbolsCmd
-                        Cmd.ofMsg (Wire (BusWire.SetSelected wId))
-                    ]
-                | SelectionState.Empty ->
-                    Cmd.batch [
-                        deselectSymbolsCmd
-                        Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                    ]
+                | Symbols sIdLst -> Cmd.ofMsg (Symbol (Symbol.SetSelected sIdLst))
+                | SelectionState.Wire _ -> deselectSymbolsCmd
+                | SelectionState.Empty -> deselectSymbolsCmd
             ]
     
         match key with
@@ -567,10 +547,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             match model.DragState with
             | NotDragging ->
                 { model with Selection = Empty }
-                , Cmd.batch [
-                    deselectSymbolsCmd
-                    Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                ]
+                , deselectSymbolsCmd
             | DragState.Symbol (_, (prevWireModel, prevSymbolModel)) ->
                 {model with
                     Wire=prevWireModel
@@ -801,11 +778,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     let handleMouseMsg mT modifier =
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, mods) ->
-            let discardSelectionsCmd =
-                Cmd.batch [
-                    deselectSymbolsCmd
-                    Cmd.ofMsg (Wire (BusWire.UnselectAll))
-                ]
+            let discardSelectionsCmd = deselectSymbolsCmd
             
             let (model, cmds) = handleInterruptAction model
 
@@ -1024,8 +997,14 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 let view (model: Model) (dispatch: Msg -> unit) =
     let sDispatch sMsg = dispatch (Symbol sMsg)
     let symbolSvg = Symbol.view model.Symbol sDispatch
+
     let wDispatch wMsg = dispatch (Wire wMsg)
-    let wireSvg = BusWire.view model.Wire model.Symbol wDispatch
+    let selectedWire =
+        match model.Selection with
+        | SelectionState.Wire wId -> Some wId
+        | _ -> None
+
+    let wireSvg = BusWire.view model.Wire selectedWire model.Symbol wDispatch
     let symbolsAndWiresSvg =
         g [] [
             wireSvg
