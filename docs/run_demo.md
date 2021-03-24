@@ -74,4 +74,11 @@ The sheet is infinite. To pan the sheet, hold the ```mousewheel``` button and dr
 ##### 3. Zoom
  - To zoom in, press ```ctrl shift = ```
  - To zoom out, press ```ctrl -```
+
+ ### Added features
+ ##### 1. Width inference
+ a. Connect a component without width inference to one with width inference, then delete the connection.
+ The width of the symbol that has width inference will be updated accordingly. 
+ b. Connect a component without width inference to a merge (ConnectionA), and conenct the output of that merge to another merge (ConnectionB), and the output of the last merge connects to the empty input port of the first merge (ConnectionC). An error should be expected. Delete the ConnectionC and the error should be resolved. Delete ConnectionA and a new error should arise.
+
  
