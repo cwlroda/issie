@@ -435,8 +435,10 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | (None, None, None, Control) ->
             { model with
                 DragState = AreaSelect (p, p, true)
-            }
-            , Cmd.ofMsg (Wire (BusWire.UnselectAll))
+            }, Cmd.batch [
+                deselectSymbolsCmd
+                Cmd.ofMsg (Wire (BusWire.UnselectAll))
+            ]
         | (None, None, None, NoModifier) ->
             { model with
                 Selection = Empty
@@ -714,24 +716,20 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
                     { model with Symbol = sModel }
 
-                let updatedModelW=
+                let updatedModelW =
                     let wModel =
                         model.CopyList.Wires
-                        |> List.fold (fun acc (srcPos, tgtPos) ->
+                        |> List.fold (fun (wire, sym) (srcPos, tgtPos) ->
                             match Symbol.getSpecificPort updatedModelS.Symbol (posAdd srcPos offset) CommonTypes.PortType.Output,
                                 Symbol.getSpecificPort updatedModelS.Symbol (posAdd tgtPos offset) CommonTypes.PortType.Input with
                             | Some srcPort, Some tgtPort ->
                                 let msg = BusWire.AddWire (srcPort, tgtPort)
                                 let symbolModel = 
                                     batchInfer updatedModelS.Symbol srcPort tgtPort CommonTypes.CreateOrDelete.Create [] 0
-                                // let symbolModel = 
-                                //     List.fold(fun acc elem -> 
-                                //         fst (Symbol.update elem acc )
-                                //     ) updatedModelS.Symbol inferred
                                 
-                                let wireModel = fst (BusWire.update msg accWire symbolModel)
+                                let wireModel = fst (BusWire.update msg wire symbolModel)
                                 wireModel,symbolModel
-                            | _ -> accWire,accSymbol
+                            | _ -> wire, sym
                         ) (updatedModelS.Wire,updatedModelS.Symbol)
 
                     { updatedModelS with 
