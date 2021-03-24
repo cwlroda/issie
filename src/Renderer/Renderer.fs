@@ -63,7 +63,9 @@
                 [| makeKeyItem "Blue" "Alt+C" (fun () -> dispatch KeyboardMsg.AltC)
                    makeKeyItem "Green" "Alt+V" (fun () -> dispatch KeyboardMsg.AltV)
                    makeKeyItem "Default"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
+                   makeKeyItem "New Random Wire"  "insert" (fun () -> dispatch KeyboardMsg.INS)
                    makeKeyItem "Red" "Alt+Z" (fun () -> dispatch KeyboardMsg.AltZ)
+                   makeKeyItem "Toggle Debug" "Alt+Shift+D" (fun () -> dispatch KeyboardMsg.AltShiftD)
                    menuSeparator
                    makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch KeyboardMsg.AltShiftZ)
                    makeRoleItem MenuItemRole.ForceReload

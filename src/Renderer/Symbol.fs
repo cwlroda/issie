@@ -27,6 +27,7 @@ type Symbol =
         Id : ComponentId
         Component : Component
         Selected : bool
+        Shadow : bool
     }
 
 
@@ -59,7 +60,7 @@ type Msg =
     // | MouseOutPort of port : Port // Used for Dummy Code
     | HighlightPorts of pId : PortId list
     | UnhighlightPorts
-    | WidthInferrer of (PortId*PortId)
+    | CreateInference of (PortId*PortId)
     | DeleteInference of (PortId*PortId)
 
 
@@ -137,6 +138,7 @@ let allPortsInModel (symModel: Model) : Map<PortId, Port> =
         ) acc (combinedPortsMap elem)
     ) Map.empty
 
+
 let findSymbolFromPort (symModel: Model) (port: Port) : Symbol =
     symModel.[port.HostId]
 
@@ -164,6 +166,12 @@ let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     |> Map.toList
     |> List.map fst
 
+let getSelectedSymbols (symModel: Model) : ComponentId list =
+    symModel
+    |> Map.filter (fun _ s -> s.Selected)
+    |> Map.toList
+    |> List.map fst
+
 let findPort (symModel: Model) (portId: PortId) : Port =
     (allPortsInModel symModel).[portId]
 
@@ -175,23 +183,32 @@ let portPos (symModel: Model) (portId: PortId) : XYPos =
         Y = foundPort.PortPos.Y + foundSymbol.Component.Y
     }
 
-let getTargetedPort (symModel:Model) (pos:XYPos) : PortId Option =
-    let nearbyPorts = 
-        allPortsInModel symModel
-        |> Map.filter
-            (fun _ port ->
-                portPos symModel port.PortId
-                |> posDist pos < 20.
-            )
-        |> Map.toList
-        |> List.map snd
-        |> List.sortBy
-            (fun port ->
-                portPos symModel port.PortId
-                |> posDist pos
-            )
+let nearbyPorts (symModel: Model) (pos: XYPos) : Port list = 
+    allPortsInModel symModel
+    |> Map.filter
+        (fun _ port ->
+            portPos symModel port.PortId
+            |> posDist pos <= 10.
+        )
+    |> Map.toList
+    |> List.map snd
+    |> List.sortBy
+        (fun port ->
+            portPos symModel port.PortId
+            |> posDist pos
+        )
 
-    match nearbyPorts with
+let getTargetedPort (symModel: Model) (pos: XYPos) : PortId Option =
+    match nearbyPorts symModel pos with
+    | nearestPort::_ -> Some nearestPort.PortId
+    | [] -> None
+
+let getSpecificPort (symModel: Model) (pos: XYPos) (portType: PortType) : PortId Option =
+    let portList =
+        nearbyPorts symModel pos
+        |> List.filter (fun p -> p.PortType = portType)
+    
+    match portList with
     | nearestPort::_ -> Some nearestPort.PortId
     | [] -> None
 
@@ -259,6 +276,15 @@ let portsInRange (model: Model) (mousePos: XYPos) (range: float) : PortId list =
 
     List.map(fun port -> port.PortId) nearbyPorts
 
+let symbolsCollide (idLst : ComponentId list) (model : Model) : bool = 
+    idLst
+    |> List.collect (fun sId ->
+        let symBBox = symbolBBox model sId
+        getSymbolsInTargetArea model symBBox
+        |> List.collect (fun matchedId -> if List.contains matchedId idLst then [] else [matchedId])
+    )
+    |> List.length
+    |> (<) 0
 
 let mulOfFive (input:float)  : float = 
     10. * float (int (input / 10.))
@@ -311,7 +337,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 Hover = PortHover false
                 Width = portWidth
             }
-        |false ->
+        | false ->
             {
                 PortId = PortId (uuid())
                 PortNumber =  None
@@ -323,6 +349,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             }
 
     let (inputPorts, outputPorts): (Map<PortId, Port> * Map<PortId, Port>) =
+        let offset = 10.
         match compType with
         | IOLabel ->
             let inputPortMap = 
@@ -424,7 +451,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 [{temp with 
                     PortPos =
                         {temp.PortPos with
-                            X = compW+15.
+                            X = compW + offset
                         }
                 }]
                 |> List.map (fun port -> (port.PortId, port))
@@ -442,7 +469,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 [{temp with 
                     PortPos =
                         {temp.PortPos with
-                            X = compW+15.
+                            X = compW + offset
                         }
                 }]
                 |> List.map (fun port -> (port.PortId, port))
@@ -675,7 +702,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
 let createNewSymbol ()  =
     let rng0 () = rng.Next (1,10)
-    let rngComponent () = rng.Next(0,26)
+    let rngComponent () = rng.Next(20,26)
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
 
     let randomName () = 
@@ -710,7 +737,7 @@ let createNewSymbol ()  =
                     |false -> "TestOutput"
 
                 [0..rng.Next(1,5)]
-                |> List.map (fun i -> ((string i + inOrOut), rng.Next(0,10)))
+                |> List.map (fun i -> ((string i + inOrOut), rng.Next(1,10)))
             {
                 Name = "\"Our\" Custom Component"
                 InputLabels = labels true
@@ -736,21 +763,21 @@ let createNewSymbol ()  =
         | 16 -> Decode4
         | 17 -> Input (rng0 ())
         | 18 -> Output (rng0 ())
-        | 19 -> IOLabel
-        | 20 -> Demux2
+        | 19 -> Demux2
+        | 20 -> IOLabel
         | 21 -> MergeWires
         | 22 -> BusSelection (rng0(),rng0())
         | 23 -> 
             let cons = rng0()
             let wid = int ((log(float cons)/log(2.))+1.)
             Constant (wid, cons)
-        | 24 -> SplitWire (rng0())
+        | 24 -> SplitWire (rng.Next(1,9))
         | _ -> Custom customComp
         
     let rng1 () = rng.Next(0,800)
     let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId ({X= float(rng1 ());Y = float (rng1 ()) }) compType ((randomName ()) + (string(rng.Next (0,10))))
+        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType (randomName() + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
@@ -761,11 +788,13 @@ let createNewSymbol ()  =
             | 0-> false
             | 1 -> true
             | _ -> true
+        Shadow = false
     }
 
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
     [1..10]
+    
     |> List.map (fun x -> createNewSymbol ())
     |> List.map (fun sym -> (sym.Id, sym))
     |> Map.ofList
@@ -808,7 +837,9 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             {tgtPort with
                 Width = 
                     match addOrDelete with 
-                    | true -> srcPort.Width
+                    | true -> 
+                        let (PortWidth wid) = srcPort.Width
+                        if wid >= 0 then srcPort.Width else PortWidth -1
                     | false -> PortWidth 0
             }
         let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
@@ -816,7 +847,9 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             {variedOutputPort with
                 Width = 
                     match addOrDelete with
-                    | true -> subtractPortWidth tgtPortNew.Width (PortWidth n)
+                    | true -> 
+                        if tgtPortNew.Width = (PortWidth -1) then PortWidth 0 
+                        else subtractPortWidth tgtPortNew.Width (PortWidth n)
                     | _ -> PortWidth 0
             }
         let tgtCompNew =
@@ -831,7 +864,9 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             {tgtPort with
                 Width = 
                     match addOrDelete with 
-                    | true -> srcPort.Width
+                    | true -> 
+                        let (PortWidth wid) = srcPort.Width
+                        if wid >= 0 then srcPort.Width else PortWidth -1
                     | false -> PortWidth 0
             }
         let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
@@ -839,7 +874,9 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             {variedOutputPort with
                 Width = 
                     match addOrDelete with
-                    | true -> tgtPortNew.Width
+                    | true -> 
+                        if tgtPortNew.Width = (PortWidth -1) then PortWidth 0 
+                        else tgtPortNew.Width
                     | _ -> PortWidth 0
             }
         let tgtCompNew = 
@@ -848,12 +885,32 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
                 OutputPorts = Map.add variedOutputPort.PortId variedOutputPortNew tgtSym.Component.OutputPorts
             }
         updateSymbolModelWithComponent symModel tgtCompNew
+
+    | BusSelection (outWid,outSelWid) ->
+        let (PortWidth srcWid) = srcPort.Width
+        let tgtPortNew = 
+            {tgtPort with
+                Width = 
+                    match addOrDelete with
+                    | true -> 
+                        if srcWid >= outWid + outSelWid then srcPort.Width
+                        else PortWidth (outWid + outSelWid)
+                    | false -> PortWidth (outWid + outSelWid)
+            }
+        let tgtCompNew = 
+            {tgtSym.Component with
+                InputPorts = Map.add tgtPort.PortId tgtPortNew tgtSym.Component.InputPorts
+            }
+        updateSymbolModelWithComponent symModel tgtCompNew
+
     | MergeWires ->
         let tgtPortNew = 
             {tgtPort with
                 Width = 
                     match addOrDelete with 
-                    | true -> srcPort.Width
+                    | true -> 
+                        let (PortWidth wid) = srcPort.Width
+                        if wid >= 0 then srcPort.Width else PortWidth -1
                     | false -> PortWidth 0
             }
         let variedOutputPort = findPortFromNumAndType tgtSym (PortNumber 0) (PortType.Output)
@@ -866,8 +923,16 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             {variedOutputPort with
                 Width = 
                     match addOrDelete with
-                    | true -> addPortWidth tgtPortNew.Width otherInputPort.Width
-                    | _ -> PortWidth 0
+                    | true -> 
+                        if ((tgtPortNew.Width = (PortWidth -1)) || (otherInputPort.Width = (PortWidth -1)))  then PortWidth 0 
+                        else (addPortWidth tgtPortNew.Width otherInputPort.Width)
+                    | _ -> 
+                        let (PortWidth port1Width) = tgtPortNew.Width
+                        let (PortWidth port2Width) = otherInputPort.Width
+
+                        match port1Width with
+                            | wid when wid < port2Width -> PortWidth port2Width
+                            | _ -> PortWidth port1Width 
             }
         let tgtCompNew = 
             {tgtSym.Component with
@@ -888,7 +953,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 IsDragging = false
                 Id = compId
                 Component = comp
-                Selected = false
+                Selected = true
+                Shadow = false
             }
         
         Map.add compId sym model, Cmd.none
@@ -925,41 +991,38 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         ) , Cmd.none
 
     | Dragging (sIdLst, pagePos) -> 
-        model
-        |> Map.map (fun _ sym -> 
-            if List.contains sym.Id sIdLst then
-                let diff = posDiff pagePos sym.LastDragPos
-                let symBBox = symbolBBox model sym.Id
-                let symsInNewBBox = getSymbolsInTargetArea model {symBBox with Pos = posAdd symBBox.Pos diff}
-
-                let movedSym =
-                    let newPos = (snapToGrid >> posAdd) (posOf sym.Component.X sym.Component.Y) diff
+        let newModel = 
+            model
+            |> Map.map(fun _ sym ->
+                if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
+                    let diff = posDiff pagePos sym.LastDragPos
                     {sym with
-                        Component = {sym.Component with X = newPos.X; Y = newPos.Y}
+                        Component ={sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
                         LastDragPos = pagePos
                     }
+                else
+                    sym
+            )
 
-                match symsInNewBBox with
-                | [id] when id = sym.Id -> movedSym
-                | [] -> movedSym
-                | _ -> sym
-            else
-                sym
-            ), Cmd.none
+        let collision = (symbolsCollide sIdLst newModel)        
+        newModel
+        |> Map.map (fun _ sym ->
+            if collision then 
+                if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
+                    {sym with Shadow = true}
+                else
+                    {sym with Shadow = false}
+            else 
+                {sym with Shadow = false}
+        ),
+
+        Cmd.none
     
     | EndDragging ->
         model
         |> Map.map (fun _ sym ->
             if sym.IsDragging then
-                let newPos = snapToGrid (posOf sym.Component.X sym.Component.Y)
-                {sym with
-                    IsDragging = false
-                    Component=
-                        {sym.Component with 
-                            X = newPos.X//mulOfFive sym.Component.X
-                            Y = newPos.Y//mulOfFive sym.Component.Y
-                        }
-                }
+                { sym with IsDragging = false }
             else sym
         ), Cmd.none
 
@@ -996,7 +1059,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 }   
             }
         ), Cmd.none
-         
+
     | UnhighlightPorts ->
         model
         |> Map.map (
@@ -1031,11 +1094,13 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         )
         ,Cmd.none
 
-    | WidthInferrer (pid1,pid2) ->
+    | CreateInference (pid1,pid2) ->
         widthInference model pid1 pid2 true, Cmd.none
 
     | DeleteInference (pid1,pid2) ->
         widthInference model pid1 pid2 false, Cmd.none
+
+    
 
     | MouseMsg _ -> model, Cmd.none // allow unused mouse messags
 
@@ -1051,11 +1116,12 @@ type private RenderSymbolProps =
     }
 
 /// View for one symbol with caching for efficient execution when input does not change
-let private renderSymbol (model:Model) =
+let private renderSymbol =
     
     FunctionComponent.Of(
         fun (props : RenderSymbolProps) ->
-
+            let opacity = if props.Symbol.Shadow then "20%" else "100%"
+             
             let fillColor =
                 if props.Symbol.Selected then
                 //if props.Symbol.IsDragging then
@@ -1111,6 +1177,7 @@ let private renderSymbol (model:Model) =
                                 TextAnchor "left" 
                                 FontSize "14px"
                                 UserSelect UserSelectOptions.None
+                                Opacity opacity
                             ]
                     }
             let viewboxExternalStaticLabelStyle: IProp seq = 
@@ -1127,10 +1194,11 @@ let private renderSymbol (model:Model) =
                 seq{Style [
                         UserSelect UserSelectOptions.None
                         TextAnchor txtAnchor
-                        FontSize "14px"
+                        FontSize "13px"
                         Fill txtColor
                         // FontFamily "system-ui"
                         FontStyle "italic"
+                        Opacity opacity
                     ]
                 }
                 
@@ -1139,6 +1207,7 @@ let private renderSymbol (model:Model) =
                             UserSelect UserSelectOptions.None
                             TextAnchor "middle"
                             FontSize "20px"
+                            Opacity opacity
                         ]
                 }
 
@@ -1160,14 +1229,14 @@ let private renderSymbol (model:Model) =
                 |Input _ |Constant _ ->
                     text 
                         (Seq.append [
-                            X (bottomLeft.X + 3.)
-                            Y (bottomLeft.Y - 17.)
+                            X (bottomLeft.X + 5.)
+                            Y (bottomLeft.Y - 14.)
                         ] viewboxExternalStaticLabelStyle) [str <| outputString]
                 |_ -> 
                     text 
                         (Seq.append [
-                            X (bottomRight.X - 3.)
-                            Y (bottomRight.Y - 17.)
+                            X (bottomRight.X - 5.)
+                            Y (bottomRight.Y - 14.)
                         ] viewboxExternalStaticLabelStyle) [str <| outputString]
 
             let viewBoxClock (bottomLeft:XYPos): ReactElement =
@@ -1179,6 +1248,7 @@ let private renderSymbol (model:Model) =
                                 SVGAttr.Fill "black"
                                 SVGAttr.Stroke "black"
                                 SVGAttr.StrokeWidth 2
+                                SVGAttr.Opacity opacity
                             ] viewBoxStaticComponent) []
                     
                         text 
@@ -1199,6 +1269,7 @@ let private renderSymbol (model:Model) =
                         FontSize "18px"
                         FontWeight "Bold"
                         Fill "black" // demo font color
+                        Opacity opacity
                         UserSelect UserSelectOptions.None
                     ]
                 }
@@ -1208,17 +1279,20 @@ let private renderSymbol (model:Model) =
                     match x.Hover with
                     |PortHover false ->
                         SVGAttr.Fill fillColor
+                        SVGAttr.Opacity opacity
                         SVGAttr.Stroke outlineColor
                         SVGAttr.StrokeWidth 6
                     |_ -> 
                         SVGAttr.Fill "red"
                         SVGAttr.Stroke "red"
                         SVGAttr.StrokeWidth 8
+                        SVGAttr.Opacity opacity
                 }
             
             let viewPortLinesStaticComponent2 : IProp seq = 
                 seq {
                         SVGAttr.Fill fillColor
+                        SVGAttr.Opacity opacity
                         SVGAttr.Stroke outlineColor
                         SVGAttr.StrokeWidth 3
                 }
@@ -1228,12 +1302,14 @@ let private renderSymbol (model:Model) =
                 match x.Hover with
                 |PortHover false ->
                     SVGAttr.Fill fillColor
+                    SVGAttr.Opacity opacity
                     SVGAttr.Stroke outlineColor
                     SVGAttr.StrokeWidth 3
                 |_ -> 
                     SVGAttr.Fill "red"
                     SVGAttr.Stroke "red"
                     SVGAttr.StrokeWidth 4
+                    SVGAttr.Opacity opacity
             }
 
             let viewPortBusIndicatorTextStaticComponent (x:Port) : IProp seq =
@@ -1245,6 +1321,7 @@ let private renderSymbol (model:Model) =
                         FontSize "12px"
                         FontWeight "Bold"
                         Fill "Blue" // demo font color
+                        Opacity opacity
                         UserSelect UserSelectOptions.None
                     ]
             }
@@ -1256,6 +1333,7 @@ let private renderSymbol (model:Model) =
                         (Seq.append [
                             SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  (0.5*(topLeft.Y+bottomLeft.Y)) (topLeft.X+10.) topLeft.Y topRight.X topRight.Y bottomRight.X bottomRight.Y (bottomLeft.X+10.) bottomLeft.Y )
                             SVGAttr.Fill fillColor
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle))  []
@@ -1274,6 +1352,7 @@ let private renderSymbol (model:Model) =
                         (Seq.append [
                             SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  topLeft.Y (topRight.X-10.) topRight.Y topRight.X (0.5*(topRight.Y+bottomRight.Y)) (bottomRight.X-10.) bottomRight.Y bottomLeft.X bottomLeft.Y)
                             SVGAttr.Fill fillColor
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle))  []
@@ -1291,7 +1370,8 @@ let private renderSymbol (model:Model) =
                     polygon
                         (Seq.append [
                             SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  topLeft.Y (topRight.X-10.) topRight.Y topRight.X (0.5*(topRight.Y+bottomRight.Y)) (bottomRight.X-10.) bottomRight.Y bottomLeft.X bottomLeft.Y)
-                            SVGAttr.Fill fillColor
+                            SVGAttr.Fill fillColor 
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                         ] (Seq.append viewBoxStaticComponent viewBoxInternalStaticLabelStyle))  []
@@ -1317,6 +1397,7 @@ let private renderSymbol (model:Model) =
                             SVGAttr.Width width
                             SVGAttr.Height height
                             SVGAttr.Fill fillColor
+                            SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
                             SVGAttr.StrokeWidth 2
                             
@@ -1417,7 +1498,7 @@ let private renderSymbol (model:Model) =
                     | _ -> nothing
                 ]
 
-            let lineLength = 15.
+            let lineLength = 10.
 
             let viewPortLinesType1 (compType:ComponentType)=
                 let generateLines (portMap: Map<PortId, Port>) : ReactElement list =
@@ -1441,7 +1522,7 @@ let private renderSymbol (model:Model) =
                                     (Seq.append [
                                         Cx (absPos()).X
                                         Cy (absPos()).Y
-                                        R 3.
+                                        R 2.5
                                     ] (viewPortLinesStaticComponent port))[]
                                 let (PortWidth wid) = port.Width
                                 if selectedBool = true && (wid > 0) then
@@ -1672,17 +1753,24 @@ let private renderSymbol (model:Model) =
 
 /// View function for symbol layer of SVG
 let view (model : Model) (dispatch : Msg -> unit) = 
-    model
-    |> Map.map (fun _ ({Id = ComponentId id} as symbol) ->
-        renderSymbol model
-            {
-                Symbol = symbol
-                Dispatch = dispatch
-                key = id
-            }
-    )
-    |> Map.toList
-    |> List.map snd
+    let (unselectedSyms, selectedSyms) =
+        model
+        |> Map.partition (fun _ sym -> sym.Selected)
+
+    let renderView (symMap: Map<ComponentId, Symbol>) : ReactElement list =
+        symMap
+        |> Map.map (fun _ ({Id = ComponentId id} as symbol) ->
+            renderSymbol
+                {
+                    Symbol = symbol
+                    Dispatch = dispatch
+                    key = id
+                }
+        )
+        |> Map.toList
+        |> List.map snd
+
+    (renderView selectedSyms @ renderView unselectedSyms)
     |> ofList
 
 

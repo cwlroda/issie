@@ -16,6 +16,18 @@ type XYPos =
         Y : float
     }
 
+let gridSize = 10.
+
+// snaps wire segments to grid (variable grid size)
+let snapToGrid (pos: XYPos) : XYPos =
+    let xOffset = pos.X % gridSize
+    let yOffset = pos.Y % gridSize
+
+    {
+        X = if xOffset < gridSize - xOffset then pos.X - xOffset else pos.X + gridSize - xOffset
+        Y = if yOffset < gridSize - yOffset then pos.Y - yOffset else pos.Y + gridSize - yOffset
+    }
+
 let posDiff a b =
     {X=a.X-b.X; Y=a.Y-b.Y}
 
@@ -32,7 +44,7 @@ let posAddXY a b =
     {X=a.X+b; Y=a.Y+b}
 
 let posHalve a =
-    {X=a.X/2.; Y=a.Y/2.}
+    snapToGrid {X=a.X/2.; Y=a.Y/2.}
 
 let posOf x y = {X=x;Y=y}
 
@@ -54,7 +66,7 @@ type BBox = {
 
 let toBBox x y w h: BBox =
     {
-        Pos = (posOf x y)
+        Pos = posOf x y
         Width = w
         Height = h
     }
@@ -75,13 +87,13 @@ let pointsToBBox (p1: XYPos) (p2: XYPos) =
 
 let containsPoint (p: XYPos) (bb: BBox) =
     p.X >= bb.Pos.X
-    && p.X < (bb.Pos.X + bb.Width)
+    && p.X <= (bb.Pos.X + bb.Width)
     && p.Y >= bb.Pos.Y
-    && p.Y < (bb.Pos.Y + bb.Height)
+    && p.Y <= (bb.Pos.Y + bb.Height)
 
 let overlaps (b1: BBox) (b2: BBox): bool =
-    let isAbove b1 b2 = (b1.Pos.Y + b1.Height) <= b2.Pos.Y
-    let isLeftOf b1 b2 = (b1.Pos.X + b1.Width) <= b2.Pos.X
+    let isAbove b1 b2 = (b1.Pos.Y + b1.Height) < b2.Pos.Y
+    let isLeftOf b1 b2 = (b1.Pos.X + b1.Width) < b2.Pos.X
 
     not (
         isAbove b1 b2
@@ -89,18 +101,6 @@ let overlaps (b1: BBox) (b2: BBox): bool =
         || isLeftOf b1 b2
         || isLeftOf b2 b1
     )
-
-let gridSize = 10.
-
-// snaps wire segments to grid (variable grid size)
-let snapToGrid (pos: XYPos) : XYPos =
-    let xOffset = pos.X % gridSize
-    let yOffset = pos.Y % gridSize
-
-    {
-        X = if xOffset < gridSize - xOffset then pos.X - xOffset else pos.X + gridSize - xOffset
-        Y = if yOffset < gridSize - yOffset then pos.Y - yOffset else pos.Y + gridSize - yOffset
-    }
 
 type MouseOp = 
     /// button up
@@ -193,9 +193,4 @@ let printStats() =
 /// these determine the size of the canvas relative to the objects on it.
 let canvasUnscaledDimensions : XYPos = 
     {X = 1000. ; Y = 1000.}
-
-
-
-
-    
 
