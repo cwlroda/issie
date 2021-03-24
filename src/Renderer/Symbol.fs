@@ -1056,14 +1056,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         model
         |> Map.map (fun _ sym ->
             if sym.IsDragging then
-                {sym with
-                    IsDragging = false
-                    Component=
-                        {sym.Component with 
-                            X = mulOfFive sym.Component.X
-                            Y = mulOfFive sym.Component.Y
-                        }
-                }
+                { sym with IsDragging = false }
             else sym
         ), Cmd.none
 
