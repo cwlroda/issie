@@ -787,25 +787,14 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     clickCmds
                 ]
             | MouseButton.Right ->
-                let msg = Symbol.AddSymbol (CommonTypes.ComponentType.And, snapToGrid model.MousePosition, "and1")
-                let sModel = fst (Symbol.update msg model.Symbol)
-
-                let symId =
-                    let sym =
-                        sModel
-                        |> Map.tryFindKey (fun _ sym -> not (Map.containsKey sym.Id model.Symbol))
-
-                    match sym with
-                    | Some x -> x
-                    | None -> failwithf "Symbol was not created"
+                let newComp = Symbol.createSpecificComponent (snapToGrid model.MousePosition) CommonTypes.ComponentType.And "and1"
 
                 { model with
-                    Symbol = sModel
-                    Selection = Symbols [symId]
+                    Selection = Symbols [newComp.Id]
                 }
                 , Cmd.batch [
                     cmds
-                    Cmd.ofMsg (Symbol (Symbol.AddSymbol (Symbol.createSpecificComponent (snapToGrid model.MousePosition) CommonTypes.ComponentType.And "and1")))
+                    Cmd.ofMsg (Symbol (Symbol.AddSymbol newComp))
                     Cmd.ofMsg (Wire (BusWire.AddSymbol))
                     Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                 ]
