@@ -726,7 +726,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
 let createNewSymbol ()  =
     let rng0 () = rng.Next (1,10)
-    let rngComponent () = rng.Next(0,26)
+    let rngComponent () = rng.Next(20,26)
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
 
     let randomName () = 
