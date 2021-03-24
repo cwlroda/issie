@@ -1078,7 +1078,7 @@ type private RenderSymbolProps =
     }
 
 /// View for one symbol with caching for efficient execution when input does not change
-let private renderSymbol (model:Model) =
+let private renderSymbol =
     
     FunctionComponent.Of(
         fun (props : RenderSymbolProps) ->
@@ -1720,18 +1720,24 @@ let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) 
         | Some sIdLst -> Set.ofList sIdLst
         | None -> Set.empty
 
-    model
-    |> Map.map (fun _ ({Id = ComponentId id} as symbol) ->
-        renderSymbol model
-            {
-                Symbol = symbol
-                Dispatch = dispatch
-                Selected = Set.contains symbol.Id selectedSet
-                key = id
-            }
-    )
-    |> Map.toList
-    |> List.map snd
+    let (unselectedSyms, selectedSyms) =
+        model
+        |> Map.partition (fun _ sym -> Set.contains sym.Id selectedSet)
+
+    let renderView (symMap: Map<ComponentId, Symbol>) : ReactElement list =
+        symMap
+        |> Map.map (fun _ ({Id = ComponentId id} as symbol) ->
+            renderSymbol
+                {
+                    Symbol = symbol
+                    Dispatch = dispatch
+                    key = id
+                }
+        )
+        |> Map.toList
+        |> List.map snd
+
+    (renderView selectedSyms @ renderView unselectedSyms)
     |> ofList
 
 
