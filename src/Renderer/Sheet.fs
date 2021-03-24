@@ -992,8 +992,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
     match msg with
     | UpdateSize (w, h) ->
-        printfn "w: %A" w
-        printfn "h: %A" h
+        //printfn "w: %A" w
+        //printfn "h: %A" h
         { model with
             Width=w
             Height=h

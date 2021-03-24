@@ -155,14 +155,14 @@ let findWire (wModel: Model) (wId: ConnectionId): Wire =
 let isSegmentAtPort (pos1: XYPos) (pos2: XYPos) =
     if pos1 = pos2 then true else false
 
-let ptCloseToSeg (pos:XYPos) (startPt: XYPos) (endPt: XYPos): bool =
-        createSegBB startPt endPt 5. |> (containsPoint pos)
+let ptCloseToSeg (width: float) (pos:XYPos) (startPt: XYPos) (endPt: XYPos): bool =
+        createSegBB startPt endPt width |> (containsPoint pos)
 
 // finds closest wire segment to mouse position
 let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
     let index =
         wire.Segments
-        |> List.tryFindIndex (fun s -> ptCloseToSeg pos s.StartPos s.EndPos )
+        |> List.tryFindIndex (fun s -> ptCloseToSeg 11. pos s.StartPos s.EndPos )
 
     match index with
     | Some x ->  
@@ -638,6 +638,7 @@ let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionId
     |> Map.add wId (manualRouting wModel wId pos)
 
 let endDrag (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
+    printf "Draging ended fine"
     updateConnections wModel sModel
 
 let singleSegBBView =
@@ -774,6 +775,7 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
         { model with WX = wxUpdated }, Cmd.none
     | StartDrag (wMsgId, wMsgPos) ->
         let wxUpdated = startDrag model wMsgId wMsgPos
+        printf$"pt which causes drag: {wMsgPos}"
         { model with WX = wxUpdated }, Cmd.none
     | EndDrag ->
         let wxUpdated = endDrag model sModel
@@ -820,11 +822,11 @@ let isTargetWire (pt: XYPos) (wire: Wire) =
 
     let res =
         wire.Segments
-        |> List.tryFindIndex (fun s -> (ptCloseToSeg pt) s.StartPos s.EndPos)
+        |> List.tryFindIndex (fun s -> (ptCloseToSeg 5. pt) s.StartPos s.EndPos)
 
     match res with
     | Some idx -> 
-        printf $"index of segment which caused select: {idx}"
+        printf $"pos which caused select: {pt}"
         true
     | None -> false
 
