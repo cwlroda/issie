@@ -77,8 +77,6 @@ type Msg =
     | Symbol of Symbol.Msg
     | KeyPress of KeyboardMsg
     | MouseMsg of MouseT * Modifier
-    | PasteSymbols of (CommonTypes.ComponentType * XYPos * string) list
-    | PasteWires of XYPos * (XYPos * XYPos) list
 
 /// Constants that will be turned into settings at a later date
 let gridSize = 10
@@ -273,7 +271,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
     ]
 
 
-let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
+let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     let deselectSymbolsCmd =
         Cmd.ofMsg (Symbol (Symbol.SetSelected []))
 
@@ -599,25 +597,36 @@ let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let updatedCL =
                     { model.CopyList with Symbols = updatedSyms }
 
-                let pasteModel =
-                    let msg = Symbol.SetSelected []
+                let updatedModelS =
+                    let sModel =
+                        updatedSyms
+                        |> List.fold (fun acc (sType, p, sLabel) ->
+                            let msg = Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)
+                            fst (Symbol.update msg acc)
+                        ) (fst (Symbol.update (Symbol.SetSelected []) model.Symbol))
 
-                    fst (
-                        fst (
-                            {model with
-                                Symbol = fst (Symbol.update msg model.Symbol)
-                            }
-                            |> update (PasteSymbols updatedSyms)
-                        )
-                        |> update (PasteWires (offset, model.CopyList.Wires))
-                    )
+                    { model with Symbol = sModel }
+
+                let updatedModelW =
+                    let wModel =
+                        updatedCL.Wires
+                        |> List.fold (fun acc (srcPos, tgtPos) ->
+                            match Symbol.getTargetedPort updatedModelS.Symbol (posAdd srcPos offset),
+                                Symbol.getTargetedPort updatedModelS.Symbol (posAdd tgtPos offset) with
+                            | Some srcPort, Some tgtPort ->
+                                let msg = BusWire.AddWire (srcPort, tgtPort)
+                                fst (BusWire.update msg acc updatedModelS.Symbol)
+                            | _ -> acc
+                        ) updatedModelS.Wire
+
+                    { updatedModelS with Wire = wModel }
 
                 let updatedModel =
                     {
-                        pasteModel with
+                        updatedModelW with
                             CopyList = updatedCL
                             GlobalCounter = newCounter
-                            Selection = Symbols (Symbol.getSelectedSymbols pasteModel.Symbol)
+                            Selection = Symbols (Symbol.getSelectedSymbols updatedModelW.Symbol)
                     }
 
                 updatedModel,
@@ -931,28 +940,6 @@ let rec update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
         { model with Wire = wModel }
         , Cmd.map Wire wCmd
-    | PasteSymbols sIdLst ->
-        let sModel =
-            sIdLst
-            |> List.fold (fun acc (sType, p, sLabel) ->
-                let msg = Symbol.AddSymbol (sType, snapToGrid (posAdd p model.MousePosition), sLabel)
-                fst (Symbol.update msg acc)
-            ) model.Symbol
-
-        { model with Symbol = sModel }, Cmd.none
-    | PasteWires (offset, pIdLst) ->
-        let wModel =
-            pIdLst
-            |> List.fold (fun acc (srcPos, tgtPos) ->
-                match Symbol.getTargetedPort model.Symbol (posAdd srcPos offset),
-                    Symbol.getTargetedPort model.Symbol (posAdd tgtPos offset) with
-                | Some srcPort, Some tgtPort ->
-                    let msg = BusWire.AddWire (srcPort, tgtPort)
-                    fst (BusWire.update msg acc model.Symbol)
-                | _ -> acc
-            ) model.Wire
-
-        { model with Wire = wModel }, Cmd.none
     | KeyPress k -> handleKeyPress k
     | MouseMsg (mT, modifier) -> handleMouseMsg mT modifier
 
