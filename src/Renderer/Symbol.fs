@@ -1823,3 +1823,18 @@ let extractComponents (symModel: Model) : Component list =
     |> List.map (fun (_,sym) ->
         sym.Component
     )
+
+
+// Our team has created a type PortId to represent ports. 
+// Issie may not recognise this, hence it might be useful for Issie if we translate 
+// PortId into (ComponentId, PortNumber, PortType) Instead
+
+let translatePortToIssieFormat (symModel: Model) (portId: PortId): (ComponentId*PortNumber*PortType) =
+    let foundPort = 
+        portId
+        |> findPort symModel
+    match foundPort.PortNumber with
+    | Some x ->
+        foundPort.HostId,x,foundPort.PortType
+    | None -> failwithf "won't happen"
+
