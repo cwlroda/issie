@@ -302,12 +302,12 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 | Symbols s -> s
                 | _ -> failwithf "Can only drag if there is a selection"
 
-            let panBBox = getScreen (posOf -model.PanX -model.PanY) model.Zoom
+            let screenBBox = getScreen (posOf -model.PanX -model.PanY) model.Zoom
 
             { model with DragState=DragState.Symbol (true, prevWire) }
             , Cmd.batch [
                 Cmd.ofMsg (Symbol (Symbol.Dragging (selectedSymbols, (snapToGrid p), mouseIsDown)))
-                Cmd.ofMsg (Wire (BusWire.DraggingSymbols (selectedSymbols, panBBox)))
+                Cmd.ofMsg (Wire (BusWire.DraggingSymbols (selectedSymbols, screenBBox)))
             ]
         | DragState.Wire (_, prevWireModel) ->
             match model.Selection with
@@ -989,7 +989,9 @@ let view (model: Model) (dispatch: Msg -> unit) =
             Some <| Symbol.portType model.Symbol pId
         | _ -> None
 
-    let symbolSvg = Symbol.view model.Symbol selectedSymbols model.MousePosition portTypeToNotHighlight sDispatch
+    let screenBBox = getScreen (posOf -model.PanX -model.PanY) model.Zoom
+
+    let symbolSvg = Symbol.view model.Symbol selectedSymbols model.MousePosition portTypeToNotHighlight screenBBox sDispatch
 
     let wDispatch wMsg = dispatch (Wire wMsg)
     let selectedWire =

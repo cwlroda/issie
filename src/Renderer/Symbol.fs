@@ -1715,14 +1715,17 @@ let private renderSymbol =
 
 /// View function for symbol layer of SVG
 
-let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (mousePos: XYPos) (portTypeToNotHighlight: PortType option) (dispatch : Msg -> unit) = 
+let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (mousePos: XYPos) (portTypeToNotHighlight: PortType option) (bbox: BBox) (dispatch : Msg -> unit) = 
     let selectedSet =
         match selectedSymbols with
         | Some sIdLst -> Set.ofList sIdLst
         | None -> Set.empty
 
+    let visibleSyms = getSymbolsInTargetArea model bbox
+
     let (selectedSyms, unselectedSyms) =
         model
+        |> Map.filter (fun _ sym -> List.contains sym.Id visibleSyms)
         |> Map.toList
         |> List.map snd
         |> List.partition (fun sym -> Set.contains sym.Id selectedSet)
