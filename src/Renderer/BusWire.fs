@@ -715,6 +715,54 @@ let adjLabelPos (seg: WireSegment) : XYPos =
     | relDiff when relDiff.X > 10.  ->  posDiff seg.StartPos (posOf 7.5 12.5)
     | _ -> posDiff seg.StartPos (posOf -7.5 12.5)
 
+
+
+
+//----------------------interface to Issie-----------------------//
+let wireSegLstToVerticesLst (wSegs: WireSegment list) : (float * float) list = 
+    let incompleteLstVert = List.map (fun (s:WireSegment) -> s.EndPos) wSegs
+    [wSegs.[0].StartPos] @ incompleteLstVert
+     |> List.map (fun pos -> (pos.X, pos.Y))   
+
+let extractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Connection =
+    let wire = findWire wModel wId
+   
+
+    {
+        Id =  wire.Id.ToString()
+        Source = (Symbol.findPort sModel wire.SrcPort)
+        Target = (Symbol.findPort sModel wire.TargetPort)
+        Vertices = (wireSegLstToVerticesLst wire.Segments)
+
+    }
+
+let extractSymbolWires (wModel: Model) (sModel: Symbol.Model) : Connection list = 
+    failwithf "Not implemented"
+
+let extractAllWires (wModel: Model) (wId: ConnectionId) : Connection List = 
+    failwithf "Not implemented"
+
+// ---------------------------- End of Issie Interface functions -----------------------//
+
+type wireCornersProps =
+    {
+        Point: (float * float)
+    }
+
+let singlePointView =
+    FunctionComponent.Of
+        (fun (props: wireCornersProps) ->
+            g [] [
+                circle
+                    [
+                        Cx (fst props.Point)
+                        Cy (snd props.Point)
+                        R 2.5
+                    ] []
+            ]
+        )
+    
+
 let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
     g [] (
         wModel.WX
@@ -753,6 +801,13 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
                     WireWidth = $"%d{w.WireWidth}"
                 }
 
+            let corners = 
+                let conn = extractWire wModel sModel w.Id
+                printf $"connection: {conn}"
+                printf $"{w.Segments}"
+                List.map (fun vert -> {Point = vert}) conn.Vertices
+                |> List.map (fun p -> singlePointView p)
+
             let segBBox =
                 w.Segments
                 |> List.fold (fun acc s ->
@@ -768,7 +823,9 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
             acc 
             @ if wModel.WireAnnotation && (w.WireWidth > 3) then [(singleLabelView labelProps)] else []
             @ if wModel.Debug then segBBox else []
+           
             @ [singleWireView props]
+            @ corners
         ) [] )
 
 
@@ -886,29 +943,6 @@ let getAllPidEnds (wModel: Model) (pIdSrc: PortId) : PortId List =
     )
     |> List.map (fun (_,w) -> w.TargetPort) 
 
-//----------------------interface to Issie-----------------------//
-let wireSegLstToVerticesLst (wSegs: WireSegment list) : (float * float) list = 
-    let incompleteLstVert = List.map (fun (s:WireSegment) -> s.EndPos) wSegs
-    [wSegs.[0].StartPos] @ incompleteLstVert
-     |> List.map (fun pos -> (pos.X, pos.Y))   
-
-let extractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Connection =
-    let wire = findWire wModel wId
-   
-
-    {
-        Id =  wire.Id.ToString()
-        Source = (Symbol.findPort sModel wire.SrcPort)
-        Target = (Symbol.findPort sModel wire.TargetPort)
-        Vertices = (wireSegLstToVerticesLst wire.Segments)
-
-    }
-
-let extractSymbolWires (wModel: Model) (sModel: Symbol.Model) : Connection list = 
-    failwithf "Not implemented"
-
-let extractAllWires (wModel: Model) (wId: ConnectionId) : Connection List = 
-    failwithf "Not implemented"
 
 
 
