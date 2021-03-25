@@ -718,54 +718,8 @@ let adjLabelPos (seg: WireSegment) : XYPos =
 
 
 
-//----------------------interface to Issie-----------------------//
-let wireSegLstToVerticesLst (wSegs: WireSegment list) : (float * float) list = 
-    let incompleteLstVert = List.map (fun (s:WireSegment) -> s.EndPos) wSegs
-    [wSegs.[0].StartPos] @ incompleteLstVert
-     |> List.map (fun pos -> (pos.X, pos.Y))   
 
-let extractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Connection =
-    let wire = findWire wModel wId
-   
 
-    {
-        Id =  wire.Id.ToString()
-        Source = (Symbol.findPort sModel wire.SrcPort)
-        Target = (Symbol.findPort sModel wire.TargetPort)
-        Vertices = (wireSegLstToVerticesLst wire.Segments)
-
-    }
-
-let extractSymbolWires (wModel: Model) (sModel: Symbol.Model)  (sId: ComponentId): Connection list = 
-    let connectedWires = getConnectedWires wModel sModel  [sId]
-    Map.toList connectedWires
-    |> List.map (fun (wId, w) -> extractWire wModel sModel wId)
-
-let extractAllWires (wModel: Model) (sModel: Symbol.Model) : Connection List = 
-    wModel.WX
-    |> Map.fold (fun connLst wId w -> [extractWire wModel sModel wId]@connLst) []
-    
-
-// ---------------------------- End of Issie Interface functions -----------------------//
-
-type wireCornersProps =
-    {
-        Point: (float * float)
-    }
-
-let singlePointView =
-    FunctionComponent.Of
-        (fun (props: wireCornersProps) ->
-            g [] [
-                circle
-                    [
-                        Cx (fst props.Point)
-                        Cy (snd props.Point)
-                        R 2.5
-                    ] []
-            ]
-        )
-    
 
 let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
     g [] (
@@ -836,48 +790,12 @@ let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Ma
         {w with Segments = smartRouting sModel w w.Segments}
     )
 
-// ---------------- Issie Interface Test Code -----------------------------------------//
-let getPosPairs (s: WireSegment) = 
-     ((s.StartPos.X, s.StartPos.Y), (s.EndPos.X, s.EndPos.Y))
-
-let checkExtractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId): bool =
-    let extractVerts = 
-        let conn = extractWire wModel sModel wId
-        List.pairwise conn.Vertices
-    let modelPairs = 
-        wModel.WX.[wId].Segments
-        |> List.map (fun s -> getPosPairs s)     
-    extractVerts = modelPairs
-
-let checkSymBol (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : bool =
-    let extractConns =
-        List.fold (fun acc sId -> extractSymbolWires wModel sModel sId @acc) [] sIdLst 
-        
-    let modelPairs =
-        let symPorts = Symbol.getPortsFromSymbols sModel sIdLst 
-        Map.filter (fun wId w -> List.contains w.SrcPort symPorts || List.contains w.TargetPort symPorts) wModel.WX
-        |> Map.map (fun wId w -> 
-            List.map (fun (s:WireSegment) -> getPosPairs s) w.Segments)
-    List.forall (fun extract -> (List.pairwise extract.Vertices) = modelPairs.[ConnectionId extract.Id]) extractConns
-
-let checkModelExtract (wModel: Model) (sModel: Symbol.Model) : bool =
-    let extractAllConns = extractAllWires wModel sModel
-
-    let modelPairs =
-        Map.map (fun wId w -> 
-            List.map (fun (s:WireSegment)-> getPosPairs s) w.Segments) wModel.WX
-
-    List.forall (fun extract -> (List.pairwise extract.Vertices) = modelPairs.[ConnectionId extract.Id]) extractAllConns
-
-    
-//----------------- End of Interface Test Code
 
 let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     match msg with
     | AddSymbol ->
         { model with WX = routingUpdate sModel model.WX }, Cmd.none
     | DeleteSymbols sIdLst ->
-        printf $"{(checkSymBol model  sModel sIdLst)}"
         { model with WX = deleteWiresOfSymbols model sModel sIdLst }, Cmd.none
     | DraggingSymbols sIdLst ->
         { model with WX = updateSymWires model sModel sIdLst }, Cmd.none
@@ -886,7 +804,6 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
         { model with WX = wxUpdated }, Cmd.none
     | DeleteWire wMsg ->
         let wxUpdated = deleteWire model sModel wMsg   
-        printf $"{(checkExtractWire model sModel wMsg)}"
         { model with WX = wxUpdated }, Cmd.none
     | Dragging (wMsgId, wMsgPos) ->
         let wxUpdated = dragging model wMsgId wMsgPos
@@ -904,8 +821,6 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     | RoutingUpdate ->
         { model with WX = routingUpdate sModel model.WX }, Cmd.none
     | Debug ->
-         
-        printf $"{checkModelExtract model sModel}"
         { model with Debug = not model.Debug }, Cmd.none
 ///Dummy function to initialize for demo
 let init () =
@@ -984,5 +899,72 @@ let getAllPidEnds (wModel: Model) (pIdSrc: PortId) : PortId List =
     |> List.map (fun (_,w) -> w.TargetPort) 
 
 
+//----------------------interface to Issie-----------------------//
+let wireSegLstToVerticesLst (wSegs: WireSegment list) : (float * float) list = 
+    let incompleteLstVert = List.map (fun (s:WireSegment) -> s.EndPos) wSegs
+    [wSegs.[0].StartPos] @ incompleteLstVert
+     |> List.map (fun pos -> (pos.X, pos.Y))   
+
+let extractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Connection =
+    let wire = findWire wModel wId
+   
+
+    {
+        Id =  wire.Id.ToString()
+        Source = (Symbol.findPort sModel wire.SrcPort)
+        Target = (Symbol.findPort sModel wire.TargetPort)
+        Vertices = (wireSegLstToVerticesLst wire.Segments)
+
+    }
+
+let extractSymbolWires (wModel: Model) (sModel: Symbol.Model)  (sId: ComponentId): Connection list = 
+    let connectedWires = getConnectedWires wModel sModel  [sId]
+    Map.toList connectedWires
+    |> List.map (fun (wId, w) -> extractWire wModel sModel wId)
+
+let extractAllWires (wModel: Model) (sModel: Symbol.Model) : Connection List = 
+    wModel.WX
+    |> Map.fold (fun connLst wId w -> [extractWire wModel sModel wId]@connLst) []
+    
+
+// ---------------------------- End of Issie Interface functions -----------------------//
+
+
+
+// ---------------- (Naive) Issie Interface Test Code -----------------------------------------//
+(* let getPosPairs (s: WireSegment) = 
+     ((s.StartPos.X, s.StartPos.Y), (s.EndPos.X, s.EndPos.Y))
+
+let checkExtractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId): bool =
+    let extractVerts = 
+        let conn = extractWire wModel sModel wId
+        List.pairwise conn.Vertices
+    let modelPairs = 
+        wModel.WX.[wId].Segments
+        |> List.map (fun s -> getPosPairs s)     
+    extractVerts = modelPairs
+
+let checkSymBol (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : bool =
+    let extractConns =
+        List.fold (fun acc sId -> extractSymbolWires wModel sModel sId @acc) [] sIdLst 
+        
+    let modelPairs =
+        let symPorts = Symbol.getPortsFromSymbols sModel sIdLst 
+        Map.filter (fun wId w -> List.contains w.SrcPort symPorts || List.contains w.TargetPort symPorts) wModel.WX
+        |> Map.map (fun wId w -> 
+            List.map (fun (s:WireSegment) -> getPosPairs s) w.Segments)
+    List.forall (fun extract -> (List.pairwise extract.Vertices) = modelPairs.[ConnectionId extract.Id]) extractConns
+
+let checkModelExtract (wModel: Model) (sModel: Symbol.Model) : bool =
+    let extractAllConns = extractAllWires wModel sModel
+
+    let modelPairs =
+        Map.map (fun wId w -> 
+            List.map (fun (s:WireSegment)-> getPosPairs s) w.Segments) wModel.WX
+
+    List.forall (fun extract -> (List.pairwise extract.Vertices) = modelPairs.[ConnectionId extract.Id]) extractAllConns
+
+     *)
+//----------------- End of Interface Test Code---------------------------------------------------------//
 
 
