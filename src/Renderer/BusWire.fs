@@ -47,18 +47,18 @@ type Model =
     }
 
 type Msg =
-    | AddSymbol
-    | DeleteSymbols of CommonTypes.ComponentId list
-    | DraggingSymbols of CommonTypes.ComponentId list
+    | AddSymbol                                             // Performs Wire Routings when a Symbol is Created
+    | DeleteSymbols of CommonTypes.ComponentId list         // Performs Wire Routings/Deletions when Symbols are being Deleted
+    | DraggingSymbols of CommonTypes.ComponentId list       // Performs Wire Routings when Symbols are being Dragged
     // | EndDragSymbols
-    | AddWire of (PortId * PortId)
-    | DeleteWire of ConnectionId
-    | SetColor of color: HighLightColor
-    | StartDrag of wId: ConnectionId * pos: XYPos
-    | Dragging of wId: ConnectionId * pos: XYPos
-    | EndDrag
-    | RoutingUpdate
-    | Debug
+    | AddWire of (PortId * PortId)                          // Create a Wire between Two Ports (Must be Ports of Opposite Polarity)
+    | DeleteWire of ConnectionId                            // Deletes a Wire
+    | SetColor of color: HighLightColor                     // Sets the Colour of a Wire
+    | StartDrag of wId: ConnectionId * pos: XYPos           // Starts Dragging a Wire's Segment
+    | Dragging of wId: ConnectionId * pos: XYPos            // Still Dragging the Wire's Segment
+    | EndDrag                                               // Complete the Dragging Process 
+    | RoutingUpdate                                         // Refreshes Wire Routings
+    | Debug                                                 // Enable Wire Bounding Boxes to be Seen (Debug Mode)
 
 
 type WireRenderProps =
