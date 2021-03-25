@@ -367,7 +367,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     { newModel with
                         Wire = prevWire
                         Symbol = prevSymbol
-                    } , Cmd.none
+                    }, Cmd.ofMsg (Symbol (Symbol.EndDragging))
                 else
                     newModel, Cmd.batch [
                         Cmd.ofMsg (Symbol (Symbol.EndDragging))
@@ -953,13 +953,15 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             symData
             |> List.map (fun comp -> comp.Id)
 
-        { model with
-            DragState=DragState.Symbol (true, (model.Wire, model.Symbol))
+        let newModel, cmds = handleInterruptAction model
+        { newModel with
+            DragState=DragState.Symbol (true, (newModel.Wire, newModel.Symbol))
             Selection=SelectionState.Symbols createdSymbols
         }, Cmd.batch [
+            cmds
             addSymbolCommand
             addWireCommand
-            Cmd.ofMsg (Symbol (Symbol.StartDragging (createdSymbols, snapToGrid model.MousePosition)))
+            Cmd.ofMsg (Symbol (Symbol.StartDragging (createdSymbols, snapToGrid newModel.MousePosition)))
         ]
     | Symbol sMsg ->
         let sModel, sCmd = Symbol.update sMsg model.Symbol
