@@ -45,8 +45,6 @@ type Msg =
     | AddSymbol of comp: Component
     | DeleteSymbols of sIdLst: ComponentId list
     | UpdateSymbolModelWithComponent of Component // Issie interface
-    | HighlightPorts of pId : PortId list
-    | UnhighlightPorts
     | CreateInference of (PortId*PortId)
     | DeleteInference of (PortId*PortId)
 
@@ -316,7 +314,6 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
                 PortType = portType
                 PortPos = (snapToGrid {X=offset; Y =  yPosCalc })
                 HostId = compId
-                Hover = PortHover false
                 Width = portWidth
             }
         | false ->
@@ -326,7 +323,6 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
                 PortType = portType
                 PortPos = {X=0.; Y=0. }
                 HostId = compId
-                Hover = PortHover false
                 Width = portWidth
             }
 
@@ -1045,74 +1041,6 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
             else sym
         ), Cmd.none
 
-    | HighlightPorts pIdLst ->
-        model
-        |> Map.map(fun _ sym ->
-            {sym with
-                Component = 
-                {sym.Component with
-                    InputPorts = 
-                        sym.Component.InputPorts
-                        |> Map.map (fun _ port ->
-                            if List.contains port.PortId pIdLst then
-                                {port with   
-                                    Hover = PortHover true
-                                }
-                            else
-                                {port with
-                                    Hover = PortHover false
-                                }
-                        )
-                    OutputPorts = 
-                        sym.Component.OutputPorts
-                        |> Map.map (fun _ port ->
-                            if List.contains port.PortId pIdLst then
-                                {port with   
-                                    Hover = PortHover true
-                                }
-                            else
-                                {port with
-                                    Hover = PortHover false
-                                }
-                        )
-                }   
-            }
-        ), Cmd.none
-
-    | UnhighlightPorts ->
-        model
-        |> Map.map (
-            (fun _ sym ->
-                {sym with
-                    Component = 
-                        {sym.Component with
-                            InputPorts =
-                                sym.Component.InputPorts
-                                |> Map.map (fun _ checkPort ->
-                                {checkPort with   
-                                        Hover = PortHover false
-                                    }
-                                )
-                        }
-                }
-            ) >> 
-            (fun _ sym ->
-                {sym with
-                    Component = 
-                        {sym.Component with
-                            InputPorts =
-                                sym.Component.OutputPorts
-                                |> Map.map (fun _ checkPort ->
-                                {checkPort with   
-                                        Hover = PortHover false
-                                    }
-                                )
-                        }
-                }
-            )
-        )
-        ,Cmd.none
-
     | CreateInference (pid1,pid2) ->
         widthInference model pid1 pid2 true, Cmd.none
 
@@ -1129,11 +1057,12 @@ type private RenderSymbolProps =
         Selected: bool
         Dispatch : Dispatch<Msg>
         key: string // special field used by react to detect whether lists have changed, set to symbol Id
+        MousePos: XYPos
+        PortTypeToNotHighlight: PortType option
     }
 
 /// View for one symbol with caching for efficient execution when input does not change
 let private renderSymbol =
-    
     FunctionComponent.Of(
         fun (props : RenderSymbolProps) ->
             let opacity = if props.Symbol.Shadow then "20%" else "100%"
@@ -1154,6 +1083,17 @@ let private renderSymbol =
             let topRight:XYPos = {X=props.Symbol.Component.X+width; Y=props.Symbol.Component.Y}
             let bottomRight:XYPos = {X=props.Symbol.Component.X+width; Y=props.Symbol.Component.Y+height}
             let bottomLeft:XYPos = {X=props.Symbol.Component.X; Y=props.Symbol.Component.Y+height}
+
+            let portHover (port: Port) =
+                match props.PortTypeToNotHighlight with
+                | Some pType when pType = port.PortType -> false
+                | _ -> 
+                    let portHighlightRange = 50.
+                    let portPos = posAdd port.PortPos topLeft
+                    let diff = posDiff portPos props.MousePos
+                    let distSquared = diff.X * diff.X + diff.Y * diff.Y
+
+                    distSquared <= portHighlightRange * portHighlightRange
 
             let inputPorts = props.Symbol.Component.InputPorts
             let outputPorts = props.Symbol.Component.OutputPorts
@@ -1292,17 +1232,16 @@ let private renderSymbol =
 
             let viewPortLinesStaticComponent (x:Port) : IProp seq = 
                 seq {
-                    match x.Hover with
-                    |PortHover false ->
-                        SVGAttr.Fill fillColor
-                        SVGAttr.Opacity opacity
-                        SVGAttr.Stroke outlineColor
-                        SVGAttr.StrokeWidth 6
-                    |_ -> 
+                    if portHover x then
                         SVGAttr.Fill "red"
                         SVGAttr.Stroke "red"
                         SVGAttr.StrokeWidth 8
                         SVGAttr.Opacity opacity
+                    else
+                        SVGAttr.Fill fillColor
+                        SVGAttr.Opacity opacity
+                        SVGAttr.Stroke outlineColor
+                        SVGAttr.StrokeWidth 6
                 }
             
             let viewPortLinesStaticComponent2 : IProp seq = 
@@ -1315,17 +1254,16 @@ let private renderSymbol =
 
             let viewPortBusIndicatorLinesStaticComponent (x:Port) : IProp seq =
                 seq {
-                match x.Hover with
-                |PortHover false ->
-                    SVGAttr.Fill fillColor
-                    SVGAttr.Opacity opacity
-                    SVGAttr.Stroke outlineColor
-                    SVGAttr.StrokeWidth 3
-                |_ -> 
-                    SVGAttr.Fill "red"
-                    SVGAttr.Stroke "red"
-                    SVGAttr.StrokeWidth 4
-                    SVGAttr.Opacity opacity
+                    if portHover x then
+                        SVGAttr.Fill "red"
+                        SVGAttr.Stroke "red"
+                        SVGAttr.StrokeWidth 4
+                        SVGAttr.Opacity opacity
+                    else
+                        SVGAttr.Fill fillColor
+                        SVGAttr.Opacity opacity
+                        SVGAttr.Stroke outlineColor
+                        SVGAttr.StrokeWidth 3
             }
 
             let viewPortBusIndicatorTextStaticComponent (x:Port) : IProp seq =
@@ -1539,7 +1477,7 @@ let private renderSymbol =
                                         Cx (absPos()).X
                                         Cy (absPos()).Y
                                         R 2.5
-                                    ] (viewPortLinesStaticComponent port))[]
+                                    ] (viewPortLinesStaticComponent port ))[]
                                 let (PortWidth wid) = port.Width
                                 if selectedBool = true && (wid > 0) then
                                     text (Seq.append [
@@ -1769,7 +1707,7 @@ let private renderSymbol =
 
 /// View function for symbol layer of SVG
 
-let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (dispatch : Msg -> unit) = 
+let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (mousePos: XYPos) (portTypeToNotHighlight: PortType option) (dispatch : Msg -> unit) = 
     let selectedSet =
         match selectedSymbols with
         | Some sIdLst -> Set.ofList sIdLst
@@ -1792,6 +1730,8 @@ let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) 
                     Dispatch = dispatch
                     Selected = selected
                     key = sId
+                    MousePos = mousePos
+                    PortTypeToNotHighlight = portTypeToNotHighlight
                 }
         )
 

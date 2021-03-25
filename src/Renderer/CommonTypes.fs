@@ -47,9 +47,6 @@ module CommonTypes
     /// Inputs and Outputs are both numberd from 0 up.
 
     [<Erase>]
-    type PortHover  = | PortHover of bool
-
-    [<Erase>]
     type PortWidth = | PortWidth of int
 
     [<Erase>]
@@ -109,7 +106,6 @@ module CommonTypes
         PortType : PortType
         PortPos : Helpers.XYPos
         HostId : ComponentId
-        Hover : PortHover
         Width : PortWidth
     }
     // Types instantiating objects in the Digital extension.
