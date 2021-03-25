@@ -552,8 +552,13 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             | NotDragging ->
                 { model with Selection = Empty }
                 , Cmd.none
-
             | DragState.Symbol (_, (prevWireModel, prevSymbolModel)) ->
+                {model with
+                    Wire=prevWireModel
+                    Symbol=prevSymbolModel
+                    DragState=NotDragging
+                }, Cmd.none
+            | DragState.Wire (_, (prevWireModel, prevSymbolModel)) ->
                 {model with
                     Wire=prevWireModel
                     Symbol=prevSymbolModel
