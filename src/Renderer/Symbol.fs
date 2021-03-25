@@ -1046,7 +1046,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         model
         |> Map.map (fun _ sym ->
             if sym.IsDragging then
-                { sym with IsDragging = false }
+                { sym with IsDragging = false; Shadow = false }
             else sym
         ), Cmd.none
 
