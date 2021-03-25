@@ -1769,7 +1769,7 @@ let private renderSymbol =
 
 /// View function for symbol layer of SVG
 
-let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (previewComponents: CommonTypes.Component list option) (dispatch : Msg -> unit) = 
+let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (dispatch : Msg -> unit) = 
     let selectedSet =
         match selectedSymbols with
         | Some sIdLst -> Set.ofList sIdLst
@@ -1795,22 +1795,7 @@ let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) 
                 }
         )
 
-    let previewSymbols =
-        match previewComponents with
-        | Some compLst ->
-            compLst
-            |> List.map (fun comp ->
-                {
-                  Component = comp
-                  Id = comp.Id
-                  IsDragging = false
-                  LastDragPos = posOf 0. 0.
-                  Shadow = true
-                }
-            )
-        | None -> []
-
-    (renderView previewSymbols true @ renderView selectedSyms true @ renderView unselectedSyms false )
+    (renderView selectedSyms true @ renderView unselectedSyms false )
     |> ofList
 
 
