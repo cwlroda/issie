@@ -412,7 +412,7 @@ let createWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: Po
         }
     | _ -> None
 
-let wiresInPan (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : ConnectionId list =
+let wiresInScreen (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : ConnectionId list =
     wModel.WX
     |> Map.filter (fun _ w ->
         let srcPos = Symbol.portPos sModel w.SrcPort
@@ -429,11 +429,11 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
         symIds
         |> List.fold (fun acc symId -> acc @ Symbol.getPortsFromSymbols sModel [symId]) []
 
-    let wiresInScreen = wiresInPan wModel sModel bbox
+    let visibleWires = wiresInScreen wModel sModel bbox
     
     wModel.WX
     |> Map.map (fun _ w ->
-        match List.contains w.Id wiresInScreen with
+        match List.contains w.Id visibleWires with
         | true ->
             match List.contains w.SrcPort pIds || List.contains w.TargetPort pIds with
             | true ->
@@ -791,11 +791,11 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
 
 
 let routingUpdate (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : Map<ConnectionId, Wire> =
-    let wiresInScreen = wiresInPan wModel sModel bbox
+    let visibleWires = wiresInScreen wModel sModel bbox
 
     wModel.WX
     |> Map.map (fun _ w ->
-        match List.contains w.Id wiresInScreen with
+        match List.contains w.Id visibleWires with
         | true ->
             match w.ManualOverride with
             | false ->
