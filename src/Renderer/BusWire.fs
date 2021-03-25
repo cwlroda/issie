@@ -627,10 +627,19 @@ let getWireColor (w: Wire): HighLightColor =
 let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionId, Wire> =
     let wire = findWire wModel wId
 
+    let selectedSeg = findClosestSegment wire pos
+    let updatedSegs = 
+        match selectedSeg with 
+        | idx when idx = 0 -> [{wire.Segments.[0] with StartPos = (snapToGrid pos)}] @ (List.tail wire.Segments)
+        | idx when idx = List.length wire.Segments - 1 -> 
+            let segRev = List.rev wire.Segments
+            [{segRev.[0] with EndPos = (snapToGrid pos)}] @ (List.tail segRev) |> List.rev
+        | _ -> wire.Segments
     Map.add wire.Id {
         wire with
-            SelectedSegment = findClosestSegment wire pos
+            SelectedSegment = selectedSeg
             LastDragPos = pos
+            Segments = updatedSegs
         } wModel.WX
 
 let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionId, Wire> =
