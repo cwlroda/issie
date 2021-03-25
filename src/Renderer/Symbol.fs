@@ -219,9 +219,9 @@ let symbolLabel (symModel: Model) (compId: ComponentId) : string =
 
 let componentBBox (comp: Component) : BBox =
     {
-        Pos = {X=comp.X; Y=comp.Y}
-        Width = comp.W
-        Height = comp.H
+        Pos = posDiff {X=comp.X; Y=comp.Y} {X=gridSize; Y=gridSize;}
+        Width = comp.W + (gridSize * 2.)
+        Height = comp.H + (gridSize * 2.)
     }
 
 let symbolBBox (symModel: Model) (compId: ComponentId) : BBox =
