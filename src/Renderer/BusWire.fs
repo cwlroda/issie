@@ -887,12 +887,28 @@ let getAllPidEnds (wModel: Model) (pIdSrc: PortId) : PortId List =
     |> List.map (fun (_,w) -> w.TargetPort) 
 
 //----------------------interface to Issie-----------------------//
-let extractWire (wModel: Model) (sId:ComponentId) : Component =
+let wireSegLstToVerticesLst (wSegs: WireSegment list) : (float * float) list = 
+    let incompleteLstVert = List.map (fun (s:WireSegment) -> s.EndPos) wSegs
+    [wSegs.[0].StartPos] @ incompleteLstVert
+     |> List.map (fun pos -> (pos.X, pos.Y))   
+
+let extractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Connection =
+    let wire = findWire wModel wId
+   
+
+    {
+        Id =  wire.Id.ToString()
+        Source = (Symbol.findPort sModel wire.SrcPort)
+        Target = (Symbol.findPort sModel wire.TargetPort)
+        Vertices = (wireSegLstToVerticesLst wire.Segments)
+
+    }
+
+let extractSymbolWires (wModel: Model) (sModel: Symbol.Model) : Connection list = 
     failwithf "Not implemented"
 
-let extractWires (wModel: Model) : Component list = 
+let extractAllWires (wModel: Model) (wId: ConnectionId) : Connection List = 
     failwithf "Not implemented"
 
-/// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
-let updateSymbolModelWithComponent (symModel: Model) (comp:Component) =
-    failwithf "Not Implemented"
+
+
