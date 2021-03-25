@@ -81,7 +81,6 @@ type Msg =
 /// Constants that will be turned into settings at a later date
 let gridSize = 10
 let undoHistorySize = 50
-let portHighlightRange = 50.
 
 let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
     let borderSize = 3.
@@ -286,29 +285,6 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
 
     
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
-    let highlightPortsNearCmd p =
-        let currentType = 
-            match model.DragState with
-            | WireCreation (pId, _) -> Some <| Symbol.portType model.Symbol pId
-            | DragState.Wire _ ->
-                match model.Selection with
-                | SelectionState.Wire wId ->
-                    let wire = BusWire.findWire model.Wire wId
-                    match wire.SelectedSegment with
-                    | x when (x = 0) -> Some <| Symbol.portType model.Symbol wire.TargetPort
-                    | x when x = wire.Segments.Length - 1 -> Some <| Symbol.portType model.Symbol wire.SrcPort
-                    | _ -> None
-                | _ -> None
-            | _ -> None
-        let portsNearMouse =
-            Symbol.portsInRange model.Symbol p portHighlightRange
-            |> List.filter (fun pId ->
-                match currentType with
-                | Some pType -> pType <> Symbol.portType model.Symbol pId
-                | None -> true
-            )
-        Cmd.ofMsg (Symbol (Symbol.HighlightPorts portsNearMouse))
-
     let saveStateIfDraggedCmd didDrag prevWireModel =
         if didDrag then
             Cmd.ofMsg (SaveState prevWireModel)
@@ -318,54 +294,48 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     let processDrag p =
         let model = { model with MousePosition=p}
 
-        let (model, cmd) =
-            match model.DragState with
-            | AreaSelect (start, _, additive) ->
-                { model with DragState=AreaSelect (start, p, additive)}, Cmd.none
-            | DragState.Symbol (_, prevWire) ->
-                let selectedSymbols =
-                    match model.Selection with
-                    | Symbols s -> s
-                    | _ -> failwithf "Can only drag if there is a selection"
-
-                { model with DragState=DragState.Symbol (true, prevWire) }
-                , Cmd.batch [
-                    Cmd.ofMsg (Symbol (Symbol.Dragging (selectedSymbols, snapToGrid p)))
-                    Cmd.ofMsg (Wire (BusWire.DraggingSymbols selectedSymbols))
-                ]
-            | DragState.Wire (_, prevWireModel) ->
+        match model.DragState with
+        | AreaSelect (start, _, additive) ->
+            { model with DragState=AreaSelect (start, p, additive)}, Cmd.none
+        | DragState.Symbol (_, prevWire) ->
+            let selectedSymbols =
                 match model.Selection with
-                | SelectionState.Wire wId ->
-                    let currentMousePos = model.MousePosition
-                    let w = BusWire.findWire model.Wire wId
-                    let selSeg = w.SelectedSegment
-                    let offset = 
-                        match selSeg with
-                        | x when x = 0 -> 
-                            Some ((posDiff currentMousePos (List.item x w.Segments).StartPos),CommonTypes.PortType.Output)
-                        | x when x = w.Segments.Length - 1 -> 
-                            Some ((posDiff (List.item x w.Segments).EndPos currentMousePos),CommonTypes.PortType.Input)
-                        |_ -> None 
-                    { model with 
-                        DragState=DragState.Wire (true, prevWireModel)
-                        Offset = offset 
-                    }
-                    , Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
+                | Symbols s -> s
                 | _ -> failwithf "Can only drag if there is a selection"
-            | WireCreation (pId, _) ->
-                { model with DragState=WireCreation (pId, p) }, Cmd.none
-            | Pan (origPan, panStart, _) ->
-                { model with
-                    DragState=Pan (origPan, panStart, p)
-                    PanX = origPan.X + (p.X - panStart.X) * model.Zoom
-                    PanY = origPan.Y + (p.Y - panStart.Y) * model.Zoom
-                }, Cmd.none
-            | _ -> model, Cmd.none
 
-        model, Cmd.batch [
-            cmd
-            highlightPortsNearCmd p
-        ]
+            { model with DragState=DragState.Symbol (true, prevWire) }
+            , Cmd.batch [
+                Cmd.ofMsg (Symbol (Symbol.Dragging (selectedSymbols, snapToGrid p)))
+                Cmd.ofMsg (Wire (BusWire.DraggingSymbols selectedSymbols))
+            ]
+        | DragState.Wire (_, prevWireModel) ->
+            match model.Selection with
+            | SelectionState.Wire wId ->
+                let currentMousePos = model.MousePosition
+                let w = BusWire.findWire model.Wire wId
+                let selSeg = w.SelectedSegment
+                let offset = 
+                    match selSeg with
+                    | x when x = 0 -> 
+                        Some ((posDiff currentMousePos (List.item x w.Segments).StartPos),CommonTypes.PortType.Output)
+                    | x when x = w.Segments.Length - 1 -> 
+                        Some ((posDiff (List.item x w.Segments).EndPos currentMousePos),CommonTypes.PortType.Input)
+                    |_ -> None 
+                { model with 
+                    DragState=DragState.Wire (true, prevWireModel)
+                    Offset = offset 
+                }
+                , Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
+            | _ -> failwithf "Can only drag if there is a selection"
+        | WireCreation (pId, _) ->
+            { model with DragState=WireCreation (pId, p) }, Cmd.none
+        | Pan (origPan, panStart, _) ->
+            { model with
+                DragState=Pan (origPan, panStart, p)
+                PanX = origPan.X + (p.X - panStart.X) * model.Zoom
+                PanY = origPan.Y + (p.Y - panStart.Y) * model.Zoom
+            }, Cmd.none
+        | _ -> model, Cmd.none
 
     let updatePan model origPan panStart panEnd =
         let diffX = (panEnd.X - panStart.X)
@@ -916,13 +886,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 updatePan newModel origPan panStart panEnd
                 , Cmd.none
             | _ -> newModel, Cmd.none
-        | (Leave, _, _) ->
-            let (model, cmd) = handleInterruptAction model
-
-            model, Cmd.batch [
-                cmd
-                Cmd.ofMsg (Symbol (Symbol.HighlightPorts []))
-            ]
+        | (Leave, _, _) -> handleInterruptAction model
         | (Move, p, _) -> processDrag p
 
     match msg with
@@ -1001,7 +965,13 @@ let view (model: Model) (dispatch: Msg -> unit) =
         | SelectionState.Symbols sIdLst -> Some sIdLst
         | _ -> None
 
-    let symbolSvg = Symbol.view model.Symbol selectedSymbols sDispatch
+    let portTypeToNotHighlight =
+        match model.DragState with
+        | DragState.WireCreation (pId, _) ->
+            Some <| Symbol.portType model.Symbol pId
+        | _ -> None
+
+    let symbolSvg = Symbol.view model.Symbol selectedSymbols model.MousePosition portTypeToNotHighlight sDispatch
 
     let wDispatch wMsg = dispatch (Wire wMsg)
     let selectedWire =
