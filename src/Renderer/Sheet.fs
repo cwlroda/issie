@@ -747,21 +747,28 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
     let handleMouseMsg mT modifier =
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, mods) ->
-            let (model, cmds) = handleInterruptAction model
-
             match mT.Button with
             | MouseButton.Left ->
-                let model, clickCmds = handleLeftClick model model.MousePosition mods
+                match model.DragState with
+                | DragState.Symbol _ ->
+                    model, Cmd.none
+                | _ ->
+                    let (newModel, cmds) = handleInterruptAction model
+                    let model, clickCmds = handleLeftClick newModel newModel.MousePosition mods
 
-                model, Cmd.batch [
-                    cmds
-                    clickCmds
-                ]
+                    model, Cmd.batch [
+                        cmds
+                        clickCmds
+                    ]
             | MouseButton.Middle ->
-                { model with DragState = Pan (posOf model.PanX model.PanY, p, p) }
+                let (newModel, cmds) = handleInterruptAction model
+
+                { newModel with DragState = Pan (posOf model.PanX model.PanY, p, p) }
                 , cmds
             | _ ->
-                { model with Selection=Empty }
+                let (newModel, cmds) = handleInterruptAction model
+
+                { newModel with Selection=Empty }
                 , cmds
         | (Drag, p, _) ->
             processDrag p
