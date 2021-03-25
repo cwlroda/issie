@@ -305,10 +305,7 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
             let yPosCalc= 
                 match considerTitle with
                 | true -> (20. + float (portNumber + 1) * (compH - 20.) / float (totalPorts + 1))
-                | false ->
-                    float (portNumber + 1) * (compH/ (float (totalPorts + 1)))
-                
-                // (compH /2.)
+                | false -> float (portNumber + 1) * (compH/ (float (totalPorts + 1)))
             let offset = 
                 match portType with 
                 |PortType.Input -> 0.
@@ -317,13 +314,8 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
                 PortId = PortId (uuid())
                 PortNumber =  Some (PortNumber (portNumber))
                 PortType = portType
-// <<<<<<< copy-require-click
-                PortPos = (snapToGrid {X=offset; Y =  yPosCalc })//{X=offset; Y = mulOfFive yPosCalc }
+                PortPos = (snapToGrid {X=offset; Y =  yPosCalc })
                 HostId = compId
-// =======
-//                 PortPos = (snapToGrid {X=offset; Y =  yPosCalc })
-//                 HostId = hostID
-// >>>>>>> main
                 Hover = PortHover false
                 Width = portWidth
             }
@@ -332,7 +324,7 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
                 PortId = PortId (uuid())
                 PortNumber =  None
                 PortType = portType
-                PortPos = {X=0.; Y=0. }//(20. + ((float portNumber) + 1.) * portPos ) }
+                PortPos = {X=0.; Y=0. }
                 HostId = compId
                 Hover = PortHover false
                 Width = portWidth
@@ -360,7 +352,6 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
                 |> Map.ofList
 
             let outputPortMap = 
-            //portTemplate (portExist:bool) (portNumber:int) (portType: PortType) (portWidth:PortWidth) (considerTitle:bool) (totalPorts:int)
                 [portTemplate (true) (0) (PortType.Output) (PortWidth n) (false) (1)] 
                 |> List.map (fun port -> (port.PortId, port))
                 |> Map.ofList
@@ -368,13 +359,11 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
             inputPortMap, outputPortMap
         |Output n ->
             let outputPortMap = 
-            //portTemplate (portExist:bool) (portNumber:int) (portType: PortType) (portWidth:PortWidth) (considerTitle:bool) (totalPorts:int)
                 [portTemplate (false) (0) (PortType.Output) (PortWidth 0) (false) (0)]
                 |> List.map (fun port -> (port.PortId, port))
                 |> Map.ofList
 
             let inputPortMap = 
-            //portTemplate (portExist:bool) (portNumber:int) (portType: PortType) (portWidth:PortWidth) (considerTitle:bool) (totalPorts:int)
                 [portTemplate (true) (0) (PortType.Input) (PortWidth n) (false) (1)]
                 |> List.map (fun port -> (port.PortId, port))
                 |> Map.ofList
@@ -403,7 +392,6 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
                     customParams.OutputLabels
                     |> List.mapi (fun i (_,portNum) ->
                         portTemplate (true) (i) (PortType.Output) (PortWidth portNum) (true) (List.length customParams.OutputLabels) 
-                        //portTemplate portNum PortType.Output (( compH - 20. ) / ((float (List.length customParams.OutputLabels)) + 1.)) (PortWidth 1) 
                     )
                     |> List.map (fun port -> (port.PortId, port))
                     |> Map.ofList
@@ -431,7 +419,6 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
                 [0;1]
                 |> List.map (fun portNumber -> 
                     portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (false) (2) 
-                    // portTemplate portNumber PortType.Input (( compH - 20. )/3.) (PortWidth 1)
                 )
                 |> List.map (fun port -> (port.PortId, port))
                 |> Map.ofList
@@ -669,10 +656,7 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
 
             let outputPortMap = 
                 [0..3]
-                |>List.map (fun portNumber -> 
-                    portTemplate (true) (portNumber) (PortType.Output) (PortWidth 1) (true) (4)
-                    // portTemplate x PortType.Output (( compH - 20. )/5.) (PortWidth 1)
-                )
+                |> List.map (fun portNumber -> portTemplate (true) (portNumber) (PortType.Output) (PortWidth 1) (true) (4))
                 |> List.map (fun port -> (port.PortId, port))
                 |> Map.ofList
 
@@ -690,7 +674,6 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
         W = compW
     }
 
-// <<<<<<< copy-require-click
 let updateCompoment (comp: Component) (p: XYPos) (label: string) : Component =
     { comp with
         Label = label
@@ -729,9 +712,6 @@ let createDeepCopyOfComponent (comp: Component): Component * Map<PortId, PortId>
     }, Map.ofList <| inputPortConversion @ outputPortConversion
 
 let createNewSymbol (index:int)  =
-// =======
-// let createNewSymbol (index:int)   =
-// >>>>>>> main
     let rng0 () = rng.Next (1,10)
     let rngComponent () = rng.Next(1,27)
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
@@ -842,18 +822,13 @@ let createNewSymbol (index:int)  =
 
 
     let rng1 () = rng.Next(0,800)
-// <<<<<<< copy-require-click
-//     let comp = 
-//         createSpecificComponent (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType (randomName() + (string(rng.Next (0,10))))
-// =======
+
     let positionX = (index % 5) * 250
-    // let totalRows = (totalSym / 5) + 1
 
     let positionY = (index / 5) * 200
     let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId (snapToGrid {X= float positionX;Y = float positionY }) compType (randomName() + (string(rng.Next (0,10))))
-// >>>>>>> main
+        createSpecificComponent (snapToGrid {X= float positionX;Y = float positionY }) compType (randomName() + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
@@ -998,6 +973,7 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
             }
         updateSymbolModelWithComponent symModel tgtCompNew
     |_ -> symModel
+    
 /// update function which displays symbols
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
