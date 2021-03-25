@@ -719,6 +719,12 @@ let adjLabelPos (seg: WireSegment) : XYPos =
     | relDiff when relDiff.X > 10.  ->  posDiff seg.StartPos (posOf 7.5 12.5)
     | _ -> posDiff seg.StartPos (posOf -7.5 12.5)
 
+
+
+
+
+
+
 let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
     g [] (
         wModel.WX
@@ -757,6 +763,8 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
                     WireWidth = $"%d{w.WireWidth}"
                 }
 
+            
+
             let segBBox =
                 w.Segments
                 |> List.fold (fun acc s ->
@@ -772,8 +780,11 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
             acc 
             @ if wModel.WireAnnotation && (w.WireWidth > 3) then [(singleLabelView labelProps)] else []
             @ if wModel.Debug then segBBox else []
+           
             @ [singleWireView props]
-        ) [] )
+            
+        ) [] ) 
+        
 
 
 let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Map<ConnectionId, Wire> =
@@ -782,6 +793,7 @@ let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Ma
     |> Map.map (fun _ w ->
         {w with Segments = smartRouting sModel w w.Segments}
     )
+
 
 let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     match msg with
@@ -795,7 +807,7 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
         let wxUpdated = addWire model sModel wMsgId1 wMsgId2
         { model with WX = wxUpdated }, Cmd.none
     | DeleteWire wMsg ->
-        let wxUpdated = deleteWire model sModel wMsg
+        let wxUpdated = deleteWire model sModel wMsg   
         { model with WX = wxUpdated }, Cmd.none
     | Dragging (wMsgId, wMsgPos) ->
         let wxUpdated = dragging model wMsgId wMsgPos
@@ -890,13 +902,73 @@ let getAllPidEnds (wModel: Model) (pIdSrc: PortId) : PortId List =
     )
     |> List.map (fun (_,w) -> w.TargetPort) 
 
+
 //----------------------interface to Issie-----------------------//
-let extractWire (wModel: Model) (sId:ComponentId) : Component =
-    failwithf "Not implemented"
+let wireSegLstToVerticesLst (wSegs: WireSegment list) : (float * float) list = 
+    let incompleteLstVert = List.map (fun (s:WireSegment) -> s.EndPos) wSegs
+    [wSegs.[0].StartPos] @ incompleteLstVert
+     |> List.map (fun pos -> (pos.X, pos.Y))   
 
-let extractWires (wModel: Model) : Component list = 
-    failwithf "Not implemented"
+let extractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Connection =
+    let wire = findWire wModel wId
+   
 
-/// Update the symbol with matching componentId to comp, or add a new symbol based on comp.
-let updateSymbolModelWithComponent (symModel: Model) (comp:Component) =
-    failwithf "Not Implemented"
+    {
+        Id =  wire.Id.ToString()
+        Source = (Symbol.findPort sModel wire.SrcPort)
+        Target = (Symbol.findPort sModel wire.TargetPort)
+        Vertices = (wireSegLstToVerticesLst wire.Segments)
+
+    }
+
+let extractSymbolWires (wModel: Model) (sModel: Symbol.Model)  (sId: ComponentId): Connection list = 
+    let connectedWires = getConnectedWires wModel sModel  [sId]
+    Map.toList connectedWires
+    |> List.map (fun (wId, w) -> extractWire wModel sModel wId)
+
+let extractAllWires (wModel: Model) (sModel: Symbol.Model) : Connection List = 
+    wModel.WX
+    |> Map.fold (fun connLst wId w -> [extractWire wModel sModel wId]@connLst) []
+    
+
+// ---------------------------- End of Issie Interface functions -----------------------//
+
+
+
+// ---------------- (Naive) Issie Interface Test Code -----------------------------------------//
+(* let getPosPairs (s: WireSegment) = 
+     ((s.StartPos.X, s.StartPos.Y), (s.EndPos.X, s.EndPos.Y))
+
+let checkExtractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId): bool =
+    let extractVerts = 
+        let conn = extractWire wModel sModel wId
+        List.pairwise conn.Vertices
+    let modelPairs = 
+        wModel.WX.[wId].Segments
+        |> List.map (fun s -> getPosPairs s)     
+    extractVerts = modelPairs
+
+let checkSymBol (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : bool =
+    let extractConns =
+        List.fold (fun acc sId -> extractSymbolWires wModel sModel sId @acc) [] sIdLst 
+        
+    let modelPairs =
+        let symPorts = Symbol.getPortsFromSymbols sModel sIdLst 
+        Map.filter (fun wId w -> List.contains w.SrcPort symPorts || List.contains w.TargetPort symPorts) wModel.WX
+        |> Map.map (fun wId w -> 
+            List.map (fun (s:WireSegment) -> getPosPairs s) w.Segments)
+    List.forall (fun extract -> (List.pairwise extract.Vertices) = modelPairs.[ConnectionId extract.Id]) extractConns
+
+let checkModelExtract (wModel: Model) (sModel: Symbol.Model) : bool =
+    let extractAllConns = extractAllWires wModel sModel
+
+    let modelPairs =
+        Map.map (fun wId w -> 
+            List.map (fun (s:WireSegment)-> getPosPairs s) w.Segments) wModel.WX
+
+    List.forall (fun extract -> (List.pairwise extract.Vertices) = modelPairs.[ConnectionId extract.Id]) extractAllConns
+
+     *)
+//----------------- End of Interface Test Code---------------------------------------------------------//
+
+
