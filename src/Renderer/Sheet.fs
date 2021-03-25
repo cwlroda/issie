@@ -290,7 +290,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         else
             Cmd.none
 
-    let processDrag p =
+    let processDrag p mouseIsDown =
         let model = { model with MousePosition=p}
 
         match model.DragState with
@@ -306,7 +306,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
             { model with DragState=DragState.Symbol (true, prevWire) }
             , Cmd.batch [
-                Cmd.ofMsg (Symbol (Symbol.Dragging (selectedSymbols, snapToGrid p)))
+                Cmd.ofMsg (Symbol (Symbol.Dragging (selectedSymbols, (snapToGrid p), mouseIsDown)))
                 Cmd.ofMsg (Wire (BusWire.DraggingSymbols (selectedSymbols, panBBox)))
             ]
         | DragState.Wire (_, prevWireModel) ->
@@ -753,7 +753,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 { newModel with Selection=Empty }
                 , cmds
         | (Drag, p, _) ->
-            processDrag p
+            processDrag p true
         | (Up, _, _) ->
             let newModel = {model with DragState=NotDragging }
 
@@ -905,7 +905,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 , Cmd.none
             | _ -> newModel, Cmd.none
         | (Leave, _, _) -> handleInterruptAction model
-        | (Move, p, _) -> processDrag p
+        | (Move, p, _) -> processDrag p false
 
     match msg with
     | UpdateSize (w, h) ->

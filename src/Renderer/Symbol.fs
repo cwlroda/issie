@@ -26,6 +26,7 @@ type Symbol =
         Id : ComponentId
         Component : Component
         Shadow : bool
+        Colliding : bool
     }
 
 
@@ -38,14 +39,14 @@ type Model = Map<ComponentId, Symbol>
 /// a production system, where we need to drag groups of symbols as well,
 /// and also select and deselect symbols, and specify real symbols, not circles
 type Msg =
-    | StartDragging of sId : ComponentId list * pagePos: XYPos      // Start Dragging Symbols
-    | Dragging of sIdLst: ComponentId list * pagePos: XYPos         // Continue Dragging Symbols
-    | EndDragging                                                   // Stop Dragging Symbols
-    | AddSymbol of comp: Component                                  // Create a New Symbol
-    | DeleteSymbols of sIdLst: ComponentId list                     // Delete All Symbols in List
-    | UpdateSymbolModelWithComponent of Component                   // Issie interface
-    | CreateInference of (PortId*PortId)                            // Updates the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
-    | DeleteInference of (PortId*PortId)                            // Resets the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
+    | StartDragging of sId : ComponentId list * pagePos: XYPos                          // Start Dragging Symbols
+    | Dragging of sIdLst: ComponentId list * pagePos: XYPos * mouseisDown: bool         // Continue Dragging Symbols
+    | EndDragging                                                                       // Stop Dragging Symbols
+    | AddSymbol of comp: Component                                                      // Create a New Symbol
+    | DeleteSymbols of sIdLst: ComponentId list                                         // Delete All Symbols in List
+    | UpdateSymbolModelWithComponent of Component                                       // Issie interface
+    | CreateInference of (PortId*PortId)                                                // Updates the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
+    | DeleteInference of (PortId*PortId)                                                // Resets the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
 
 
 //---------------------------------helper types and functions----------------//
@@ -836,6 +837,7 @@ let createNewSymbol (index:int)  =
         Id = comp.Id
         Component = comp
         Shadow = false
+        Colliding = false
     }
 
 /// Dummy function for test. The real init would probably have no symbols.
@@ -985,7 +987,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 IsDragging = false
                 Id = comp.Id
                 Component = comp
-                Shadow = false
+                Shadow = true
+                Colliding = false
             }
         
         Map.add comp.Id sym model, Cmd.none
@@ -1010,7 +1013,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 sym
         ) , Cmd.none
 
-    | Dragging (sIdLst, pagePos) -> 
+    | Dragging (sIdLst, pagePos, mouseIsDown) -> 
         let newModel = 
             model
             |> Map.map(fun _ sym ->
@@ -1019,6 +1022,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                     {sym with
                         Component ={sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
                         LastDragPos = pagePos
+                        Shadow = not mouseIsDown
                     }
                 else
                     sym
@@ -1029,11 +1033,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         |> Map.map (fun _ sym ->
             if collision then 
                 if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
-                    {sym with Shadow = true}
+                    {sym with Colliding = true; Shadow = true}
                 else
-                    {sym with Shadow = false}
+                    {sym with Colliding = false}
             else 
-                {sym with Shadow = false}
+                {sym with Colliding = false}
         ),
 
         Cmd.none
@@ -1042,7 +1046,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         model
         |> Map.map (fun _ sym ->
             if sym.IsDragging then
-                { sym with IsDragging = false }
+                { sym with IsDragging = false; Shadow = false }
             else sym
         ), Cmd.none
 
@@ -1073,11 +1077,11 @@ let private renderSymbol =
             let opacity = if props.Symbol.Shadow then "20%" else "100%"
 
             let fillColor =
-                if props.Selected then
-                //if props.Symbol.IsDragging then
-                    "#00d1b2"
-                else
-                    "#d3d3d3"
+                match props.Selected, props.Symbol.Colliding with
+                | (_, true) -> "#ff0000"
+                | (true, _) -> "#00d1b2"
+                | _ -> "#d3d3d3"
+                
                     
             let outlineColor = 
                 "black"
