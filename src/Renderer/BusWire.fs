@@ -830,12 +830,35 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     | Debug ->
         { model with Debug = not model.Debug }, Cmd.none
 ///Dummy function to initialize for demo
-let init () =
-    {
-        WX = Map.empty
-        WireAnnotation = true
-        Debug = false
-    }, Cmd.none
+let init (sModel: Symbol.Model) () =
+    let rng = System.Random 0
+    let inList, outList =
+        Symbol.allPortsInModel sModel
+        |> Map.toList
+        |> List.partition (fun (_, p) -> p.PortType = PortType.Output)
+
+    let inList, outList =
+        inList |> List.map fst,
+        outList |> List.map fst
+
+    let n = min inList.Length outList.Length
+
+    let model =
+        {
+            WX = Map.empty
+            WireAnnotation = true
+            Debug = false
+        }
+    
+    [1..100]
+    |> List.fold (fun acc i ->
+        let s1, s2 =
+            outList.[rng.Next(0, n-1)],
+            inList.[rng.Next(0, n-1)]
+
+        {acc with WX = addWire acc sModel s1 s2}
+    ) model
+    , Cmd.none
 
 //---------------Other interface functions--------------------//
 
