@@ -1,7 +1,6 @@
 ﻿module Symbol
 open Fable.React
 open Fable.React.Props
-open Browser
 open Elmish
 open Elmish.React
 open Helpers
@@ -39,16 +38,16 @@ type Model = Map<ComponentId, Symbol>
 /// a production system, where we need to drag groups of symbols as well,
 /// and also select and deselect symbols, and specify real symbols, not circles
 type Msg =
-    | StartDragging of sId : ComponentId list * pagePos: XYPos
-    | Dragging of sIdLst: ComponentId list * pagePos: XYPos
-    | EndDragging
-    | AddSymbol of comp: Component
-    | DeleteSymbols of sIdLst: ComponentId list
-    | UpdateSymbolModelWithComponent of Component // Issie interface
-    | HighlightPorts of pId : PortId list
-    | UnhighlightPorts
-    | CreateInference of (PortId*PortId)
-    | DeleteInference of (PortId*PortId)
+    | StartDragging of sId : ComponentId list * pagePos: XYPos      // Start Dragging Symbols
+    | Dragging of sIdLst: ComponentId list * pagePos: XYPos         // Continue Dragging Symbols
+    | EndDragging                                                   // Stop Dragging Symbols
+    | AddSymbol of comp: Component                                  // Create a New Symbol
+    | DeleteSymbols of sIdLst: ComponentId list                     // Delete All Symbols in List
+    | UpdateSymbolModelWithComponent of Component                   // Issie interface
+    | HighlightPorts of pIdList : PortId list                       // Highlights Ports Given in the List pId
+    | UnhighlightPorts                                              // Unhighlight All Highlighted Ports
+    | CreateInference of (PortId*PortId)                            // Updates the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
+    | DeleteInference of (PortId*PortId)                            // Resets the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
 
 
 //---------------------------------helper types and functions----------------//
