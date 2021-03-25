@@ -48,15 +48,15 @@ type Model =
     }
 
 type Msg =
-    | DeleteSymbols of CommonTypes.ComponentId list         // Performs Wire Routings/Deletions when Symbols are being Deleted
-    | DraggingSymbols of CommonTypes.ComponentId list * BBox       // Performs Wire Routings when Symbols are being Dragged
-    | AddWire of (PortId * PortId)                          // Create a Wire between Two Ports (Must be Ports of Opposite Polarity)
-    | DeleteWire of ConnectionId                            // Deletes a Wire
-    | StartDrag of wId: ConnectionId * pos: XYPos           // Starts Dragging a Wire's Segment
-    | Dragging of wId: ConnectionId * pos: XYPos            // Still Dragging the Wire's Segment
-    | EndDrag                                               // Complete the Dragging Process 
-    | RoutingUpdate of BBox                                         // Refreshes Wire Routings
-    | Debug                                                 // Enable Wire Bounding Boxes to be Seen (Debug Mode)
+    | DeleteSymbols of CommonTypes.ComponentId list             // Performs Wire Routings/Deletions when Symbols are being Deleted
+    | DraggingSymbols of CommonTypes.ComponentId list * BBox    // Performs Wire Routings when Symbols are being Dragged
+    | AddWire of (PortId * PortId)                              // Create a Wire between Two Ports (Must be Ports of Opposite Polarity)
+    | DeleteWire of ConnectionId                                // Deletes a Wire
+    | StartDrag of wId: ConnectionId * pos: XYPos               // Starts Dragging a Wire's Segment
+    | Dragging of wId: ConnectionId * pos: XYPos                // Still Dragging the Wire's Segment
+    | EndDrag                                                   // Complete the Dragging Process 
+    | RoutingUpdate of BBox                                     // Refreshes Wire Routings
+    | Debug                                                     // Enable Wire Bounding Boxes to be Seen (Debug Mode)
 
 
 type WireRenderProps =
