@@ -358,11 +358,21 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 saveStateIfDraggedCmd didDrag prevSubModel
             ]
 
-        | DragState.Symbol (didDrag, prevSubModel) ->
-            newModel, Cmd.batch [
-                Cmd.ofMsg (Symbol (Symbol.EndDragging))
-                saveStateIfDraggedCmd didDrag prevSubModel
-            ]
+        | DragState.Symbol (didDrag, (prevWire, prevSymbol)) ->
+                let selectedSymbols =
+                    match model.Selection with
+                    | Symbols s -> s
+                    | _ -> failwithf "Can only stop dragging if there is a selection"
+                if Symbol.symbolsCollide selectedSymbols model.Symbol then
+                    { newModel with
+                        Wire = prevWire
+                        Symbol = prevSymbol
+                    } , Cmd.none
+                else
+                    newModel, Cmd.batch [
+                        Cmd.ofMsg (Symbol (Symbol.EndDragging))
+                        saveStateIfDraggedCmd didDrag (prevWire, prevSymbol)
+                    ]
         | DragState.WireCreation _ ->
             { newModel with Selection = Empty }
             , Cmd.none
