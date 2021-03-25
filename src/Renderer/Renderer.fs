@@ -46,11 +46,16 @@
             // this option isn't working
             invisibleMenu.visible <- false // false if you want keys but no "Edit" menu
             invisibleMenu.submenu <-
-                [| makeKeyInput "Escape" (fun () -> dispatch KeyboardMsg.Escape)
-                   makeKeyInput "Alt+A" (fun () -> dispatch KeyboardMsg.AltA)
-                   makeKeyInput "Ctrl+Shift+=" (fun () -> dispatch KeyboardMsg.CtrlShiftEqual)
-                   makeKeyInput "Ctrl+=" (fun () -> dispatch KeyboardMsg.CtrlEqual)
-                   makeKeyInput "Ctrl+-" (fun () -> dispatch KeyboardMsg.CtrlMinus)
+                [| makeKeyInput "Escape" (fun () -> dispatch <| KeyPress KeyboardMsg.Escape)
+                   makeKeyInput "Alt+A" (fun () -> dispatch <| KeyPress KeyboardMsg.AltA)
+                   makeKeyInput "Ctrl+Shift+=" (fun () -> dispatch <| KeyPress KeyboardMsg.CtrlShiftEqual)
+                   makeKeyInput "Ctrl+=" (fun () -> dispatch <| KeyPress KeyboardMsg.CtrlEqual)
+                   makeKeyInput "Ctrl+-" (fun () -> dispatch <| KeyPress KeyboardMsg.CtrlMinus)
+                   makeKeyInput "Alt+N" (fun () -> dispatch (
+                                                        let newComp = Symbol.createSpecificComponent (posOf 0. 0.) CommonTypes.ComponentType.And "and1"
+
+                                                        Sheet.CreateObjects {Symbols=[newComp];Wires=[]}
+                                                   ))
                 |]
                 |> U2.Case1
 
@@ -60,14 +65,14 @@
             invisibleMenu.label <- "Edit"
             invisibleMenu.visible <- true // false if you want keys but no "Edit" menu
             invisibleMenu.submenu <-
-                [| makeKeyItem "Blue" "Alt+C" (fun () -> dispatch KeyboardMsg.AltC)
-                   makeKeyItem "Green" "Alt+V" (fun () -> dispatch KeyboardMsg.AltV)
-                   makeKeyItem "Default"  "delete" (fun () -> dispatch KeyboardMsg.DEL)
-                   makeKeyItem "New Random Wire"  "insert" (fun () -> dispatch KeyboardMsg.INS)
-                   makeKeyItem "Red" "Alt+Z" (fun () -> dispatch KeyboardMsg.AltZ)
-                   makeKeyItem "Toggle Debug" "Alt+Shift+D" (fun () -> dispatch KeyboardMsg.AltShiftD)
+                [| makeKeyItem "Blue" "Alt+C" (fun () -> dispatch <| KeyPress KeyboardMsg.AltC)
+                   makeKeyItem "Green" "Alt+V" (fun () -> dispatch <| KeyPress KeyboardMsg.AltV)
+                   makeKeyItem "Default"  "delete" (fun () -> dispatch <| KeyPress KeyboardMsg.DEL)
+                   makeKeyItem "New Random Wire"  "insert" (fun () -> dispatch <| KeyPress KeyboardMsg.INS)
+                   makeKeyItem "Red" "Alt+Z" (fun () -> dispatch <| KeyPress KeyboardMsg.AltZ)
+                   makeKeyItem "Toggle Debug" "Alt+Shift+D" (fun () -> dispatch <| KeyPress KeyboardMsg.AltShiftD)
                    menuSeparator
-                   makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch KeyboardMsg.AltShiftZ)
+                   makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch <| KeyPress KeyboardMsg.AltShiftZ)
                    makeRoleItem MenuItemRole.ForceReload
                    makeRoleItem MenuItemRole.Reload
                    makeRoleItem MenuItemRole.ToggleDevTools
@@ -82,9 +87,10 @@
                 |> Array.map U2.Case1
                 |> electron.remote.Menu.buildFromTemplate   
             menu.items.[0].visible <- Some true
+            menu.items.[1].visible <- Some false
             electron.remote.app.applicationMenu <- Some menu
     
-        Cmd.map KeyPress (Cmd.ofSub sub)   
+        Cmd.ofSub sub   
 
     let update' = fun msg -> recordExecutionTimeStats "Update" (Sheet.update msg)
     let view'  = recordExecutionTimeStats "View" Sheet.view

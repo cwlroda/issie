@@ -85,8 +85,6 @@ let portHighlightRange = 50.
 
 let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
     let borderSize = 3.
-    let widthInPixels = sprintf "%.2fpx" ((model.Width))
-    let heightInPixels = sprintf "%.2fpx" ((model.Height))
     let mDown (ev: Types.MouseEvent) = ev.buttons <> 0.
 
     let mouseOp op (ev: Types.MouseEvent) =
@@ -651,24 +649,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     sIdLst
                     |> List.map (fun sId ->
                         (Symbol.getSymbolFromSymbolId model.Symbol sId).Component
-                        , Symbol.symbolBBox model.Symbol sId
-                    )
-
-                let sCopyDataLst =
-                    let middleOfSymbols =
-                        let middle cs = List.min cs + (List.max cs - List.min cs) / 2.
-
-                        sCopyDataLst
-                        |> List.map (fun (_, bb) ->
-                            (bb.Pos.X, bb.Pos.X + bb.Width, bb.Pos.Y, bb.Pos.Y + bb.Height))
-                        |> List.fold (fun (xs, ys) (x1, x2, y1, y2) -> (x1 :: x2 :: xs, y1 :: y2 :: ys)) ([], [])
-                        |> fun (xs, ys) -> posOf (middle xs) (middle ys)
-
-                    sCopyDataLst
-                    |> List.map (fun (comp, _) ->
-                        let p = posOf comp.X comp.Y
-
-                        Symbol.updateCompoment comp (posDiff p middleOfSymbols) comp.Label
                     )
 
                 let pCopyDataLst =
@@ -776,18 +756,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 model, Cmd.batch [
                     cmds
                     clickCmds
-                ]
-            | MouseButton.Right ->
-                let newComp = Symbol.createSpecificComponent (snapToGrid model.MousePosition) CommonTypes.ComponentType.And "and1"
-
-                { model with
-                    Selection = Symbols [newComp.Id]
-                }
-                , Cmd.batch [
-                    cmds
-                    Cmd.ofMsg (Symbol (Symbol.AddSymbol newComp))
-                    Cmd.ofMsg (Wire (BusWire.AddSymbol))
-                    Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
                 ]
             | MouseButton.Middle ->
                 { model with DragState = Pan (posOf model.PanX model.PanY, p, p) }
@@ -972,11 +940,27 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         }, Cmd.none
     | CreateObjects {Symbols=symData;Wires=wireData} -> 
         let addSymbolCommand =
+            let middleOfSymbols =
+                let middle cs = List.min cs + (List.max cs - List.min cs) / 2.
+
+                symData
+                |> List.map Symbol.componentBBox
+                |> List.map (fun bb ->
+                    (bb.Pos.X, bb.Pos.X + bb.Width, bb.Pos.Y, bb.Pos.Y + bb.Height))
+                |> List.fold (fun (xs, ys) (x1, x2, y1, y2) -> (x1 :: x2 :: xs, y1 :: y2 :: ys)) ([], [])
+                |> fun (xs, ys) -> posOf (middle xs) (middle ys)
+
             symData
             |> List.map (fun comp ->
-                let p = posOf comp.X comp.Y
-                let snappedPos = snapToGrid (posAdd p model.MousePosition)
-                Symbol.updateCompoment comp snappedPos comp.Label
+                let p =
+                    middleOfSymbols
+                    |> posDiff (posOf comp.X comp.Y)
+                    |> posAdd model.MousePosition
+                    |> snapToGrid
+
+                printfn "%A" p
+
+                Symbol.updateCompoment comp p comp.Label
             )
             |> List.map (Symbol.AddSymbol >> Symbol >> Cmd.ofMsg)
             |> Cmd.batch

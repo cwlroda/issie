@@ -219,15 +219,18 @@ let symbolType (symModel: Model) (compId: ComponentId) : ComponentType =
 let symbolLabel (symModel: Model) (compId: ComponentId) : string = 
     (Map.find compId symModel).Component.Label
 
+let componentBBox (comp: Component) : BBox =
+    {
+        Pos = {X=comp.X; Y=comp.Y}
+        Width = comp.W
+        Height = comp.H
+    }
+
 let symbolBBox (symModel: Model) (compId: ComponentId) : BBox =
     let foundSymbol = 
         Map.find compId symModel
 
-    {
-        Pos = {X=foundSymbol.Component.X; Y=foundSymbol.Component.Y}
-        Width = foundSymbol.Component.W
-        Height = foundSymbol.Component.H
-    }
+    componentBBox foundSymbol.Component
 
 let subtractPortWidth (pw1:PortWidth) (pw2:PortWidth) :PortWidth = 
     let (PortWidth w1) = pw1
