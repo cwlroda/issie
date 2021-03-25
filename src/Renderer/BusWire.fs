@@ -474,7 +474,7 @@ let singleWireView =
 
 let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
     let wire = findWire wModel wId
-    let diff = snapToGrid (posDiff pos wire.LastDragPos)
+    let diff = (posDiff pos wire.LastDragPos)
 
     let seg =
         match List.tryItem wire.SelectedSegment wire.Segments with
