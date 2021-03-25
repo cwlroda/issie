@@ -1798,7 +1798,7 @@ let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) 
                 }
         )
 
-    (renderView selectedSyms true @ renderView unselectedSyms false )
+    (renderView unselectedSyms false @ renderView selectedSyms true)
     |> ofList
 
 
