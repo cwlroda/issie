@@ -51,7 +51,6 @@ type Msg =
     | AddSymbol                                             // Performs Wire Routings when a Symbol is Created
     | DeleteSymbols of CommonTypes.ComponentId list         // Performs Wire Routings/Deletions when Symbols are being Deleted
     | DraggingSymbols of CommonTypes.ComponentId list       // Performs Wire Routings when Symbols are being Dragged
-    // | EndDragSymbols
     | AddWire of (PortId * PortId)                          // Create a Wire between Two Ports (Must be Ports of Opposite Polarity)
     | DeleteWire of ConnectionId                            // Deletes a Wire
     | SetColor of color: HighLightColor                     // Sets the Colour of a Wire
@@ -218,7 +217,7 @@ let autoConnect (segList: WireSegment list) : WireSegment list =
 let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : WireSegment list =
     let srcPortPos = Symbol.portPos sModel wire.SrcPort
     let tgtPortPos = Symbol.portPos sModel wire.TargetPort
-    let avgPortPos = snapToGrid (midPt srcPortPos tgtPortPos)
+    let avgPortPos = midPt srcPortPos tgtPortPos
     let halfPortDist = posHalve (posDiff tgtPortPos srcPortPos)
 
     // checks if bounding boxes of wire segment and symbol overlap
@@ -234,7 +233,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
         let offset = if dir then gridSize else -gridSize
 
         match d with
-        | x when x >= 260 -> seg
+        | x when x > 260 -> seg
         | _ ->
             match collision seg with
             | true ->
@@ -257,7 +256,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
     // bidirectional recursion to shorten path
     let rec routing (depth: int) (newSegList: WireSegment list) : WireSegment list =
         match depth with
-        | x when x > 5 -> newSegList
+        | x when x > 1 -> newSegList
         | _ ->
             match (List.exists (fun seg -> collision seg) newSegList) || (depth = 0) with
             | true ->
@@ -270,21 +269,26 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
                         | 3 ->
                             let newSeg =
                                 {s with
-                                    StartPos = posOf avgPortPos.X s.StartPos.Y 
-                                    EndPos = posOf avgPortPos.X s.EndPos.Y 
+                                    StartPos = snapToGrid (posOf avgPortPos.X s.StartPos.Y) 
+                                    EndPos = snapToGrid (posOf avgPortPos.X s.EndPos.Y)
                                 }
 
                             let segLeft = avoid newSeg i false 0
                             let segRight = avoid newSeg i true 0
                             let distLeft = abs (avgPortPos.X - segLeft.StartPos.X)
                             let distRight = abs (avgPortPos.X - segRight.StartPos.X)
-                            let clearance = abs (halfPortDist.X) - gridSize
+                            let clearance = abs halfPortDist.X
 
                             match distLeft, distRight with
-                            | x, y when x >= clearance && y >= clearance -> newSeg
-                            | x, _ when x < clearance -> segLeft
-                            | _, y when y < clearance -> segRight
-                            | _ -> if distLeft <= distRight then segLeft else segRight
+                            | x, y when (x > clearance) && (y > clearance) -> newSeg
+                            | x, y when (x <= clearance) && (y > clearance) -> segLeft
+                            | x, y when (x > clearance) && (y <= clearance) -> segRight
+                            | _ ->
+                                match collision segList.Head, collision (List.last segList) with
+                                | true, false -> segLeft
+                                | false, true -> segRight
+                                | _ -> if distLeft <= distRight then segLeft else segRight
+
                         | _ ->
                             let newSeg =
                                 {s with
@@ -296,8 +300,8 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
                     | 2 ->
                         let newSeg =
                             {s with
-                                StartPos = posOf s.StartPos.X avgPortPos.Y
-                                EndPos = posOf s.EndPos.X avgPortPos.Y
+                                StartPos = snapToGrid (posOf s.StartPos.X avgPortPos.Y)
+                                EndPos = snapToGrid (posOf s.EndPos.X avgPortPos.Y)
                             }
 
                         let segUp = avoid newSeg i false 0
