@@ -298,8 +298,18 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | AreaSelect (start, _, additive) ->
             { model with DragState=AreaSelect (start, p, additive)}, Cmd.none
         | DragState.Symbol (_, prevWire) ->
-            let selectedSymbols =
-                match model.Selection with
+                let selectedSymbols =
+                    match model.Selection with
+                    | Symbols s -> s
+                    | _ -> failwithf "Can only drag if there is a selection"
+
+                { model with DragState=DragState.Symbol (true, prevWire) }
+                , Cmd.batch [
+                    Cmd.ofMsg (Symbol (Symbol.Dragging (selectedSymbols, snapToGrid p)))
+                    Cmd.ofMsg (Wire (BusWire.DraggingSymbols selectedSymbols))
+                ]
+        | DragState.Wire (_, prevWireModel) ->
+            match model.Selection with
                 | SelectionState.Wire wId ->
                     let currentMousePos = model.MousePosition
                     let w = BusWire.findWire model.Wire wId
@@ -317,31 +327,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     }
                     , Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
                 | _ -> failwithf "Can only drag if there is a selection"
-
-            { model with DragState=DragState.Symbol (true, prevWire) }
-            , Cmd.batch [
-                Cmd.ofMsg (Symbol (Symbol.Dragging (selectedSymbols, snapToGrid p)))
-                Cmd.ofMsg (Wire (BusWire.DraggingSymbols selectedSymbols))
-            ]
-        | DragState.Wire (_, prevWireModel) ->
-            match model.Selection with
-            | SelectionState.Wire wId ->
-                let currentMousePos = model.MousePosition
-                let w = BusWire.findWire model.Wire wId
-                let selSeg = w.SelectedSegment
-                let offset = 
-                    match selSeg with
-                    | x when x = 0 -> 
-                        Some ((posDiff currentMousePos (List.item x w.Segments).StartPos),CommonTypes.PortType.Output)
-                    | x when x = w.Segments.Length - 1 -> 
-                        Some ((posDiff (List.item x w.Segments).EndPos currentMousePos),CommonTypes.PortType.Input)
-                    |_ -> None 
-                { model with 
-                    DragState=DragState.Wire (true, prevWireModel)
-                    Offset = offset 
-                }
-                , Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
-            | _ -> failwithf "Can only drag if there is a selection"
         | WireCreation (pId, _) ->
             { model with DragState=WireCreation (pId, p) }, Cmd.none
         | Pan (origPan, panStart, _) ->
