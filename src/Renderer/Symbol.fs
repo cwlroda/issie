@@ -39,14 +39,14 @@ type Model = Map<ComponentId, Symbol>
 /// a production system, where we need to drag groups of symbols as well,
 /// and also select and deselect symbols, and specify real symbols, not circles
 type Msg =
-    | StartDragging of sId : ComponentId list * pagePos: XYPos      // Start Dragging Symbols
-    | Dragging of sIdLst: ComponentId list * pagePos: XYPos         // Continue Dragging Symbols
-    | EndDragging                                                   // Stop Dragging Symbols
-    | AddSymbol of comp: Component                                  // Create a New Symbol
-    | DeleteSymbols of sIdLst: ComponentId list                     // Delete All Symbols in List
-    | UpdateSymbolModelWithComponent of Component                   // Issie interface
-    | CreateInference of (PortId*PortId)                            // Updates the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
-    | DeleteInference of (PortId*PortId)                            // Resets the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
+    | StartDragging of sId : ComponentId list * pagePos: XYPos                          // Start Dragging Symbols
+    | Dragging of sIdLst: ComponentId list * pagePos: XYPos * mouseisDown: bool         // Continue Dragging Symbols
+    | EndDragging                                                                       // Stop Dragging Symbols
+    | AddSymbol of comp: Component                                                      // Create a New Symbol
+    | DeleteSymbols of sIdLst: ComponentId list                                         // Delete All Symbols in List
+    | UpdateSymbolModelWithComponent of Component                                       // Issie interface
+    | CreateInference of (PortId*PortId)                                                // Updates the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
+    | DeleteInference of (PortId*PortId)                                                // Resets the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
 
 
 //---------------------------------helper types and functions----------------//
@@ -1013,7 +1013,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 sym
         ) , Cmd.none
 
-    | Dragging (sIdLst, pagePos) -> 
+    | Dragging (sIdLst, pagePos, mouseIsDown) -> 
         let newModel = 
             model
             |> Map.map(fun _ sym ->
