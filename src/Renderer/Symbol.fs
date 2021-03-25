@@ -987,7 +987,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 IsDragging = false
                 Id = comp.Id
                 Component = comp
-                Shadow = false
+                Shadow = true
                 Colliding = false
             }
         
@@ -1022,6 +1022,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                     {sym with
                         Component ={sym.Component with X = sym.Component.X + diff.X; Y = sym.Component.Y + diff.Y}
                         LastDragPos = pagePos
+                        Shadow = not mouseIsDown
                     }
                 else
                     sym
@@ -1032,11 +1033,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         |> Map.map (fun _ sym ->
             if collision then 
                 if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
-                    {sym with Shadow = true; Colliding = true}
+                    {sym with Colliding = true; Shadow = true}
                 else
-                    {sym with Shadow = false; Colliding = false}
+                    {sym with Colliding = false}
             else 
-                {sym with Shadow = false; Colliding = false}
+                {sym with Colliding = false}
         ),
 
         Cmd.none
