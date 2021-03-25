@@ -26,6 +26,7 @@ type Symbol =
         Id : ComponentId
         Component : Component
         Shadow : bool
+        Colliding : bool
     }
 
 
@@ -836,6 +837,7 @@ let createNewSymbol (index:int)  =
         Id = comp.Id
         Component = comp
         Shadow = false
+        Colliding = false
     }
 
 /// Dummy function for test. The real init would probably have no symbols.
@@ -986,6 +988,7 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 Id = comp.Id
                 Component = comp
                 Shadow = false
+                Colliding = false
             }
         
         Map.add comp.Id sym model, Cmd.none
@@ -1029,11 +1032,11 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
         |> Map.map (fun _ sym ->
             if collision then 
                 if List.tryFind (fun sId -> sId = sym.Id) sIdLst <> None then
-                    {sym with Shadow = true}
+                    {sym with Shadow = true; Colliding = true}
                 else
-                    {sym with Shadow = false}
+                    {sym with Shadow = false; Colliding = false}
             else 
-                {sym with Shadow = false}
+                {sym with Shadow = false; Colliding = false}
         ),
 
         Cmd.none
@@ -1073,11 +1076,11 @@ let private renderSymbol =
             let opacity = if props.Symbol.Shadow then "20%" else "100%"
 
             let fillColor =
-                if props.Selected then
-                //if props.Symbol.IsDragging then
-                    "#00d1b2"
-                else
-                    "#d3d3d3"
+                match props.Selected, props.Symbol.Colliding with
+                | (_, true) -> "#ff0000"
+                | (true, _) -> "#00d1b2"
+                | _ -> "#d3d3d3"
+                
                     
             let outlineColor = 
                 "black"
