@@ -958,7 +958,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 if Symbol.symbolsCollide selectedSymbols model.Symbol then model, Cmd.none else
                     newModel, Cmd.batch [
                         Cmd.ofMsg (Symbol (Symbol.EndDragging))
-                        Cmd.ofMsg (Wire (BusWire.EndDragSymbols))
+                        // Cmd.ofMsg (Wire (BusWire.EndDragSymbols))
                         saveStateIfDraggedCmd didDrag prevWireModel
                     ]
             | DragState.WireCreation (pIdStart, p) ->
