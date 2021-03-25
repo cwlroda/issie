@@ -717,12 +717,7 @@ let createDeepCopyOfComponent (comp: Component): Component * Map<PortId, PortId>
         OutputPorts = outputPorts
     }, Map.ofList <| inputPortConversion @ outputPortConversion
 
-let createNewSymbol (index:int)  =
-    let rng0 () = rng.Next (1,10)
-    let rngComponent () = rng.Next(1,27)
-    let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
-
-    let randomName () = 
+let randomName () = 
         let nameRng1 () = rng.Next (1,21)
         let nameRng2 () = rng.Next (1,6)
         let nameRng3 () = rng.Next(1,27)
@@ -743,8 +738,41 @@ let createNewSymbol (index:int)  =
             | 16 -> "p" | 17 -> "q" | 18 -> "r" | 19 -> "s" | 20 -> "t"
             | 21 -> "u" | 22 -> "v" | 23 -> "w" | 24 -> "x" | 25 -> "y" | _ -> "z"
         firstLetter() + secondLetter() + thirdLetter()
-        
+let createCompType (compNo:int):ComponentType =
+    let rng0 () = rng.Next (1,10)
+    let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
+    match (compNo) with
+    | 1 -> Not
+    | 2 -> And
+    | 3 -> Or
+    | 4 -> Xor
+    | 5 -> Nand
+    | 6 -> Nor
+    | 7 -> Xnor
+    | 8 -> Mux2
+    | 9 -> NbitsAdder (rng0 ())
+    | 10 -> DFF
+    | 11 -> DFFE
+    | 12 -> Register (rng0 ())
+    | 13 -> RegisterE (rng0())
+    | 14 -> AsyncROM (memory ())
+    | 15 -> ROM (memory())
+    | 16 -> RAM (memory())
+    | 17 -> Decode4
+    | 18 -> Input (rng0 ())
+    | 19 -> Output (rng0 ())
+    | 20 -> Demux2
+    | 21 -> IOLabel
+    | 22 -> MergeWires
+    | 23 -> BusSelection (rng0(),rng0())
+    | 24 -> 
+        let cons = rng0()
+        let wid = int ((log(float cons)/log(2.))+1.)
+        Constant (wid, cons)
+    | _-> SplitWire (rng.Next(1,9))
 
+let createNewSymbol (index:int)  =
+    let rngComponent () = rng.Next(1,27)
     let compType = 
         let customComp (custNo:int):CustomComponentType = 
             let labels (inputOutput:bool) (count:int) = 
@@ -781,36 +809,9 @@ let createNewSymbol (index:int)  =
                     match index with
                     | x when x < 26 -> x
                     | _ -> rngComponent()
-                match (componentNo) with
-                | 1 -> Not
-                | 2 -> And
-                | 3 -> Or
-                | 4 -> Xor
-                | 5 -> Nand
-                | 6 -> Nor
-                | 7 -> Xnor
-                | 8 -> Mux2
-                | 9 -> NbitsAdder (rng0 ())
-                | 10 -> DFF
-                | 11 -> DFFE
-                | 12 -> Register (rng0 ())
-                | 13 -> RegisterE (rng0())
-                | 14 -> AsyncROM (memory ())
-                | 15 -> ROM (memory())
-                | 16 -> RAM (memory())
-                | 17 -> Decode4
-                | 18 -> Input (rng0 ())
-                | 19 -> Output (rng0 ())
-                | 20 -> Demux2
-                | 21 -> IOLabel
-                | 22 -> MergeWires
-                | 23 -> BusSelection (rng0(),rng0())
-                | 24 -> 
-                    let cons = rng0()
-                    let wid = int ((log(float cons)/log(2.))+1.)
-                    Constant (wid, cons)
-                | _-> SplitWire (rng.Next(1,9))
                 
+                
+                createCompType componentNo
             
             | x when x = 46 ->
                 Custom (customComp 1)

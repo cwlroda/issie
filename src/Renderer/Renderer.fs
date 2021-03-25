@@ -52,7 +52,7 @@
                    makeKeyInput "Ctrl+=" (fun () -> dispatch <| KeyPress KeyboardMsg.CtrlEqual)
                    makeKeyInput "Ctrl+-" (fun () -> dispatch <| KeyPress KeyboardMsg.CtrlMinus)
                    makeKeyInput "Alt+N" (fun () -> dispatch (
-                                                        let newComp = Symbol.createSpecificComponent (posOf 0. 0.) CommonTypes.ComponentType.And "and1"
+                                                        let newComp = Symbol.createSpecificComponent (posOf 0. 0.) (Symbol.createCompType (Symbol.rng.Next(0,25))) (Symbol.randomName ())
 
                                                         Sheet.CreateObjects {Symbols=[newComp];Wires=[]}
                                                    ))
