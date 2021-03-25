@@ -1750,7 +1750,7 @@ let private renderSymbol =
 
 /// View function for symbol layer of SVG
 
-let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (dispatch : Msg -> unit) = 
+let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (previewComponents: CommonTypes.Component list option) (dispatch : Msg -> unit) = 
     let selectedSet =
         match selectedSymbols with
         | Some sIdLst -> Set.ofList sIdLst
@@ -1758,24 +1758,40 @@ let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) 
 
     let (selectedSyms, unselectedSyms) =
         model
-        |> Map.partition (fun _ sym -> Set.contains sym.Id selectedSet)
+        |> Map.toList
+        |> List.map snd
+        |> List.partition (fun sym -> Set.contains sym.Id selectedSet)
 
-    let renderView (symMap: Map<ComponentId, Symbol>) selected : ReactElement list =
-        symMap
-        |> Map.map (fun _ ({Id = ComponentId id} as symbol) ->
+    let renderView symbols selected : ReactElement list =
+        symbols
+        |> List.map (fun symbol ->
+            let (ComponentId sId) = symbol.Id
+
             renderSymbol
                 {
                     Symbol = symbol
                     Dispatch = dispatch
                     Selected = selected
-                    key = id
+                    key = sId
                 }
         )
-        |> Map.toList
-        |> List.map snd
 
+    let previewSymbols =
+        match previewComponents with
+        | Some compLst ->
+            compLst
+            |> List.map (fun comp ->
+                {
+                  Component = comp
+                  Id = comp.Id
+                  IsDragging = false
+                  LastDragPos = posOf 0. 0.
+                  Shadow = true
+                }
+            )
+        | None -> []
 
-    (renderView selectedSyms true @ renderView unselectedSyms false)
+    (renderView previewSymbols true @ renderView selectedSyms true @ renderView unselectedSyms false )
     |> ofList
 
 

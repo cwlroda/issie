@@ -10,7 +10,14 @@ open Helpers
 
 type SubModel = BusWire.Model * Symbol.Model
 
+type CreateElements =
+    {
+        Symbols: (CommonTypes.Component) list
+        Wires: (CommonTypes.PortId * CommonTypes.PortId) list
+    }
+
 type DragState =
+    | CreateObjects of CreateElements * SubModel
     | Wire of bool * SubModel
     | Symbol of bool * SubModel
     | AreaSelect of XYPos * XYPos * bool
@@ -23,14 +30,8 @@ type SelectionState =
     | Symbols of CommonTypes.ComponentId list
     | Empty
 
-type CopyElements =
-    {
-        Symbols: (CommonTypes.Component) list
-        Wires: (CommonTypes.PortId * CommonTypes.PortId) list
-    }
-
 type CopyState =
-    | Copied of CopyElements
+    | Copied of CreateElements * int
     | Uninitialized
     
 type Model = {
@@ -361,7 +362,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     PanX = origPan.X + (p.X - panStart.X) * model.Zoom
                     PanY = origPan.Y + (p.Y - panStart.Y) * model.Zoom
                 }, Cmd.none
-            | NotDragging -> model, Cmd.none
+            | _ -> model, Cmd.none
 
         model, Cmd.batch [
             cmd
@@ -381,6 +382,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         let newModel = {model with DragState=NotDragging}
 
         match model.DragState with
+        | CreateObjects _ -> model, Cmd.none
         | AreaSelect _ -> newModel, Cmd.none
         | DragState.Wire (didDrag, prevSubModel) ->
             
@@ -400,7 +402,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | DragState.Pan (origPan, panStart, panEnd) ->
             updatePan model origPan panStart panEnd
             , Cmd.none
-        | NotDragging -> newModel, Cmd.none
+        | _ -> newModel, Cmd.none
 
     let handleLeftClick model p m =
         let targetedPort = Symbol.getTargetedPort model.Symbol p
@@ -645,19 +647,21 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     sIdLst
                     |> List.map (fun sId ->
                         (Symbol.getSymbolFromSymbolId model.Symbol sId).Component
+                        , Symbol.symbolBBox model.Symbol sId
                     )
 
                 let sCopyDataLst =
                     let middleOfSymbols =
-                        let middle c = List.min c + (List.max c - List.min c) / 2.
+                        let middle cs = List.min cs + (List.max cs - List.min cs) / 2.
 
                         sCopyDataLst
-                        |> List.map (fun comp -> (comp.X, comp.Y))
-                        |> List.fold (fun (xs, ys) (x, y) -> (x :: xs, y :: ys)) ([], [])
+                        |> List.map (fun (_, bb) ->
+                            (bb.Pos.X, bb.Pos.X + bb.Width, bb.Pos.Y, bb.Pos.Y + bb.Height))
+                        |> List.fold (fun (xs, ys) (x1, x2, y1, y2) -> (x1 :: x2 :: xs, y1 :: y2 :: ys)) ([], [])
                         |> fun (xs, ys) -> posOf (middle xs) (middle ys)
 
                     sCopyDataLst
-                    |> List.map (fun comp ->
+                    |> List.map (fun (comp, _) ->
                         let p = posOf comp.X comp.Y
 
                         Symbol.updateCompoment comp (posDiff p middleOfSymbols) comp.Label
@@ -670,19 +674,29 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
                 { model with
                     CopyState =
-                        Copied {
+                        Copied ({
                             Symbols = sCopyDataLst
                             Wires = pCopyDataLst
-                        }
+                        }, 0)
                 }
             | _ -> model
             , Cmd.none
         | AltV ->
             match model.CopyState with
-            | Copied {Symbols=symbolData;Wires=wireData} ->
-                let sCopyDataLst = List.map Symbol.createDeepCopyOfComponent symbolData
+            | Copied ({Symbols=symbolData;Wires=wireData} as copyData, timesPasted) ->
                 let sCopyDataLst, portConversionMap =
-                    List.unzip sCopyDataLst
+                    symbolData
+                    |> List.map Symbol.createDeepCopyOfComponent
+                    |> List.unzip
+
+                let sCopyDataLst =
+                    sCopyDataLst
+                    |> List.map (fun comp ->
+                        let p = posOf comp.X comp.Y
+                        let label = comp.Label + "_" + (string <| timesPasted + 1)
+                        Symbol.updateCompoment comp p label
+                    )
+
 
                 let portConversionMap =
                     portConversionMap
@@ -696,36 +710,20 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         Map.find target portConversionMap
                     )
 
-                let addSymbolCommand =
-                    sCopyDataLst
-                    |> List.map (fun comp ->
-                        let p = posOf comp.X comp.Y
-                        let snappedPos = snapToGrid (posAdd p model.MousePosition)
-                        Symbol.updateCompoment comp snappedPos comp.Label
-                    )
-                    |> List.map (Symbol.AddSymbol >> Symbol >> Cmd.ofMsg)
-                    |> Cmd.batch
-
-                let addWireCommand =
-                    Cmd.batch
-                    <| List.map (BusWire.AddWire >> Wire >> Cmd.ofMsg) pCopyDataLst
-
-                let selectedSymbols =
-                    sCopyDataLst
-                    |> List.map (fun comp -> comp.Id)
+                let subModel = (model.Wire, model.Symbol)
+                let createdObjects =
+                    {
+                        Symbols=sCopyDataLst
+                        Wires=pCopyDataLst
+                    }
 
                 { model with
-                    Selection = SelectionState.Symbols selectedSymbols
-                }, Cmd.batch (
-                    [
-                        addSymbolCommand
-                        addWireCommand
-                        Cmd.ofMsg (Wire (BusWire.AddSymbol))  
-                        Cmd.ofMsg (SaveState (model.Wire, model.Symbol))
-                    ]
-
-                )
-            | Uninitialized -> model, Cmd.none
+                    Selection=Empty
+                    DragState=DragState.CreateObjects (createdObjects, subModel)
+                    CopyState = Copied (copyData, timesPasted + 1)
+                }
+            | Uninitialized -> model
+            , Cmd.none
         | AltZ ->
             match model.UndoList with
             | [] -> model, Cmd.none
@@ -780,7 +778,37 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
             match mT.Button with
             | MouseButton.Left ->
-                let model, clickCmds = handleLeftClick model model.MousePosition mods
+                let model, clickCmds =
+                    match model.DragState with
+                    | CreateObjects ({Symbols=symbolData;Wires=wireData}, prevSubModel) ->
+                        let addSymbolCommand =
+                            symbolData
+                            |> List.map (fun comp ->
+                                let p = posOf comp.X comp.Y
+                                let snappedPos = snapToGrid (posAdd p model.MousePosition)
+                                Symbol.updateCompoment comp snappedPos comp.Label
+                            )
+                            |> List.map (Symbol.AddSymbol >> Symbol >> Cmd.ofMsg)
+                            |> Cmd.batch
+
+                        let addWireCommand =
+                            wireData
+                            |> List.map (BusWire.AddWire >> Wire >> Cmd.ofMsg)
+                            |> Cmd.batch
+
+                        let selectedSymbols =
+                            symbolData
+                            |> List.map (fun comp -> comp.Id)
+
+                        { model with
+                            DragState=NotDragging
+                            Selection=Symbols selectedSymbols
+                        }, Cmd.batch [
+                            addSymbolCommand
+                            addWireCommand
+                            Cmd.ofMsg <| SaveState prevSubModel
+                        ]
+                    | _ -> handleLeftClick model model.MousePosition mods
 
                 model, Cmd.batch [
                     cmds
@@ -970,8 +998,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
 
     match msg with
     | UpdateSize (w, h) ->
-        printfn "w: %A" w
-        printfn "h: %A" h
         { model with
             Width=w
             Height=h
@@ -1001,8 +1027,19 @@ let view (model: Model) (dispatch: Msg -> unit) =
         match model.Selection with
         | SelectionState.Symbols sIdLst -> Some sIdLst
         | _ -> None
+    let previewSymbols =
+        match model.DragState with
+        | CreateObjects ({Symbols=symData}, _) ->
+            symData
+            |> List.map (fun comp ->
+                let p = posOf comp.X comp.Y
+                let snappedPos = snapToGrid (posAdd p model.MousePosition)
+                Symbol.updateCompoment comp snappedPos comp.Label
+            )
+            |> Some
+        | _ -> None
 
-    let symbolSvg = Symbol.view model.Symbol selectedSymbols sDispatch
+    let symbolSvg = Symbol.view model.Symbol selectedSymbols previewSymbols sDispatch
 
     let wDispatch wMsg = dispatch (Wire wMsg)
     let selectedWire =
