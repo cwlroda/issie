@@ -1,7 +1,6 @@
 ﻿module Symbol
 open Fable.React
 open Fable.React.Props
-open Browser
 open Elmish
 open Elmish.React
 open Helpers
@@ -39,14 +38,16 @@ type Model = Map<ComponentId, Symbol>
 /// a production system, where we need to drag groups of symbols as well,
 /// and also select and deselect symbols, and specify real symbols, not circles
 type Msg =
-    | StartDragging of sId : ComponentId list * pagePos: XYPos
-    | Dragging of sIdLst: ComponentId list * pagePos: XYPos
-    | EndDragging
-    | AddSymbol of comp: Component
-    | DeleteSymbols of sIdLst: ComponentId list
-    | UpdateSymbolModelWithComponent of Component // Issie interface
-    | CreateInference of (PortId*PortId)
-    | DeleteInference of (PortId*PortId)
+    | StartDragging of sId : ComponentId list * pagePos: XYPos      // Start Dragging Symbols
+    | Dragging of sIdLst: ComponentId list * pagePos: XYPos         // Continue Dragging Symbols
+    | EndDragging                                                   // Stop Dragging Symbols
+    | AddSymbol of comp: Component                                  // Create a New Symbol
+    | DeleteSymbols of sIdLst: ComponentId list                     // Delete All Symbols in List
+    | UpdateSymbolModelWithComponent of Component                   // Issie interface
+    | HighlightPorts of pIdList : PortId list                       // Highlights Ports Given in the List pId
+    | UnhighlightPorts                                              // Unhighlight All Highlighted Ports
+    | CreateInference of (PortId*PortId)                            // Updates the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
+    | DeleteInference of (PortId*PortId)                            // Resets the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
 
 
 //---------------------------------helper types and functions----------------//
@@ -75,7 +76,11 @@ let posOf x y = {X=x;Y=y}
 
 let withinSelectedBoundary (compTopLeft:XYPos) (compBotRight:XYPos) (boundTopLeft:XYPos) (boundBotRight:XYPos) :bool =
     match compTopLeft,compBotRight with
-        | point1,point2 when (point1.X >= boundTopLeft.X) && (point2.X <= boundBotRight.X) && (point1.Y >= boundTopLeft.Y) && (point2.Y <= boundBotRight.Y) -> true
+        | point1,point2 when 
+            (point1.X >= boundTopLeft.X) 
+            && (point2.X <= boundBotRight.X) 
+            && (point1.Y >= boundTopLeft.Y) 
+            && (point2.Y <= boundBotRight.Y) -> true
         | _ -> false
 
 
@@ -710,12 +715,7 @@ let createDeepCopyOfComponent (comp: Component): Component * Map<PortId, PortId>
         OutputPorts = outputPorts
     }, Map.ofList <| inputPortConversion @ outputPortConversion
 
-let createNewSymbol (index:int)  =
-    let rng0 () = rng.Next (1,10)
-    let rngComponent () = rng.Next(1,27)
-    let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
-
-    let randomName () = 
+let randomName () = 
         let nameRng1 () = rng.Next (1,21)
         let nameRng2 () = rng.Next (1,6)
         let nameRng3 () = rng.Next(1,27)
@@ -736,8 +736,41 @@ let createNewSymbol (index:int)  =
             | 16 -> "p" | 17 -> "q" | 18 -> "r" | 19 -> "s" | 20 -> "t"
             | 21 -> "u" | 22 -> "v" | 23 -> "w" | 24 -> "x" | 25 -> "y" | _ -> "z"
         firstLetter() + secondLetter() + thirdLetter()
-        
+let createCompType (compNo:int):ComponentType =
+    let rng0 () = rng.Next (1,10)
+    let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
+    match (compNo) with
+    | 1 -> Not
+    | 2 -> And
+    | 3 -> Or
+    | 4 -> Xor
+    | 5 -> Nand
+    | 6 -> Nor
+    | 7 -> Xnor
+    | 8 -> Mux2
+    | 9 -> NbitsAdder (rng0 ())
+    | 10 -> DFF
+    | 11 -> DFFE
+    | 12 -> Register (rng0 ())
+    | 13 -> RegisterE (rng0())
+    | 14 -> AsyncROM (memory ())
+    | 15 -> ROM (memory())
+    | 16 -> RAM (memory())
+    | 17 -> Decode4
+    | 18 -> Input (rng0 ())
+    | 19 -> Output (rng0 ())
+    | 20 -> Demux2
+    | 21 -> IOLabel
+    | 22 -> MergeWires
+    | 23 -> BusSelection (rng0(),rng0())
+    | 24 -> 
+        let cons = rng0()
+        let wid = int ((log(float cons)/log(2.))+1.)
+        Constant (wid, cons)
+    | _-> SplitWire (rng.Next(1,9))
 
+let createNewSymbol (index:int)  =
+    let rngComponent () = rng.Next(1,27)
     let compType = 
         let customComp (custNo:int):CustomComponentType = 
             let labels (inputOutput:bool) (count:int) = 
@@ -774,36 +807,9 @@ let createNewSymbol (index:int)  =
                     match index with
                     | x when x < 26 -> x
                     | _ -> rngComponent()
-                match (componentNo) with
-                | 1 -> Not
-                | 2 -> And
-                | 3 -> Or
-                | 4 -> Xor
-                | 5 -> Nand
-                | 6 -> Nor
-                | 7 -> Xnor
-                | 8 -> Mux2
-                | 9 -> NbitsAdder (rng0 ())
-                | 10 -> DFF
-                | 11 -> DFFE
-                | 12 -> Register (rng0 ())
-                | 13 -> RegisterE (rng0())
-                | 14 -> AsyncROM (memory ())
-                | 15 -> ROM (memory())
-                | 16 -> RAM (memory())
-                | 17 -> Decode4
-                | 18 -> Input (rng0 ())
-                | 19 -> Output (rng0 ())
-                | 20 -> Demux2
-                | 21 -> IOLabel
-                | 22 -> MergeWires
-                | 23 -> BusSelection (rng0(),rng0())
-                | 24 -> 
-                    let cons = rng0()
-                    let wid = int ((log(float cons)/log(2.))+1.)
-                    Constant (wid, cons)
-                | _-> SplitWire (rng.Next(1,9))
                 
+                
+                createCompType componentNo
             
             | x when x = 46 ->
                 Custom (customComp 1)
@@ -823,9 +829,7 @@ let createNewSymbol (index:int)  =
     let rng1 () = rng.Next(0,800)
 
     let positionX = (index % 5) * 250
-
     let positionY = (index / 5) * 200
-    let compId = ComponentId (Helpers.uuid())
     let comp = 
         createSpecificComponent (snapToGrid {X= float positionX;Y = float positionY }) compType (randomName() + (string(rng.Next (0,10))))
     {
@@ -1155,7 +1159,6 @@ let private renderSymbol =
                         TextAnchor txtAnchor
                         FontSize "13px"
                         Fill txtColor
-                        // FontFamily "system-ui"
                         FontStyle "italic"
                         Opacity opacity
                     ]
@@ -1203,7 +1206,7 @@ let private renderSymbol =
                     [
                         polygon 
                             (Seq.append [
-                                SVGAttr.Points (sprintf "%f %f, %f %f, %f %f" bottomLeft.X (bottomLeft.Y-5.) (bottomLeft.X+10.) (bottomLeft.Y-10.) (bottomLeft.X) (bottomLeft.Y-15.))
+                                Points (sprintf "%f %f, %f %f, %f %f" bottomLeft.X (bottomLeft.Y-5.) (bottomLeft.X+10.) (bottomLeft.Y-10.) (bottomLeft.X) (bottomLeft.Y-15.))
                                 SVGAttr.Fill "black"
                                 SVGAttr.Stroke "black"
                                 SVGAttr.StrokeWidth 2
@@ -1288,7 +1291,7 @@ let private renderSymbol =
                 [
                     polygon
                         (Seq.append [
-                            SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  (0.5*(topLeft.Y+bottomLeft.Y)) (topLeft.X+10.) topLeft.Y topRight.X topRight.Y bottomRight.X bottomRight.Y (bottomLeft.X+10.) bottomLeft.Y )
+                            Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  (0.5*(topLeft.Y+bottomLeft.Y)) (topLeft.X+10.) topLeft.Y topRight.X topRight.Y bottomRight.X bottomRight.Y (bottomLeft.X+10.) bottomLeft.Y )
                             SVGAttr.Fill fillColor
                             SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
@@ -1307,7 +1310,7 @@ let private renderSymbol =
                 [  
                     polygon
                         (Seq.append [
-                            SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  topLeft.Y (topRight.X-10.) topRight.Y topRight.X (0.5*(topRight.Y+bottomRight.Y)) (bottomRight.X-10.) bottomRight.Y bottomLeft.X bottomLeft.Y)
+                            Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  topLeft.Y (topRight.X-10.) topRight.Y topRight.X (0.5*(topRight.Y+bottomRight.Y)) (bottomRight.X-10.) bottomRight.Y bottomLeft.X bottomLeft.Y)
                             SVGAttr.Fill fillColor
                             SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
@@ -1326,7 +1329,7 @@ let private renderSymbol =
                 [
                     polygon
                         (Seq.append [
-                            SVGAttr.Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  topLeft.Y (topRight.X-10.) topRight.Y topRight.X (0.5*(topRight.Y+bottomRight.Y)) (bottomRight.X-10.) bottomRight.Y bottomLeft.X bottomLeft.Y)
+                            Points (sprintf "%f %f, %f %f, %f %f , %f %f, %f %f" topLeft.X  topLeft.Y (topRight.X-10.) topRight.Y topRight.X (0.5*(topRight.Y+bottomRight.Y)) (bottomRight.X-10.) bottomRight.Y bottomLeft.X bottomLeft.Y)
                             SVGAttr.Fill fillColor 
                             SVGAttr.Opacity opacity
                             SVGAttr.Stroke outlineColor
@@ -1349,8 +1352,8 @@ let private renderSymbol =
                             Seq.append [
                             X topLeft.X 
                             Y topLeft.Y
-                            SVGAttr.Rx 5.
-                            SVGAttr.Ry 5.
+                            Rx 5.
+                            Ry 5.
                             SVGAttr.Width width
                             SVGAttr.Height height
                             SVGAttr.Fill fillColor
@@ -1395,7 +1398,7 @@ let private renderSymbol =
                         path
                             (Seq.append
                                 [
-                                    SVGAttr.D (sprintf
+                                    D (sprintf
                                         "M %f %f
                                         L %f %f
                                         Q %f %f %f %f
@@ -1490,7 +1493,7 @@ let private renderSymbol =
                                 else nothing
 
                                 match compType with 
-                                | ComponentType.Not | ComponentType.Nand | ComponentType.Nor | ComponentType.Xnor ->
+                                | Not | Nand | Nor | Xnor ->
                                     match port.PortType with
                                     |PortType.Output -> 
                                         g [] [
@@ -1763,3 +1766,18 @@ let extractComponents (symModel: Model) : Component list =
     |> List.map (fun (_,sym) ->
         sym.Component
     )
+
+
+// Our team has created a type PortId to represent ports. 
+// Issie may not recognise this, hence it might be useful for Issie if we translate 
+// PortId into (ComponentId, PortNumber, PortType) Instead
+
+let translatePortToIssieFormat (symModel: Model) (portId: PortId): (ComponentId*PortNumber*PortType) =
+    let foundPort = 
+        portId
+        |> findPort symModel
+    match foundPort.PortNumber with
+    | Some x ->
+        foundPort.HostId,x,foundPort.PortType
+    | None -> failwithf "won't happen"
+

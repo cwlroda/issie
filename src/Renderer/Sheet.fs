@@ -48,7 +48,7 @@ type Model = {
     Height: float
     UndoList: SubModel list
     RedoList: SubModel list
-    Offset: (XYPos * CommonTypes.PortType) Option
+    PrevPortType: CommonTypes.PortType Option
 }
 
 type KeyboardMsg =
@@ -300,7 +300,22 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | DragState.Symbol (_, prevWire) ->
             let selectedSymbols =
                 match model.Selection with
-                | Symbols s -> s
+                | SelectionState.Wire wId ->
+                    let currentMousePos = model.MousePosition
+                    let w = BusWire.findWire model.Wire wId
+                    let selSeg = w.SelectedSegment
+                    let prevPortType = 
+                        match selSeg with
+                        | x when x = 0 -> 
+                            Some (CommonTypes.PortType.Output)
+                        | x when x = w.Segments.Length - 1 -> 
+                            Some (CommonTypes.PortType.Input)
+                        |_ -> None 
+                    { model with 
+                        DragState=DragState.Wire (true, prevWireModel)
+                        PrevPortType = prevPortType 
+                    }
+                    , Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
                 | _ -> failwithf "Can only drag if there is a selection"
 
             { model with DragState=DragState.Symbol (true, prevWire) }
@@ -777,10 +792,10 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let inferredDelete = 
                     batchInfer newModel.Symbol oldSrcPortId oldTgtPortId CommonTypes.CreateOrDelete.Delete [] 0
 
-                match newModel.Offset with
+                match newModel.PrevPortType with
                 | None -> nullCase
-                | Some (offset, CommonTypes.PortType.Input) ->
-                    let findingPort = Symbol.getTargetedPort newModel.Symbol (posAdd model.MousePosition offset)
+                | Some CommonTypes.PortType.Input ->
+                    let findingPort = Symbol.getTargetedPort newModel.Symbol model.MousePosition
                     match findingPort with
                     | Some portId -> 
                         let foundPort = Symbol.findPort newModel.Symbol portId
@@ -790,7 +805,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                                 batchInfer inferredDelete oldSrcPortId foundPort.PortId CommonTypes.CreateOrDelete.Create [] 0
                             let newerModel = 
                                 {newModel with
-                                    Offset = None
+                                    PrevPortType = None
                                     Symbol = inferredCreate
                                 }
                             newerModel, Cmd.batch (
@@ -803,7 +818,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         | _ -> 
                             let newerModel = 
                                 {newModel with
-                                    Offset = None
+                                    PrevPortType = None
                                 }
                             newerModel, Cmd.batch (
                                 [
@@ -814,8 +829,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                             )
 
                     | None -> nullCase
-                | Some (offset, CommonTypes.PortType.Output) ->
-                    let findingPort = Symbol.getTargetedPort newModel.Symbol (posDiff model.MousePosition offset)
+                | Some CommonTypes.PortType.Output ->
+                    let findingPort = Symbol.getTargetedPort newModel.Symbol model.MousePosition
                     match findingPort with
                     | Some portId ->
                         let foundPort = Symbol.findPort newModel.Symbol portId
@@ -825,7 +840,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                                 batchInfer inferredDelete foundPort.PortId oldTgtPortId CommonTypes.CreateOrDelete.Create [] 0
                             let newerModel = 
                                 {newModel with
-                                    Offset = None
+                                    PrevPortType = None
                                     Symbol = inferredCreate
                                 }
                             newerModel, Cmd.batch (
@@ -839,7 +854,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         | _ -> 
                             let newerModel = 
                                 {newModel with
-                                    Offset = None
+                                    PrevPortType = None
                                 }
                             newerModel, Cmd.batch (
                                 [
@@ -1007,7 +1022,7 @@ let init () =
         Height = 1000.
         UndoList = []
         RedoList = []
-        Offset = None
+        PrevPortType = None
     }, Cmd.batch [
         Cmd.map Symbol sCmds
         Cmd.map Wire wCmds

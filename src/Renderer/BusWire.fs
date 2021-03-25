@@ -47,18 +47,18 @@ type Model =
     }
 
 type Msg =
-    | AddSymbol
-    | DeleteSymbols of CommonTypes.ComponentId list
-    | DraggingSymbols of CommonTypes.ComponentId list
+    | AddSymbol                                             // Performs Wire Routings when a Symbol is Created
+    | DeleteSymbols of CommonTypes.ComponentId list         // Performs Wire Routings/Deletions when Symbols are being Deleted
+    | DraggingSymbols of CommonTypes.ComponentId list       // Performs Wire Routings when Symbols are being Dragged
     // | EndDragSymbols
-    | AddWire of (PortId * PortId)
-    | DeleteWire of ConnectionId
-    | SetColor of color: HighLightColor
-    | StartDrag of wId: ConnectionId * pos: XYPos
-    | Dragging of wId: ConnectionId * pos: XYPos
-    | EndDrag
-    | RoutingUpdate
-    | Debug
+    | AddWire of (PortId * PortId)                          // Create a Wire between Two Ports (Must be Ports of Opposite Polarity)
+    | DeleteWire of ConnectionId                            // Deletes a Wire
+    | SetColor of color: HighLightColor                     // Sets the Colour of a Wire
+    | StartDrag of wId: ConnectionId * pos: XYPos           // Starts Dragging a Wire's Segment
+    | Dragging of wId: ConnectionId * pos: XYPos            // Still Dragging the Wire's Segment
+    | EndDrag                                               // Complete the Dragging Process 
+    | RoutingUpdate                                         // Refreshes Wire Routings
+    | Debug                                                 // Enable Wire Bounding Boxes to be Seen (Debug Mode)
 
 
 type WireRenderProps =
@@ -474,7 +474,7 @@ let singleWireView =
 
 let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
     let wire = findWire wModel wId
-    let diff = snapToGrid (posDiff pos wire.LastDragPos)
+    let diff = (posDiff pos wire.LastDragPos)
 
     let seg =
         match List.tryItem wire.SelectedSegment wire.Segments with
@@ -627,10 +627,19 @@ let getWireColor (w: Wire): HighLightColor =
 let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionId, Wire> =
     let wire = findWire wModel wId
 
+    let selectedSeg = findClosestSegment wire pos
+    let updatedSegs = 
+        match selectedSeg with 
+        | idx when idx = 0 -> [{wire.Segments.[0] with StartPos = (posOf pos.X wire.Segments.[0].StartPos.Y)}] @ (List.tail wire.Segments)
+        | idx when idx = List.length wire.Segments - 1 -> 
+            let segRev = List.rev wire.Segments
+            [{segRev.[0] with EndPos = (posOf pos.X segRev.[0].EndPos.Y )}] @ (List.tail segRev) |> List.rev
+        | _ -> wire.Segments
     Map.add wire.Id {
         wire with
-            SelectedSegment = findClosestSegment wire pos
+            SelectedSegment = selectedSeg
             LastDragPos = pos
+            Segments = updatedSegs
         } wModel.WX
 
 let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionId, Wire> =
