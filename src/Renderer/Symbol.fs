@@ -304,7 +304,10 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             let yPosCalc= 
                 match considerTitle with
                 | true -> (20. + float (portNumber + 1) * (compH - 20.) / float (totalPorts + 1))
-                | false -> (compH /2.)
+                | false ->
+                    float (portNumber + 1) * (compH/ (float (totalPorts + 1)))
+                
+                // (compH /2.)
             let offset = 
                 match portType with 
                 |PortType.Input -> 0.
@@ -313,7 +316,7 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
                 PortId = PortId (uuid())
                 PortNumber =  Some (PortNumber (portNumber))
                 PortType = portType
-                PortPos = (snapToGrid {X=offset; Y =  yPosCalc })//{X=offset; Y = mulOfFive yPosCalc }
+                PortPos = (snapToGrid {X=offset; Y =  yPosCalc })
                 HostId = hostID
                 Hover = PortHover false
                 Width = portWidth
@@ -405,13 +408,13 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             let inputPortMap = 
                 [0;1]
                 |> List.map (fun portNumber ->
-                    portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (true) (2) 
+                    portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (false) (2) 
                 )
                 |> List.map (fun port -> (port.PortId, port))
                 |> Map.ofList
 
             let outputPortMap = 
-                [portTemplate (true) (0) (PortType.Output) (PortWidth 1) (true) (1)] 
+                [portTemplate (true) (0) (PortType.Output) (PortWidth 1) (false) (1)] 
                 |> List.map (fun port -> (port.PortId, port))
                 |> Map.ofList
 
@@ -421,14 +424,14 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
             let inputPortMap = 
                 [0;1]
                 |> List.map (fun portNumber -> 
-                    portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (true) (2) 
+                    portTemplate (true) (portNumber) (PortType.Input) (PortWidth 1) (false) (2) 
                     // portTemplate portNumber PortType.Input (( compH - 20. )/3.) (PortWidth 1)
                 )
                 |> List.map (fun port -> (port.PortId, port))
                 |> Map.ofList
 
             let outputPortMap = 
-                let temp = portTemplate (true) (0) (PortType.Output) (PortWidth 1) (true) (1) 
+                let temp = portTemplate (true) (0) (PortType.Output) (PortWidth 1) (false) (1) 
                 [{temp with 
                     PortPos =
                         {temp.PortPos with
@@ -441,12 +444,12 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
 
         | Not ->
             let inputPortMap = 
-                [portTemplate (true) (0) (PortType.Input) (PortWidth 1) (true) (1)]
+                [portTemplate (true) (0) (PortType.Input) (PortWidth 1) (false) (1)]
                 |> List.map (fun port -> (port.PortId, port))
                 |> Map.ofList
 
             let outputPortMap = 
-                let temp = portTemplate (true) (0) (PortType.Output) (PortWidth 1) (true) (1) 
+                let temp = portTemplate (true) (0) (PortType.Output) (PortWidth 1) (false) (1) 
                 [{temp with 
                     PortPos =
                         {temp.PortPos with
@@ -681,9 +684,9 @@ let createSpecificComponent (hostID: ComponentId) (position:XYPos) (compType:Com
         W = compW
     }
 
-let createNewSymbol ()  =
+let createNewSymbol (index:int)   =
     let rng0 () = rng.Next (1,10)
-    let rngComponent () = rng.Next(0,26)
+    let rngComponent () = rng.Next(1,27)
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
 
     let randomName () = 
@@ -710,55 +713,95 @@ let createNewSymbol ()  =
         
 
     let compType = 
-        let (customComp:CustomComponentType) = 
-            let labels (inputOutput:bool) = 
+        let customComp (custNo:int):CustomComponentType = 
+            let labels (inputOutput:bool) (count:int) = 
                 let inOrOut = 
                     match inputOutput with
                     |true -> "TestInput"
                     |false -> "TestOutput"
 
-                [0..rng.Next(1,5)]
+
+                [0..count-1]
                 |> List.map (fun i -> ((string i + inOrOut), rng.Next(1,10)))
+
             {
                 Name = "\"Our\" Custom Component"
-                InputLabels = labels true
-                OutputLabels = labels false
+                InputLabels = 
+                    match custNo with
+                    | 1 -> labels true 2
+                    | 2 -> labels true 3
+                    | 3 -> labels true 5
+                    | 4 -> labels true 3
+                    | _ -> labels true 10
+                OutputLabels = 
+                    match custNo with
+                    | 1 -> labels false 3
+                    | 2 -> labels false 2
+                    | 3 -> labels false 2
+                    | 4 -> labels false 6
+                    | _ -> labels false 10
             }
-        match (rngComponent ()) with
-        | 0 -> Not
-        | 1 -> And
-        | 2 -> Or
-        | 3 -> Xor
-        | 4 -> Nand
-        | 5 -> Nor
-        | 6 -> Xnor
-        | 7 -> Mux2
-        | 8 -> NbitsAdder (rng0 ())
-        | 9 -> DFF
-        | 10 -> DFFE
-        | 11 -> Register (rng0 ())
-        | 12 -> RegisterE (rng0())
-        | 13 -> AsyncROM (memory ())
-        | 14 -> ROM (memory())
-        | 15 -> RAM (memory())
-        | 16 -> Decode4
-        | 17 -> Input (rng0 ())
-        | 18 -> Output (rng0 ())
-        | 19 -> Demux2
-        | 20 -> IOLabel
-        | 21 -> MergeWires
-        | 22 -> BusSelection (rng0(),rng0())
-        | 23 -> 
-            let cons = rng0()
-            let wid = int ((log(float cons)/log(2.))+1.)
-            Constant (wid, cons)
-        | 24 -> SplitWire (rng.Next(1,9))
-        | _ -> Custom customComp
-        
+        let componentType = 
+            match index with
+            | x when x < 46 ->
+                let componentNo = 
+                    match index with
+                    | x when x < 26 -> x
+                    | _ -> rngComponent()
+                match (componentNo) with
+                | 1 -> Not
+                | 2 -> And
+                | 3 -> Or
+                | 4 -> Xor
+                | 5 -> Nand
+                | 6 -> Nor
+                | 7 -> Xnor
+                | 8 -> Mux2
+                | 9 -> NbitsAdder (rng0 ())
+                | 10 -> DFF
+                | 11 -> DFFE
+                | 12 -> Register (rng0 ())
+                | 13 -> RegisterE (rng0())
+                | 14 -> AsyncROM (memory ())
+                | 15 -> ROM (memory())
+                | 16 -> RAM (memory())
+                | 17 -> Decode4
+                | 18 -> Input (rng0 ())
+                | 19 -> Output (rng0 ())
+                | 20 -> Demux2
+                | 21 -> IOLabel
+                | 22 -> MergeWires
+                | 23 -> BusSelection (rng0(),rng0())
+                | 24 -> 
+                    let cons = rng0()
+                    let wid = int ((log(float cons)/log(2.))+1.)
+                    Constant (wid, cons)
+                | _-> SplitWire (rng.Next(1,9))
+                
+            
+            | x when x = 46 ->
+                Custom (customComp 1)
+            | x when x = 47 ->
+                Custom (customComp 2)
+            | x when x = 48 ->
+                Custom (customComp 3)
+            | x when x = 49 ->
+                Custom (customComp 4)
+            | x when x = 50 ->
+                Custom (customComp 5)
+            |_ -> And
+
+        componentType
+
+
     let rng1 () = rng.Next(0,800)
+    let positionX = (index % 5) * 250
+    // let totalRows = (totalSym / 5) + 1
+
+    let positionY = (index / 5) * 200
     let compId = ComponentId (Helpers.uuid())
     let comp = 
-        createSpecificComponent compId (snapToGrid {X= float(rng1 ());Y = float (rng1 ()) }) compType (randomName() + (string(rng.Next (0,10))))
+        createSpecificComponent compId (snapToGrid {X= float positionX;Y = float positionY }) compType (randomName() + (string(rng.Next (0,10))))
     {
         LastDragPos = {X=0. ; Y=0.}
         IsDragging = false
@@ -771,7 +814,7 @@ let createNewSymbol ()  =
 let init () =
     [1..50]
     
-    |> List.map (fun x -> createNewSymbol ())
+    |> List.map (fun x -> createNewSymbol (x))
     |> List.map (fun sym -> (sym.Id, sym))
     |> Map.ofList
     , Cmd.none
