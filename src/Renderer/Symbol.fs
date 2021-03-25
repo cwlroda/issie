@@ -44,8 +44,6 @@ type Msg =
     | AddSymbol of comp: Component                                  // Create a New Symbol
     | DeleteSymbols of sIdLst: ComponentId list                     // Delete All Symbols in List
     | UpdateSymbolModelWithComponent of Component                   // Issie interface
-    // | HighlightPorts of pIdList : PortId list                       // Highlights Ports Given in the List pId
-    // | UnhighlightPorts                                              // Unhighlight All Highlighted Ports
     | CreateInference of (PortId*PortId)                            // Updates the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
     | DeleteInference of (PortId*PortId)                            // Resets the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
 
