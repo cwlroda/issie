@@ -1,5 +1,5 @@
 ﻿module Helpers
-open Browser.Types
+open Browser
 open Fable.Core
 open Fable.Core.JsInterop
 open Electron
@@ -101,6 +101,11 @@ let overlaps (b1: BBox) (b2: BBox): bool =
         || isLeftOf b1 b2
         || isLeftOf b2 b1
     )
+
+let getScreen (pos: XYPos) (zoom: float) : BBox =
+    let screenWidth = (window.innerWidth |> float) / zoom
+    let screenHeight = (window.innerHeight |> float) / zoom
+    toBBox (pos.X / zoom) (pos.Y / zoom) screenWidth screenHeight
 
 type MouseOp = 
     /// button up
