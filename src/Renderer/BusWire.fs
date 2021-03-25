@@ -736,11 +736,15 @@ let extractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Con
 
     }
 
-let extractSymbolWires (wModel: Model) (sModel: Symbol.Model) : Connection list = 
-    failwithf "Not implemented"
+let extractSymbolWires (wModel: Model) (sModel: Symbol.Model)  (sId: ComponentId): Connection list = 
+    let connectedWires = getConnectedWires wModel sModel  [sId]
+    Map.toList connectedWires
+    |> List.map (fun (wId, w) -> extractWire wModel sModel wId)
 
-let extractAllWires (wModel: Model) (wId: ConnectionId) : Connection List = 
-    failwithf "Not implemented"
+let extractAllWires (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Connection List = 
+    wModel.WX
+    |> Map.fold (fun connLst wId w -> [extractWire wModel sModel wId]@connLst) []
+    
 
 // ---------------------------- End of Issie Interface functions -----------------------//
 
@@ -801,12 +805,7 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
                     WireWidth = $"%d{w.WireWidth}"
                 }
 
-            let corners = 
-                let conn = extractWire wModel sModel w.Id
-                printf $"connection: {conn}"
-                printf $"{w.Segments}"
-                List.map (fun vert -> {Point = vert}) conn.Vertices
-                |> List.map (fun p -> singlePointView p)
+            
 
             let segBBox =
                 w.Segments
@@ -825,8 +824,9 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
             @ if wModel.Debug then segBBox else []
            
             @ [singleWireView props]
-            @ corners
-        ) [] )
+            
+        ) [] ) 
+        
 
 
 let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Map<ConnectionId, Wire> =
