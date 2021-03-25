@@ -831,7 +831,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let wireInQuestion =
                     match model.Selection with
                     |SelectionState.Wire x -> x
-                    |_ -> failwithf "idk what to do now boise"            
+                    |_ -> failwithf "Not supposed to happen"            
                 let oldModel = newModel.Wire.WX
                 let oldWire = Map.find wireInQuestion oldModel
                 let oldSrcPortId = oldWire.SrcPort
@@ -866,7 +866,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                             let newerModel = 
                                 {newModel with
                                     Offset = None
-                                    Symbol = inferredDelete
                                 }
                             newerModel, Cmd.batch (
                                 [
@@ -903,7 +902,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                             let newerModel = 
                                 {newModel with
                                     Offset = None
-                                    Symbol = inferredDelete
                                 }
                             newerModel, Cmd.batch (
                                 [
