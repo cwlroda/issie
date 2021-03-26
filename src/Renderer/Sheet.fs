@@ -234,7 +234,7 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
 
     let errorOverlay =
         g [] (
-            BusWire.getErrors model.Wire model.Symbol
+            BusWire.getErrors model.Wire
             |> List.filter (fun e ->
                 match BusWire.getTargetedWire model.Wire model.MousePosition with
                 | Some id when id = e.Id -> true
