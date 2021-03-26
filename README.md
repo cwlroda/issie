@@ -1,5 +1,5 @@
 # HLP 2021 Project
-This is the HLP group project for team 5. The code is made to act as the GUI library for the Issie application. Issie is an "Interactive Schematic Simulator with Integrated" [Issie Repo](https://github.com/tomcl/ISSIE) . 
+This is the HLP group project for team 5. The code is made to act as the GUI library for the Issie application. Issie is an "Interactive Schematic Simulator with Integrated", for more information about issie see the [Issie Repo](https://github.com/tomcl/ISSIE) . 
 The aim is to be able to replace the currently used library drawing library. So the code is set up to make it easy add and move symbols which represent dfferent circuit elements and then connect them using wires. The code allows you to add a different range of component displayed as different symbols to your canvas and connect them together using the wires. The code is set up three modules ```sheet```, ```buswire```, and ```symbol``` where they have  as ```sheet <- buswire <- symbol```.
 The symbol creation is handled by the [symbol.fs](./src/Render/symbol.fs) while the wire creation is handled by [buswire.fs](./src/Render/buswire.fs). The sheet module written in [sheet.fs](./src/Render/sheet.fs) is used for the overall control of the system with function such as copy, past, drag, and select etc.
 
