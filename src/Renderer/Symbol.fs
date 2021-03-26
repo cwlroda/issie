@@ -70,7 +70,7 @@ type Msg =
     | DeleteInference of (PortId*PortId)                                           
 
 
-//---------------------------------helper types and functions----------------//
+//---------------------------------Functions ----------------------------------------//
 
 /// <summary> Cuts the length of the input string to match the threshold.
 /// Replaces any excess characters with ```..``` . </summary>
