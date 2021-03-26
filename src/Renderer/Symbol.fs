@@ -12,48 +12,72 @@ open CommonTypes
 //------------------------------------------------------------------------//
 
 
-/// Model to generate one symbol (skeleton). Id is a unique Id 
-/// for the symbol shared with Issie Component type.
-/// The real type will obviously be much larger.
-/// Complex information that never changes (other than Id) should 
-/// probably not be here, but looked up via some function
-/// from a more compact form, so that comparison of two Symbols to
-/// determine are they the same is fast.
+
+
+/// <summary> Contains the component and all its relevant attributes. </summary>
+/// <typeparam name="LastDragPos"> ```XYPos``` indicating the previous dragging location of the component.</typeparam>
+/// <typeparam name="IsDragging"> ```bool``` that is ```true``` if the symbol is currently dragging and ```false``` otherwise. </typeparam>
+/// <typeparam name="Id"> ```ComponentId``` indicating the unique ID for the symbol shared with Issie Component type. </typeparam>
+/// <typeparam name="Component"> ```Component``` indicating the underlying component in the symbol. </typeparam>
+/// <typeparam name="Shadow"> ```bool``` that is ```true``` if the symbol is currently in the preview state and ```false``` otherwise.</typeparam>
+/// <typeparam name="Colliding"> ```bool``` that is ```true``` if the symbol is currently colliding with another symbol and ```false``` otherwise. </typeparam>
 type Symbol =
     {
+        /// <summary> ```XYPos``` indicating the previous dragging location of the component.</summary>
         LastDragPos : XYPos
+        /// <summary> ```bool``` that is ```true``` if the symbol is currently dragging and ```false``` otherwise. </summary>
         IsDragging : bool
+        /// <summary> ```ComponentId``` indicating the unique ID for the symbol shared with Issie Component type. </summary>
         Id : ComponentId
+        /// <summary> ```Component``` indicating the underlying component in the symbol. </summary>
         Component : Component
+        /// <summary> ```bool``` that is ```true``` if the symbol is currently in the preview state and ```false``` otherwise.</summary>
         Shadow : bool
+        /// <summary> ```bool``` that is ```true``` if the symbol is currently colliding with another symbol and ```false``` otherwise. </summary>
         Colliding : bool
     }
 
-
+/// <summary> ```Map``` containing all ```Symbol``` as ```Value``` and their respective ```ComponentId``` as ```Key``` </summary>\
 type Model = Map<ComponentId, Symbol>
 
 //----------------------------Message Type-----------------------------------//
 
-/// Messages to update symbol model
-/// These are OK for the demo - but possibly not the correct messages for
-/// a production system, where we need to drag groups of symbols as well,
-/// and also select and deselect symbols, and specify real symbols, not circles
+/// <summary> Messages to update symbol model </summary>
+/// <typeparam name="StartDragging"> Start dragging symbols at a position </typeparam>
+/// <typeparam name="Dragging"> Continue dragging symbols, updates their positions and checks if the mouse is down  </typeparam>
+/// <typeparam name="EndDragging"> Stop dragging symbols </typeparam>
+/// <typeparam name="AddSymbol"> Create a new symbol of ```Component``` </typeparam>
+/// <typeparam name="DeleteDymbols"> Deletes the given list of symbols </typeparam>
+/// <typeparam name="UpdateSymbolModelWithComponent"> Issie interface </typeparam>
+/// <typeparam name="CreateInference"> Updates the widths of symbols connected by two ```PortId``` that have undefined ```PortWidth```  </typeparam>
+/// <typeparam name="StartDragging"> Resets the widths of symbols connected by two ```PortId``` that have undefined ```PortWidth``` </typeparam>
 type Msg =
-    | StartDragging of sId : ComponentId list * pagePos: XYPos                          // Start Dragging Symbols
-    | Dragging of sIdLst: ComponentId list * pagePos: XYPos * mouseisDown: bool         // Continue Dragging Symbols
-    | EndDragging                                                                       // Stop Dragging Symbols
-    | AddSymbol of comp: Component                                                      // Create a New Symbol
-    | DeleteSymbols of sIdLst: ComponentId list                                         // Delete All Symbols in List
-    | UpdateSymbolModelWithComponent of Component                                       // Issie interface
-    | CreateInference of (PortId*PortId)                                                // Updates the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
-    | DeleteInference of (PortId*PortId)                                                // Resets the Widths of Symbols Connected by the Two PortIds that have Width Inferred Ports
+    /// <summary> Start dragging symbols </summary>
+    | StartDragging of sId : ComponentId list * pagePos: XYPos
+    /// <summary> Continue dragging symbols, updates their positions and checks if the mouse is down  </summary>
+    | Dragging of sIdLst: ComponentId list * pagePos: XYPos * mouseisDown: bool     
+    /// <summary> Stop dragging symbols </summary>
+    | EndDragging                                        
+    /// <summary> Create a new symbol of ```Component``` </summary>                       
+    | AddSymbol of comp: Component                          
+    /// <summary> Deletes the given list of symbols</summary>                          
+    | DeleteSymbols of sIdLst: ComponentId list             
+    ///<summary> Issie interface</summary>                       
+    | UpdateSymbolModelWithComponent of Component      
+    /// <summary> Updates the widths of symbols connected by two ```PortId``` that have undefined ```PortWidth```  </summary>                  
+    | CreateInference of (PortId*PortId)                
+    /// <summary> Resets the widths of symbols connected by two ```PortId``` that have undefined ```PortWidth``` </summary>                                    
+    | DeleteInference of (PortId*PortId)                                           
 
 
 //---------------------------------helper types and functions----------------//
 
-/// Cuts the length of the input ```string``` to match the ```threshold```.
-/// Replaces any excess characters with ```..``` .
-let processingString (inputString) (thresholdLength) = 
+/// <summary> Cuts the length of the input string to match the threshold.
+/// Replaces any excess characters with ```..``` . </summary>
+/// <param name="inputString"> The input string represented by ```string``` </param>
+/// <param name="thresholdLength"> The threshold string length represneted by ```int``` </param>
+/// <returns> The cut string represented by ```string``` </returns> 
+let processingString (inputString) (thresholdLength): string = 
     let beforeProcessingLength = String.length inputString
     if beforeProcessingLength > thresholdLength then
             let intermediateStep = 
@@ -66,21 +90,9 @@ let processingString (inputString) (thresholdLength) =
             intermediateStep + ".."
         else inputString
 
-/// Checks if a ```Component``` is within a boundary.
-/// Returns ```true``` if it is, and ```false``` otherwise.
-/// Takes in the ```Component``` top-left and bottom right positions as ```XYPos```.
-/// Also takes in the boundary's top-left and bottom right positions as ```XYPos```. 
-let withinSelectedBoundary (compTopLeft:XYPos) (compBotRight:XYPos) (boundTopLeft:XYPos) (boundBotRight:XYPos) :bool =
-    match compTopLeft,compBotRight with
-        | point1,point2 when 
-            (point1.X >= boundTopLeft.X) 
-            && (point2.X <= boundBotRight.X) 
-            && (point1.Y >= boundTopLeft.Y) 
-            && (point2.Y <= boundBotRight.Y) -> true
-        | _ -> false
-
-
-/// Returns a combined ```Map<PortId, Port>``` of all valid input ports and output ports in a ```Symbol```.
+/// <summary> Combines all valid input and outpot ports of a symbol into a map </summary>
+/// <param name="sym"> The symbol to extract the ports from </param>
+/// <returns> Map of all valid ```Port``` in the symbol as ```Value``` and their respective ```PortIds``` as ```Key``` </returns>
 let combinedPortsMap (sym: Symbol) : Map<PortId, Port> =
     let filledPortList (portMap: Map<PortId, Port>) : Map<PortId, Port> = 
         portMap
@@ -88,14 +100,21 @@ let combinedPortsMap (sym: Symbol) : Map<PortId, Port> =
 
     Map.fold (fun acc k v -> Map.add k v acc) (filledPortList sym.Component.InputPorts) (filledPortList sym.Component.OutputPorts)
 
-/// Returns the specific ```Port``` in a symbol given the ```Symbol```, ```PortNumber``` and ```PortType```.
+/// <summary> Finds the specific port given the symbol, its port number and its port type.</summary>
+/// <param name="sym"> The Symbol to find that specific port </param>
+/// <param name="portNum"> The specific port's port number </param>
+/// <param name="portType"> The specific port's port type </param>
+/// <returns> The specific port in the symbol as ```Port``` </returns>
 let findPortFromNumAndType (sym: Symbol) (portNum: PortNumber) (portType: PortType): Port =
     combinedPortsMap sym
     |> Map.toList
     |> List.find ( fun (_,port) -> (port.PortNumber = Some portNum && port.PortType= portType))
     |> snd
 
-/// Returns all valid ```PortId``` that are in the list of symbols ```sIdLst```.
+/// <summary> Returns all valid port IDs that are in the given list of symbols. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="sIdLst"> The list of symbols to find all the ports from </param>
+/// <returns> The list of valid port IDs represented by ```PortId list``` </returns> 
 let getPortsFromSymbols (symModel: Model) (sIdLst: ComponentId list) : PortId list =
     let symList =
         symModel
@@ -112,13 +131,17 @@ let getPortsFromSymbols (symModel: Model) (sIdLst: ComponentId list) : PortId li
         )
     ) []
 
-/// Returns all the symbols contained in the symbol ```Model``` as a ```ComponentId list```. 
+/// <summary> Returns all the symbols contained in the symbol model. </summary> 
+/// <param name="symModel"> The current symbol model </param>
+/// <returns> The component IDs of all the symbols contained in the symbol model represented by ```ComponentId list``` </returns>
 let getAllSymbols (symModel: Model) : ComponentId list =
     symModel
     |> Map.toList
     |> List.map fst
 
-/// Returns all valid ```Ports``` contained in the symbol ```Model```.
+/// <summary> Returns all valid ports contained in the symbol model. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <returns> Map of all valid ```Port``` as ```Value``` and their respective ```PortId``` as ```Key``` </returns>
 let allPortsInModel (symModel: Model) : Map<PortId, Port> = 
     symModel
     |> Map.fold (fun acc _ elem -> 
@@ -127,14 +150,17 @@ let allPortsInModel (symModel: Model) : Map<PortId, Port> =
         ) acc (combinedPortsMap elem)
     ) Map.empty
 
-/// Given a ```Port```, find its parent symbol in the symbol ```Model```.
+/// <summary> Given a port, find its parent symbol in the symbol model. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="port"> The port of the parent symbol </param>
+/// <returns> The parent symbol represented by ```Symbol``` </returns>
 let findSymbolFromPort (symModel: Model) (port: Port) : Symbol =
     symModel.[port.HostId]
 
-/// Given a position,
-/// return the ```ComponentId``` of a symbol that is in the symbol ```Model```
-/// as an option if the position ```pos``` is within the symbol. 
-/// Returns ```None``` otherwise.
+/// <summary> Given a targeted position, return the option of the component ID of a symbol that is in the symbol model. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="pos"> The targeted position </param>
+/// <returns> The option of the component ID of the symbol represented by ```Some ComponentId``` if the targeted position is in the symbol, and ```None``` otherwise </returns>
 let getTargetedSymbol (symModel: Model) (pos:XYPos) : ComponentId Option = 
     let foundSymId = 
         symModel
@@ -149,7 +175,10 @@ let getTargetedSymbol (symModel: Model) (pos:XYPos) : ComponentId Option =
         | Some symId -> Some symId
         | None -> None
 
-/// Given an bounding box area ```bbox```, return a list of ```ComponentId``` in the symbol ```Model``` that intersecting with ```bbox```.
+/// <summary> Given an bounding box area, return a list of component IDs in the symbol model that intersects with the bounding box. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="bbox"> The bounding box area </param>
+/// <returns> The list of component IDs of the symbols that intersects with the bounding box, represented by ```ComponentId List``` </returns> 
 let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     symModel
     |> Map.filter
@@ -160,11 +189,17 @@ let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     |> Map.toList
     |> List.map fst
 
-/// Given a ```PortId``` in a symbol ```Model``` return the entire ```Port```.
+/// <summary> Given a port ID in a symbol model return the entire port. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="portId"> The port ID of the port </param>
+/// <returns> The port represented by ```Port``` </returns>
 let findPort (symModel: Model) (portId: PortId) : Port =
     (allPortsInModel symModel).[portId]
 
-/// Given a ```PortId``` in a symbol ```Model``` return its position as an ```XYPos```.
+/// <summary> Given a port ID in a symbol model return its position. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="portId"> The port ID of the port </param>
+/// <returns> The position of the port represented by ```XYPos``` </returns>
 let portPos (symModel: Model) (portId: PortId) : XYPos = 
     let foundPort = findPort symModel portId
     let foundSymbol = findSymbolFromPort symModel foundPort
@@ -173,7 +208,11 @@ let portPos (symModel: Model) (portId: PortId) : XYPos =
         Y = foundPort.PortPos.Y + foundSymbol.Component.Y
     }
 
-/// Given a position ```pos```, return all ports in the symbol ```Model``` that are within the ```threshold``` from ```pos```.
+/// <summary> Given a position, return all ports in the symbol model that are within the threshold distance of the position. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="pos"> The desired position </param>
+/// <param name="threshold"> The threshold distance that has to be satisfied </param>
+/// <returns> The list of ports in the symbol model within the threshold distance of the position, represented by ```Port list``` </returns>
 let nearbyPorts (symModel: Model) (pos: XYPos) (threshold: float) : Port list = 
     allPortsInModel symModel
     |> Map.filter
@@ -189,63 +228,87 @@ let nearbyPorts (symModel: Model) (pos: XYPos) (threshold: float) : Port list =
             |> posDist pos
         )
 
-/// Given a position ```pos```,
-/// return the ```PortId``` of a port that is in the symbol ```Model```
-/// as an option if ```pos``` is within 10 pixels from the port.
-/// Returns ```None``` otherwise.
+/// <summary> Given a position return the option of the port ID of a port in the symbol model within 10 pixels from the position. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="pos"> The desired position </param>
+/// <returns> The port Id of the nearest port that is within 10 pixels from the desired position, represented by ```Some PortId```, and ```None``` otherwise </returns> 
 let getTargetedPort (symModel: Model) (pos: XYPos) : PortId Option =
     match nearbyPorts symModel pos 10. with
     | nearestPort::_ -> Some nearestPort.PortId
     | [] -> None
 
-/// Given a position ```pos```,
-/// return the ```PortId``` of a port that is in the symbol ```Model```
-/// as an option if ```pos``` within 10 pixels from the port,
-/// and its ```PortType``` matches ```portType```.
-/// Returns ```None``` otherwise.
-let getSpecificPort (symModel: Model) (pos: XYPos) (portType: PortType) : PortId Option =
+/// <summary> Given a position and a reference port type, return option of the port ID of a port in the symbol model within 10 pixels from the port, and has port type that fits the reference. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="pos"> The desired position </param>
+/// <param name= "referencePortType"> The reference port type </param>
+/// <returns> The port Id of the nearest port that is within 10 pixels from the desired position and has the same port type as the reference, represented by ```Some PortId```, and ```None``` otherwise </returns>
+let getSpecificPort (symModel: Model) (pos: XYPos) (referencePortType: PortType) : PortId Option =
     let portList =
         nearbyPorts symModel pos 10.
-        |> List.filter (fun p -> p.PortType = portType)
+        |> List.filter (fun p -> p.PortType = referencePortType)
     
     match portList with
     | nearestPort::_ -> Some nearestPort.PortId
     | [] -> None
 
-/// Given a symbol's ```ComponentId``` in a symbol ```Model```, return the position of its top left corner as an ```XYPos```.
+/// <summary> Given a symbol's ID in a symbol model, return the position of its top left corner. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="sId"> The component ID of the symbol </param>
+/// <returns> The top left corner of the symbol, represented by ```XYPos``` </returns>
 let symbolPos (symModel: Model) (sId: ComponentId) : XYPos = 
     Map.find sId symModel
     |> (fun sym -> {X=sym.Component.X;Y=sym.Component.Y})
 
-/// Given a ```PortId``` in a symbol ```Model```, return its ```PortType```.
+/// <summary> Given a port id in a symbol model, return its port type. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="portId"> The desired port's port ID </param>>
+/// <returns> The desired port's port type, represented by ```PortType``` </returns>
 let portType (symModel: Model) (portId: PortId) : PortType = 
     let foundPort = findPort symModel portId
     foundPort.PortType
 
-/// Given a ```PortId``` in a symbol ```Model```, return its ```PortWidth```.
+/// <summary> Given a port id in a symbol model, return its port width. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="portId"> The desired port's port ID </param>>
+/// <returns> The desired port's port width, represented by ```PortWidth``` </returns>
 let portWidth (symModel: Model) (portId: PortId) : int option = 
     let foundPort = findPort symModel portId
 
     match foundPort.Width with
     | PortWidth x -> Some x
 
-/// Given a symbol's ```ComponentId``` in a symbol ```Model```, return the said ```symbol```. 
+/// <summary> Given the desired symbol's ID in a symbol model, return the desired symbol. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="symId"> The desired symbol's component ID </param>
+/// <returns> The desired symbol, represented by ```Symbol``` </returns>
 let getSymbolFromSymbolId (symModel: Model) (symId: ComponentId) : Symbol = 
     Map.find symId symModel
 
-/// Given a ```PortId``` in a symbol ```Model```, return the parent symbol's ```ComponentId```.
+/// <summary> Given a port's ID in a symbol model, return the ID of its parent symbol. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="portId"> The port's ID to find it's parent symbol </param>
+/// <returns> The parent symbol's component ID, represented by ```ComponentID``` </returns> 
 let getHostId (symModel: Model) (portId: PortId) : ComponentId = 
     (findPort symModel portId).HostId
 
-/// Given a symbol's ```ComponentId``` in a symbol ```Model```, return the said symbol's ```ComponentType```.
+/// <summary> Given a symbol's ID in a symbol model, return its component type. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="compId"> The desired symbol's ID </param>
+/// <returns> The desired symbol's component type, represented by ```Component Type``` </returns>
 let symbolType (symModel: Model) (compId: ComponentId) : ComponentType = 
     (Map.find compId symModel).Component.Type
 
-/// Given a symbol's ```ComponentId``` in a symbol ```Model```, return the said symbol's label.
+/// <summary> Given a symbol's ID in a symbol model, return its component label. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="compId"> The desired symbol's ID </param>
+/// <returns> The desired symbol's component label, represented by ```string``` </returns>
 let symbolLabel (symModel: Model) (compId: ComponentId) : string = 
     (Map.find compId symModel).Component.Label
 
-/// Given a ```Component``` and some tolerance, calculate its bounding box.
+/// <summary> Given a component and some additional width offset, calculate its bounding box. </summary>
+/// <param name="allowableWidth"> The additional width offset </param>
+/// <param name="comp"> The input component </param>
+/// <returns> The bounding box of the input component, represented by ```BBox``` </returns> 
 let componentBBox (allowableWidth : int) (comp: Component): BBox =
     {
         Pos = posAddX {X = comp.X; Y = comp.Y} -gridSize
@@ -253,7 +316,10 @@ let componentBBox (allowableWidth : int) (comp: Component): BBox =
         Height = comp.H
     }
 
-/// Given a symbol's ```ComponentId``` in a symbol ```Model```, calculate the symbol's bounding box as a ```BBox```.
+/// <summary> Given a symbol's ID in a symbol model, calculate the symbol's bounding box. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="compId"> The symbol's ID </param>
+/// <returns> The symbol's bounding box, represented by ```BBox``` </returns>
 let symbolBBox (symModel: Model) (compId: ComponentId) : BBox =
     let foundSymbol = 
         Map.find compId symModel
@@ -261,25 +327,33 @@ let symbolBBox (symModel: Model) (compId: ComponentId) : BBox =
     | Not | Nand | Nor | Xnor -> componentBBox 1 foundSymbol.Component
     | _ -> componentBBox 0 foundSymbol.Component
 
-/// Subtracts two ```PortWidth```, returning a ```PortWidth``` corresponding to ```pw1 - pw2```.
+/// <summary> Subtracts two port widths. </summary>
+/// <param name="pw1"> The first port width </param>
+/// <param name="pw2"> The second port width </param>
+/// <returns> The resultant port width, corresponding to ```pw1 - pw2```, represented by ```PortWidth``` </returns>
 let subtractPortWidth (pw1:PortWidth) (pw2:PortWidth) :PortWidth = 
     let (PortWidth w1) = pw1
     let (PortWidth w2) = pw2
     PortWidth (w1-w2)
 
-/// Adds two ```PortWidth```, returning a ```PortWidth``` corresponding to ```pw1 + pw2```.
+/// <summary> Adds two port widths. </summary>
+/// <param name="pw1"> The first port width </param>
+/// <param name="pw2"> The second port width </param>
+/// <returns> The resultant port width, corresponding to ```pw1 + pw2```, represented by ```PortWidth``` </returns>
 let addPortWidth (pw1:PortWidth) (pw2:PortWidth): PortWidth =
     let (PortWidth w1) = pw1
     let (PortWidth w2) = pw2
     PortWidth (w1+w2)
 
-/// Given a list of symbol ```ComponentId``` in a symbol ```Model```, returns ```true``` they are overlapping with any other symbols in the symbol.
-/// Returns ```false``` if they are not.
-let symbolsCollide (idLst : ComponentId list) (model : Model) : bool = 
+/// <summary> Given a list of symbol IDs in a symbol model, check if they are overlapping with any other symbols in the symbol model. </summary>
+/// <param name="idLst"> List of symbol IDs </param>
+/// <param name="symModel"> The current symbol model </param>
+/// <returns> ```true``` if any symbol in the list overlaps with any other symbol in the symbol model, ```false``` otherwise </returns>
+let symbolsCollide (idLst : ComponentId list) (symModel : Model) : bool = 
     idLst
     |> List.collect (fun sId ->
-        let symBBox = symbolBBox model sId
-        getSymbolsInTargetArea model symBBox
+        let symBBox = symbolBBox symModel sId
+        getSymbolsInTargetArea symModel symBBox
         |> List.collect (fun matchedId -> if List.contains matchedId idLst then [] else [matchedId])
     )
     |> List.length
