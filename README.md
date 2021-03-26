@@ -37,10 +37,10 @@ The code which handles the initalisation in the code are the ```init```  dummy f
        
        
 ## Interface Definition
-All interface used in the project are defined in the interface.md file found in [docs/](./docs), a file for each module. There are also two other files, [common_types.md](./docs/common_types.md) and [notes.md](./docs/notes.md). [common_types.md](./docs/common_types.md) contains all the new type definitions we had to agree on, and [notes.md](/.docs/notes.md) contains notes on our design decisions. There is also a file named [issie_interface.md](./docs/issie_interface.md) which contains information about the function which exsist in the code for potential interface with issie.
+All interfaces used in the project are defined in their respective \<module>.md files found in [docs/](./docs). There are also two other files, [common_types.md](./docs/common_types.md) and [notes.md](./docs/notes.md). [common_types.md](./docs/common_types.md) contains all the new type definitions we had to agree on, and [notes.md](/.docs/notes.md) contains notes on our design decisions. There is also a file named [issie_interface.md](./docs/issie_interface.md) which contains information about the function which exsist in the code for potential interface with issie.
 
 ## Features
-To see an exhaustive list of features, refer to [feature_summary.md](./docs/feature_summary.md).
+For an exhaustive list of features, refer to [feature_summary.md](./docs/feature_summary.md).
 
 ## Project allocation
 This was the inital allocation used under the group phase. In the project phase the division has become less rigid as everyone has worked together to put all the modules together.
