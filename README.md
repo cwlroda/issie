@@ -43,7 +43,7 @@ All interfaces used in the project are defined in their respective \<module>.md 
 For an exhaustive list of features, refer to [feature_summary.md](./docs/feature_summary.md).
 
 ## Project allocation
-This was the inital allocation used under the group phase. In the project phase the division has become less rigid as everyone has worked together to put all the modules together.
+This was the inital allocation used under the individual phase. In the group phase the division has become less rigid as everyone has worked together to put all the modules together.
 ###### Symbol
   * Chizu
   * Marcus
