@@ -1076,7 +1076,17 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 Colliding = false
             }
         
-        Map.add comp.Id sym model, Cmd.none
+        let newModel = Map.add comp.Id sym model
+
+        let sym =
+            if (symbolsCollide [comp.Id] newModel) then
+                {sym with Shadow = true; Colliding = true}
+            else sym
+
+        newModel
+        |> Map.change comp.Id (fun _ -> Some sym)
+            
+        , Cmd.none
 
     | DeleteSymbols sIdLst ->
         let sIdSet = Set.ofList sIdLst
