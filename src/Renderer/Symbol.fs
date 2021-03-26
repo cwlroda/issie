@@ -66,17 +66,6 @@ let processingString (inputString) (thresholdLength) =
             intermediateStep + ".."
         else inputString
 
-/// Subtracts two ```XYPos```, returning another ```XYPos``` corresponding to ```a - b```.
-let posDiff (a:XYPos) (b:XYPos) =
-    {X=a.X-b.X; Y=a.Y-b.Y}
-
-/// Adds two ```XYPos```, returning another ```XYPos``` corresponding to ```a + b```.
-let posAdd  (a:XYPos) (b:XYPos) =
-    {X=a.X+b.X; Y=a.Y+b.Y}
-
-/// Converts two floats into ```XYPos```.
-let posOf x y = {X=x;Y=y}
-
 /// Checks if a ```Component``` is within a boundary.
 /// Returns ```true``` if it is, and ```false``` otherwise.
 /// Takes in the ```Component``` top-left and bottom right positions as ```XYPos```.
@@ -259,7 +248,7 @@ let symbolLabel (symModel: Model) (compId: ComponentId) : string =
 /// Given a ```Component``` and some tolerance, calculate its bounding box.
 let componentBBox (allowableWidth : int) (comp: Component): BBox =
     {
-        Pos = {X = comp.X - gridSize; Y = comp.Y}
+        Pos = posAddX {X = comp.X; Y = comp.Y} -gridSize
         Width = comp.W + (gridSize * (2.+ float (allowableWidth)))
         Height = comp.H
     }
@@ -1013,7 +1002,17 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
                 Colliding = false
             }
         
-        Map.add comp.Id sym model, Cmd.none
+        let newModel = Map.add comp.Id sym model
+
+        let sym =
+            if (symbolsCollide [comp.Id] newModel) then
+                {sym with Shadow = true; Colliding = true}
+            else sym
+
+        newModel
+        |> Map.change comp.Id (fun _ -> Some sym)
+            
+        , Cmd.none
 
     | DeleteSymbols sIdLst ->
         let sIdSet = Set.ofList sIdLst

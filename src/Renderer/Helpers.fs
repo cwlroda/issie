@@ -28,11 +28,16 @@ let snapToGrid (pos: XYPos) : XYPos =
         Y = if yOffset < gridSize - yOffset then pos.Y - yOffset else pos.Y + gridSize - yOffset
     }
 
-let posDiff a b =
+/// Subtracts two ```XYPos```, returning another ```XYPos``` corresponding to ```a - b```.
+let posDiff (a:XYPos) (b:XYPos) =
     {X=a.X-b.X; Y=a.Y-b.Y}
 
-let posAdd a b =
+/// Adds two ```XYPos```, returning another ```XYPos``` corresponding to ```a + b```.
+let posAdd  (a:XYPos) (b:XYPos) =
     {X=a.X+b.X; Y=a.Y+b.Y}
+
+/// Converts two floats into ```XYPos```.
+let posOf x y = {X=x;Y=y}
 
 let posAddX a b =
     {X=a.X+b; Y=a.Y}
@@ -45,8 +50,6 @@ let posAddXY a b =
 
 let posHalve a =
     snapToGrid {X=a.X/2.; Y=a.Y/2.}
-
-let posOf x y = {X=x;Y=y}
 
 let posLength p =
     sqrt <| p.X * p.X + p.Y * p.Y
