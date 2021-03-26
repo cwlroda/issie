@@ -95,8 +95,8 @@
     let view'  = recordExecutionTimeStats "View" Sheet.view
     let printMsg (msg:Msg) =
         match msg with
+        | Interface (MouseMsg (symMouseMsg, _)) -> sprintf "SymbolMsg:%A" symMouseMsg.Op
         | Interface key -> sprintf "%A" key
-        | MouseMsg (symMouseMsg, _) -> sprintf "SymbolMsg:%A" symMouseMsg.Op
         | x -> sprintf "Other:%A" x
 
     let traceFn (msg:Msg) model = printfn "Msg=%A\n\n" (printMsg msg)
