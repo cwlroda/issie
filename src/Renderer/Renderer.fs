@@ -46,7 +46,7 @@
             // this option isn't working
             invisibleMenu.visible <- false // false if you want keys but no "Edit" menu
             invisibleMenu.submenu <-
-                [| makeKeyInput "CancelAction" (fun () -> dispatch <| Interface InterfaceMsg.CancelAction)
+                [| makeKeyInput "Esc" (fun () -> dispatch <| Interface InterfaceMsg.CancelAction)
                    makeKeyInput "Alt+A" (fun () -> dispatch <| Interface InterfaceMsg.SelectAll)
                    makeKeyInput "Ctrl+Shift+=" (fun () -> dispatch <| Interface (InterfaceMsg.Zoom ZoomRequest.In))
                    makeKeyInput "Ctrl+-" (fun () -> dispatch <| Interface (InterfaceMsg.Zoom ZoomRequest.Out))
