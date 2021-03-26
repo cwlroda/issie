@@ -933,7 +933,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 let middle cs = List.min cs + (List.max cs - List.min cs) / 2.
 
                 symData
-                |> List.map Symbol.componentBBox
+                |> List.map (Symbol.componentBBox 0)
                 |> List.map (fun bb ->
                     (bb.Pos.X, bb.Pos.X + bb.Width, bb.Pos.Y, bb.Pos.Y + bb.Height))
                 |> List.fold (fun (xs, ys) (x1, x2, y1, y2) -> (x1 :: x2 :: xs, y1 :: y2 :: ys)) ([], [])
