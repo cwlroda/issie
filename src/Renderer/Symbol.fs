@@ -259,9 +259,9 @@ let symbolLabel (symModel: Model) (compId: ComponentId) : string =
 /// Given a ```Component``` and some tolerance, calculate its bounding box.
 let componentBBox (allowableWidth : int) (comp: Component): BBox =
     {
-        Pos = {X = comp.X - gridSize; Y = comp.Y}
+        Pos = posAddXY {X = comp.X; Y = comp.Y} -gridSize
         Width = comp.W + (gridSize * (2.+ float (allowableWidth)))
-        Height = comp.H
+        Height = comp.H + (gridSize * 2.)
     }
 
 /// Given a symbol's ```ComponentId``` in a symbol ```Model```, calculate the symbol's bounding box as a ```BBox```.
@@ -1500,26 +1500,12 @@ let private renderSymbol =
                             |Some a -> a
                             |None -> PortNumber -1
                         match portNumber with
-                        |portCheck when portCheck >= 0 ->
-                            g[] [
-                                circle 
-                                    (Seq.append [
-                                        Cx (absPos()).X
-                                        Cy (absPos()).Y
-                                        R 2.5
-                                    ] (viewPortLinesStaticComponent port ))[]
-                                let (PortWidth wid) = port.Width
-                                if selectedBool = true && (wid > 0) then
-                                    text (Seq.append [
-                                        X (snd dynamicContent)
-                                        Y ((absPos()).Y - 20.)
-                                        ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
-                                else nothing
-
+                        | portCheck when portCheck >= 0 ->
+                            g [] [
                                 match compType with 
                                 | Not | Nand | Nor | Xnor ->
                                     match port.PortType with
-                                    |PortType.Output -> 
+                                    | PortType.Output -> 
                                         g [] [
                                             line 
                                                 (Seq.append [
@@ -1536,10 +1522,24 @@ let private renderSymbol =
                                                     Y1 (absPos()).Y
                                                 ] (viewPortLinesStaticComponent2))[]
                                         ]
-                                    |_ -> nothing
+                                    | _ -> nothing
                                 | _ -> nothing
+
+                                circle 
+                                    (Seq.append [
+                                        Cx (absPos()).X
+                                        Cy (absPos()).Y
+                                        R 2.5
+                                    ] (viewPortLinesStaticComponent port ))[]
+                                let (PortWidth wid) = port.Width
+                                if selectedBool = true && (wid > 0) then
+                                    text (Seq.append [
+                                        X (snd dynamicContent)
+                                        Y ((absPos()).Y - 20.)
+                                        ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
+                                else nothing
                             ]
-                        |_ -> nothing
+                        | _ -> nothing
                     )
 
                 (generateLines inputPorts) @ (generateLines outputPorts)
