@@ -879,12 +879,21 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         saveStateIfDraggedCmd didDrag prevWireModel
                     ]
             | DragState.WireCreation (pIdStart, p) ->
-                let targetedPort = Symbol.getTargetedPort newModel.Symbol p
+                let targetedPortId = Symbol.getTargetedPort newModel.Symbol p
                 
-                match targetedPort with
+                match targetedPortId with
                 | Some pIdEnd when pIdEnd <> pIdStart ->
+                    let targetedPort = Symbol.findPort newModel.Symbol pIdEnd
+                    let sourcePort = Symbol.findPort newModel.Symbol pIdStart
+
                     let inferred = 
-                        batchInfer newModel.Symbol pIdStart pIdEnd CommonTypes.CreateOrDelete.Create [] 0
+                        match targetedPort.PortType, sourcePort.PortType with
+                        | CommonTypes.PortType.Input, CommonTypes.PortType.Input -> newModel.Symbol
+                        | CommonTypes.PortType.Output, CommonTypes.PortType.Output -> newModel.Symbol
+                        | CommonTypes.PortType.Input, CommonTypes.PortType.Output -> 
+                            batchInfer newModel.Symbol pIdStart pIdEnd CommonTypes.CreateOrDelete.Create [] 0
+                        | CommonTypes.PortType.Output, CommonTypes.PortType.Input -> 
+                            batchInfer newModel.Symbol pIdEnd pIdStart CommonTypes.CreateOrDelete.Create [] 0
                         
                     { newModel with 
                         Selection = Empty
