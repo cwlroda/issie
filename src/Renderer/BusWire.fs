@@ -192,7 +192,7 @@ type SegBBRenderProps =
 
 /// <summary> Checks if two points form a vertical line </summary>
 /// <param name="relPos"> Relative distance between two points </param>
-/// <returns> Outputs ```true``` if the two original points form a vertical line and ```false``` otherwise </returns>
+/// <returns> ```true``` if the two original points form a vertical line, and ```false``` otherwise </returns>
 let isVertical (relPos: XYPos): bool =
     abs (relPos.X) <= abs (relPos.Y)
 
@@ -219,39 +219,54 @@ let createSegBB (startPos: XYPos) (endPos: XYPos) (width: float) : BBox =
     | _ ->
         toBBox 0. 0. 0. 0.
 
-///Takes the current wire model and a wire Id and returns the wire
+/// <summary> Finds the wire with a specific id </summary>
+/// <param name="wModel"> Wire ```Model``` </param>
+/// <param name="wId"> ```ConnectionId``` of a wire </param>
+/// <returns> ```Wire``` </returns>
+/// <exception type="failwithf"> If an invalid ```ConnectionId``` is passed </exception>
 let findWire (wModel: Model) (wId: ConnectionId): Wire =
     match Map.tryFind wId wModel.WX with
     | Some vWire -> vWire
     | None -> failwithf "Invalid Id passed"
 
-/// Takes two position and returns ture if the positions are the same and false otherwise
+/// <summary> Checks if end of a wire segment is aligned with a port </summary>
+/// <param name="pos1"> Start/end position of wire segment </param>
+/// <param name="pos2"> Port position </param>
+/// <returns> ```true``` if both positions are the same, and ```false``` otherwise </returns>
 let isSegmentAtPort (pos1: XYPos) (pos2: XYPos) : bool =
     if pos1 = pos2 then true else false
 
-/// Checks if a position is inside a wire segment bounding box
-/// Takes ```width``` for the desired width for the bounding box, the position of interest and the start and end positions of the wire segment
-let ptCloseToSeg (width: float) (pos: XYPos) (startPt: XYPos) (endPt: XYPos) : bool =
+/// <summary> Checks if a point is inside a wire segment bounding box </summary>
+/// <param name="pos"> Point of interest </param>
+/// <param name="startPt"> Start position of wire segment </param>
+/// <param name="endPt"> End position of wire segment </param>
+/// <param name="width"> ```float``` width of bounding box </param>
+/// <returns> ```true``` if the point is inside the bounding box, and ```false``` otherwise </returns>
+let ptCloseToSeg (pos: XYPos) (startPt: XYPos) (endPt: XYPos) (width: float) : bool =
     createSegBB startPt endPt width |> (containsPoint pos)
 
-/// finds the closest wire segment of a given wire to mouse position
-/// Takes a wire and the position of interest and returns the index of the wire segment of the segment which is closest to the given position
-/// NOTE: the function fails if the position is not inside the bounding box of any of the segments of the given wire 
-/// - i.e. should only be called on a selected wire
+/// <summary> Finds the closest wire segment of a given wire to mouse position </summary>
+/// <param name="wire"> ```Wire``` </param>
+/// <param name="pos"> Point of interest </param>
+/// <returns> Index of the wire segment represented by ```SegmentIndex``` </returns>
+/// <exception type="failwithf"> If the point is not inside the bounding boxes of any of the segments of the given wire </exception>
 let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
     let index =
         wire.Segments
-        |> List.tryFindIndex (fun s -> ptCloseToSeg 5. pos s.StartPos s.EndPos )
+        |> List.tryFindIndex (fun s -> ptCloseToSeg pos s.StartPos s.EndPos 5.)
 
     match index with
-    | Some x ->  
-        x
-    | None ->      
+    | Some x -> x
+    | None ->
         failwithf $"This shouldn't happen! - WireSegments: {wire.Segments} and pos: {pos}"
 
-/// Takes two port ids and checks if they are of opposite type - i.e. one output and one input
-/// Returns a result record of either a tuple with the given ids if the types are correct or an error string
-let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<PortId * PortId, string> =
+/// <summary> Checks if two ports are of opposite type - i.e. one output and one input </summary>
+/// <param name="port1"> ```PortId``` </param>
+/// <param name="port2"> ```PortId``` </param>
+/// <param name="sModel"> Symbol ```Model``` </param>
+/// <returns> Result containing a tuple of ```(PortId * PortId)``` if both ports are of opposite type, and an error ```string``` otherwise </returns>
+/// <exception type="failwithf"> If either of the port types are invalid </exception>
+let typesValid (port1: PortId) (port2: PortId) (sModel: Symbol.Model) : Result<PortId * PortId, string> =
     let getType pId = (Symbol.portType sModel pId)
 
     match getType port1, getType port2 with
@@ -260,14 +275,20 @@ let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<Po
     | PortType.Input, PortType.Output -> Ok (port2, port1)
     | _ -> failwithf "Invalid connection!"
 
-/// Checks if an input has multiple wires connected to it.
-/// Given the current wire model, a wire id and an input port id.
-/// Returns true if there is already another wire connected and false otherwise
+/// <summary> Checks if an input has multiple wires connected to it </summary>
+/// <param name="wModel"> Wire ```Model``` </param>
+/// <param name="wId"> ```ConnectionId``` </param>
+/// <param name="inputId"> ```PortId``` </param>
+/// <returns> ```true``` if there is already another wire connected and false otherwise </returns>
 let notAvaliableInput (wModel: Model) (wId: ConnectionId) (inputId: PortId): bool =
     Map.exists (fun _ w -> (w.Id <> wId) && (w.TargetPort = inputId)) wModel.WX
 
-/// checks the width of the given ports and checks if the connection is valid. 
-/// Takes the port ids of the two ports of interest as well as the current symbol model. Returns a result of either the correct width or error string
+/// <summary> Checks the width of the given ports and if their connection is valid </summary>
+/// <param name="sModel"> Symbol ```Model``` </param>
+/// <param name="srcPortId"> ```PortId``` </param>
+/// <param name="tgtPortId"> ```PortId``` </param>
+/// <returns> Result containing the correct width if valid, and error string otherwise </returns>
+/// <exception type="failwithf"> Error obtaining widths </exception>
 let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortId) : Result<int, string> =
     let srcSym =
         Symbol.findPort sModel srcPortId
@@ -282,7 +303,7 @@ let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortI
 
     let widthMatching =
         match getWidth srcPortId, getWidth tgtPortId with
-        | Some x, _ when x<=0 ->
+        | Some x, _ when x <= 0 ->
             Error $"Invalid connection! Invalid Driver"
         | Some pW1, Some pW2 when pW1 <> pW2 ->
             Error $"Invalid connection! Mismatched wire widths [{bits pW1}, {bits pW2}]"
@@ -291,7 +312,7 @@ let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortI
         | Some w, None ->
             Error $"Invalid connection! Mismatched wire widths [None, {bits w}]"
         | Some w, _ -> Ok w
-        | _, _ -> failwithf "Should not occur"
+        | _, _ -> failwithf "Error obtaining widths"
 
     match tgtSym.Component.Type with
     | MergeWires | IOLabel ->
@@ -308,8 +329,11 @@ let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortI
         | _ -> widthMatching
     | _ -> widthMatching
 
-/// Takes current symbol and wire model and a bounding box and returns a list of 
-/// all the connection ids of the wires which exist in the given bounding box
+/// <summary> Finds all wires visible in the current screen </summary>
+/// <param name="wModel"> Wire ```Model``` </param>
+/// <param name="sModel"> Symbol ```Model``` </param>
+/// <param name="bbox"> ```BBox``` </param>
+/// <returns> ```ConnectionId list``` of the wires which are visible in the current screen </returns>
 let wiresInScreen (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : ConnectionId list =
     wModel.WX
     |> Map.filter (fun _ w ->
@@ -321,7 +345,7 @@ let wiresInScreen (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : Connecti
     |> Map.toList
     |> List.map fst
 
-/// Calculates the distance between a point and a two other points which is used to define a start and end point of a wire segment
+/// <summary> Calculates the distance between a point and a two other points which is used to define a start and end point of a wire segment
 let distPtToSeg (pt: XYPos) ((startPt, endPt): XYPos * XYPos) = //(wSeg: WireSegment) =
     let ptToPtA = posOf (pt.X - endPt.X) (pt.Y - endPt.Y)
     let ptAToB = posOf (endPt.X - startPt.X) (endPt.Y - startPt.Y)
@@ -344,11 +368,10 @@ let distPtToWire (pt: XYPos) (wire: Wire) =
 let isTargetWire (pt: XYPos) (wire: Wire) =
     let res =
         wire.Segments
-        |> List.tryFindIndex (fun s -> (ptCloseToSeg 5. pt) s.StartPos s.EndPos)
+        |> List.tryFindIndex (fun s -> ptCloseToSeg pt s.StartPos s.EndPos 5.)
 
     match res with
-    | Some idx ->
-        true
+    | Some idx -> true
     | None -> false
 
 /// Given a position finds the wire which is within a few pixels. If there are multiple chooses the closest wire
@@ -441,7 +464,7 @@ let createWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: Po
 
     let widthValid = checkPortWidths sModel port1 port2 
 
-    match typesValid (port1, port2) sModel with
+    match typesValid port1 port2 sModel with
     | Ok (s, t) ->
         let src, tgt, width, colour, err =
             match widthValid with
