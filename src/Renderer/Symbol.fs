@@ -1480,20 +1480,6 @@ let private renderSymbol =
                         match portNumber with
                         |portCheck when portCheck >= 0 ->
                             g[] [
-                                circle 
-                                    (Seq.append [
-                                        Cx (absPos()).X
-                                        Cy (absPos()).Y
-                                        R 2.5
-                                    ] (viewPortLinesStaticComponent port ))[]
-                                let (PortWidth wid) = port.Width
-                                if selectedBool = true && (wid > 0) then
-                                    text (Seq.append [
-                                        X (snd dynamicContent)
-                                        Y ((absPos()).Y - 20.)
-                                        ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
-                                else nothing
-
                                 match compType with 
                                 | Not | Nand | Nor | Xnor ->
                                     match port.PortType with
@@ -1516,6 +1502,20 @@ let private renderSymbol =
                                         ]
                                     |_ -> nothing
                                 | _ -> nothing
+                                
+                                circle 
+                                    (Seq.append [
+                                        Cx (absPos()).X
+                                        Cy (absPos()).Y
+                                        R 2.5
+                                    ] (viewPortLinesStaticComponent port ))[]
+                                let (PortWidth wid) = port.Width
+                                if selectedBool = true && (wid > 0) then
+                                    text (Seq.append [
+                                        X (snd dynamicContent)
+                                        Y ((absPos()).Y - 20.)
+                                        ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
+                                else nothing
                             ]
                         |_ -> nothing
                     )
