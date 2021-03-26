@@ -617,7 +617,8 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : W
         | _ -> failwithf "Stray wire!"
     | _ -> wire
 
-/// ???? 
+/// Takes a symbol and wire model and a wire and calls the createWire to run the validity checks and 
+/// return a wire with an updated error message
 let updateWireValidity (wModel: Model) (sModel: Symbol.Model) (wire: Wire): Wire =
     match createWire wModel sModel wire.SrcPort wire.TargetPort (Some wire.Id) with
     | Some newWire -> 
@@ -736,6 +737,7 @@ let endDrag (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
 let singleSegBBView =
     FunctionComponent.Of
         (fun (props: SegBBRenderProps) ->
+            /// Creates a bbox with a defined with - now it is set to gridsize to debug auto-routing
             let segBBox = createSegBB props.StartPos props.EndPos gridSize
 
             g [] [
