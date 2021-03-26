@@ -232,8 +232,8 @@ let symbolBBox (symModel: Model) (compId: ComponentId) : BBox =
     let foundSymbol = 
         Map.find compId symModel
     match foundSymbol.Component.Type with
-    |Not | Nand | Nor | Xnor -> componentBBox 1 foundSymbol.Component
-    |_ -> componentBBox 0 foundSymbol.Component
+    | Not | Nand | Nor | Xnor -> componentBBox 1 foundSymbol.Component
+    | _ -> componentBBox 0 foundSymbol.Component
 
 let subtractPortWidth (pw1:PortWidth) (pw2:PortWidth) :PortWidth = 
     let (PortWidth w1) = pw1
