@@ -46,15 +46,15 @@
             // this option isn't working
             invisibleMenu.visible <- false // false if you want keys but no "Edit" menu
             invisibleMenu.submenu <-
-                [| makeKeyInput "Escape" (fun () -> dispatch <| KeyPress KeyboardMsg.Escape)
-                   makeKeyInput "Alt+A" (fun () -> dispatch <| KeyPress KeyboardMsg.AltA)
-                   makeKeyInput "Ctrl+Shift+=" (fun () -> dispatch <| KeyPress KeyboardMsg.CtrlShiftEqual)
-                   makeKeyInput "Ctrl+=" (fun () -> dispatch <| KeyPress KeyboardMsg.CtrlEqual)
-                   makeKeyInput "Ctrl+-" (fun () -> dispatch <| KeyPress KeyboardMsg.CtrlMinus)
+                [| makeKeyInput "CancelAction" (fun () -> dispatch <| Interface InterfaceMsg.CancelAction)
+                   makeKeyInput "Alt+A" (fun () -> dispatch <| Interface InterfaceMsg.SelectAll)
+                   makeKeyInput "Ctrl+Shift+=" (fun () -> dispatch <| Interface (InterfaceMsg.Zoom ZoomRequest.In))
+                   makeKeyInput "Ctrl+-" (fun () -> dispatch <| Interface (InterfaceMsg.Zoom ZoomRequest.Out))
+                   makeKeyInput "Ctrl+=" (fun () -> dispatch <| Interface (InterfaceMsg.Zoom ZoomRequest.Reset))
                    makeKeyInput "Alt+N" (fun () -> dispatch (
                                                         let newComp = Symbol.createSpecificComponent (posOf 0. 0.) (Symbol.createCompType (Symbol.rng.Next(0,25))) (Symbol.randomName ())
 
-                                                        Sheet.CreateObjects {Symbols=[newComp];Wires=[]}
+                                                        Sheet.Interface <| InterfaceMsg.CreateObjects {Symbols=[newComp];Wires=[]}
                                                    ))
                 |]
                 |> U2.Case1
@@ -65,14 +65,13 @@
             invisibleMenu.label <- "Edit"
             invisibleMenu.visible <- true // false if you want keys but no "Edit" menu
             invisibleMenu.submenu <-
-                [| makeKeyItem "Blue" "Alt+C" (fun () -> dispatch <| KeyPress KeyboardMsg.AltC)
-                   makeKeyItem "Green" "Alt+V" (fun () -> dispatch <| KeyPress KeyboardMsg.AltV)
-                   makeKeyItem "Default"  "delete" (fun () -> dispatch <| KeyPress KeyboardMsg.DEL)
-                   makeKeyItem "New Random Wire"  "insert" (fun () -> dispatch <| KeyPress KeyboardMsg.INS)
-                   makeKeyItem "Red" "Alt+Z" (fun () -> dispatch <| KeyPress KeyboardMsg.AltZ)
-                   makeKeyItem "Toggle Debug" "Alt+Shift+D" (fun () -> dispatch <| KeyPress KeyboardMsg.AltShiftD)
+                [| makeKeyItem "Blue" "Alt+C" (fun () -> dispatch <| Interface InterfaceMsg.Copy)
+                   makeKeyItem "Green" "Alt+V" (fun () -> dispatch <| Interface InterfaceMsg.Paste)
+                   makeKeyItem "Default"  "delete" (fun () -> dispatch <| Interface InterfaceMsg.DeleteSelected)
+                   makeKeyItem "Red" "Alt+Z" (fun () -> dispatch <| Interface InterfaceMsg.Undo)
+                   makeKeyItem "Toggle Debug" "Alt+Shift+D" (fun () -> dispatch <| Interface InterfaceMsg.ToggleWireDebug)
                    menuSeparator
-                   makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch <| KeyPress KeyboardMsg.AltShiftZ)
+                   makeKeyItem "Print Statistics" "Alt+Shift+Z" (fun () -> dispatch <| Interface InterfaceMsg.Redo)
                    makeRoleItem MenuItemRole.ForceReload
                    makeRoleItem MenuItemRole.Reload
                    makeRoleItem MenuItemRole.ToggleDevTools
@@ -96,8 +95,8 @@
     let view'  = recordExecutionTimeStats "View" Sheet.view
     let printMsg (msg:Msg) =
         match msg with
-        | KeyPress key -> sprintf "%A" key
-        | MouseMsg (symMouseMsg, _) -> sprintf "SymbolMsg:%A" symMouseMsg.Op
+        | Interface (MouseMsg (symMouseMsg, _)) -> sprintf "SymbolMsg:%A" symMouseMsg.Op
+        | Interface key -> sprintf "%A" key
         | x -> sprintf "Other:%A" x
 
     let traceFn (msg:Msg) model = printfn "Msg=%A\n\n" (printMsg msg)
