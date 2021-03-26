@@ -480,7 +480,15 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
                 match w.ManualOverride with
                 | true -> w
                 | false -> {w with Segments = smartRouting sModel w w.Segments}
-        | false -> w
+        | false ->
+            match List.contains w.SrcPort pIds || List.contains w.TargetPort pIds with
+            | true ->
+                let segList = autoRoute sModel w
+                {w with
+                    Segments = smartRouting sModel w segList
+                    ManualOverride = false
+                }
+            | false -> w
     )
 
 /// Given a wire returns the string which contains the points formated to give the apporiate SVG path element
@@ -864,7 +872,6 @@ let routingUpdate (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : Map<Conn
             | true -> w
         | false -> w
     )
-
 
 let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     match msg with
