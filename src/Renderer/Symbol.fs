@@ -70,7 +70,7 @@ type Msg =
     | DeleteInference of (PortId*PortId)                                           
 
 
-//---------------------------------helper types and functions----------------//
+//---------------------------------Functions ----------------------------------------//
 
 /// <summary> Cuts the length of the input string to match the threshold.
 /// Replaces any excess characters with ```..``` . </summary>
@@ -359,12 +359,22 @@ let symbolsCollide (idLst : ComponentId list) (symModel : Model) : bool =
     |> List.length
     |> (<) 0
 
-    
-//-----------------------------Skeleton Model Type for symbols----------------//
-
-//------------------------------Create Symbols---------------------//
-let rng = System.Random 0
-let rng2() = rng.Next(0,2)
+/// <summary> Given a component, a new position and a new label, update that component with those new information. </summary>  
+/// <param name="comp"> The desired component </param>  
+/// <param name="p"> The new position </param>
+/// <param name="label"> The new label </param>
+/// <returns> The updated component, represented by ```Component``` </returns>
+let updateCompoment (comp: Component) (p: XYPos) (label: string) : Component =
+    { comp with
+        Label = label
+        X = p.X
+        Y = p.Y
+    }
+/// <summary> Given a position, component type and label, create a new component with those information. </summary>
+/// <param name="position"> The position of the new component </param>
+/// <param name="compType"> The component type of the new component </param>
+/// <param name="labelName"> The label of the new component </param>
+/// <returns> The new component, represented by ```Component``` </returns>
 let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName:string) : Component =
     let compId = ComponentId (uuid())
     let compX = position.X
@@ -762,13 +772,9 @@ let createSpecificComponent (position:XYPos) (compType:ComponentType) (labelName
         W = compW
     }
 
-let updateCompoment (comp: Component) (p: XYPos) (label: string) : Component =
-    { comp with
-        Label = label
-        X = p.X
-        Y = p.Y
-    }
-
+/// <summary> Creates a deep copy of the component, used for copying and pasting </summary>
+/// <param name="comp"> The desired component </param>
+/// <returns> The deep copy of the component, represented by ```Component * Map&lt;PortId, PortId&gt;``` </returns>
 let createDeepCopyOfComponent (comp: Component): Component * Map<PortId, PortId> =
     let compId = ComponentId (uuid())
 
@@ -797,8 +803,27 @@ let createDeepCopyOfComponent (comp: Component): Component * Map<PortId, PortId>
         Id = compId
         InputPorts = inputPorts
         OutputPorts = outputPorts
-    }, Map.ofList <| inputPortConversion @ outputPortConversion
+    }, Map.ofList <| inputPortConversion @ outputPortConversion 
 
+/// <summary> Updates a component in the current symbol model. If it does not exist then insert it into the symbol model. </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="comp"> The component to be updated </param>
+/// <returns> The updated symbol model, represented by ```Model``` </returns>
+let updateSymbolModelWithComponent (symModel: Model) (comp: Component) : Model =
+    symModel
+    |> Map.add comp.Id {symModel.[comp.Id] with Component = comp}
+
+
+
+
+
+let rng = System.Random 0
+let rng2() = rng.Next(0,2)
+
+
+
+/// <summary> Generates a random name (For Demo) </summary>
+/// <returns> A randomly generated name, represented by ```string``` </returns>  
 let randomName () = 
         let nameRng1 () = rng.Next (1,21)
         let nameRng2 () = rng.Next (1,6)
@@ -820,6 +845,10 @@ let randomName () =
             | 16 -> "p" | 17 -> "q" | 18 -> "r" | 19 -> "s" | 20 -> "t"
             | 21 -> "u" | 22 -> "v" | 23 -> "w" | 24 -> "x" | 25 -> "y" | _ -> "z"
         firstLetter() + secondLetter() + thirdLetter()
+
+/// <summary> Generates a component type based on the index (For Demo) </summary>
+/// <param name="compNo"> The input index </param>
+/// <returns> The component type, represented by ```ComponentType``` </returns>
 let createCompType (compNo:int):ComponentType =
     let rng0 () = rng.Next (1,10)
     let memory () = {AddressWidth = rng0(); WordWidth = rng0(); Data=Map.empty}
@@ -853,6 +882,9 @@ let createCompType (compNo:int):ComponentType =
         Constant (wid, cons)
     | _-> SplitWire (rng.Next(1,9))
 
+/// <summary> Creates a new symbol based on the index (For Demo) </summary>
+/// <param name="index"> The input index </param>
+/// <returns> The generated symbol </returns>
 let createNewSymbol (index:int)  =
     let rngComponent () = rng.Next(1,27)
     let compType = 
@@ -925,7 +957,7 @@ let createNewSymbol (index:int)  =
         Colliding = false
     }
 
-/// Dummy function for test. The real init would probably have no symbols.
+/// <summary> Dummy function for the demo. The real init would probably have no symbols. </summary>
 let init () =
     [1..50]
     
@@ -934,10 +966,13 @@ let init () =
     |> Map.ofList
     , Cmd.none
 
-let updateSymbolModelWithComponent (symModel: Model) (comp: Component) : Model =
-    symModel
-    |> Map.add comp.Id {symModel.[comp.Id] with Component = comp}
 
+///<summary> Calculates/Resets the width inference of symbols in the symbol model joined by two ports </summary>
+///<param name="symModel"> The current symbol model </param>
+///<param name="pid1"> The first port </param>
+///<param name="pid2"> The second port </param>
+///<param name="addOrDelete"> Boolean to decide whether to calculate or reset the width inference </param>
+///<returns> The symbol model containing the updated symbols, represented by ```Model``` </returns> 
 let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete: bool): Model =
     let p1 = pid1 |> findPort symModel
     let p2 = pid2 |> findPort symModel
@@ -1062,7 +1097,10 @@ let widthInference (symModel: Model) (pid1: PortId) (pid2: PortId) (addOrDelete:
         updateSymbolModelWithComponent symModel tgtCompNew
     |_ -> symModel
     
-/// update function which displays symbols
+/// <summary> Update function which displays symbols. </summary>
+/// <param name="msg"> The message from sent from sheets </param>
+/// <param name="model"> The current symbol model </param>
+/// <returns> The updated symbol model, together with additional commands, represented by ```Model * Cmd &lt;'a&gt;``` </returns>
 let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
     match msg with
     | AddSymbol comp ->
@@ -1153,8 +1191,8 @@ let update (msg : Msg) (model : Model): Model*Cmd<'a>  =
 
 //----------------------------View Function for Symbols----------------------------//
 
-/// Input to react component (which does not re-evaluate when inputs stay the same)
-/// This generates View (react virtual DOM SVG elements) for one symbol
+/// <summary> Input to react component (which does not re-evaluate when inputs stay the same)
+/// This generates View (react virtual DOM SVG elements) for one symbol </summary>
 type private RenderSymbolProps =
     {
         Symbol : Symbol // name works for the demo!
@@ -1165,7 +1203,7 @@ type private RenderSymbolProps =
         PortTypeToNotHighlight: PortType option
     }
 
-/// View for one symbol with caching for efficient execution when input does not change
+/// <summary> View for one symbol with caching for efficient execution when input does not change </summary>
 let private renderSymbol =
     FunctionComponent.Of(
         fun (props : RenderSymbolProps) ->
@@ -1808,8 +1846,14 @@ let private renderSymbol =
     , equalsButFunctions
     )
 
-/// View function for symbol layer of SVG
-
+/// <summary> View function for symbol layer of SVG. </summary>
+/// <param name="model"> The current symbol model </param>
+/// <param name="selectedSymbols"> An option of selected symbols </param>
+/// <param name="mousePos"> The given mous position </param>
+/// <param name="portTypeToNotHighlight"> Indicates which ports are not supposed to be highlighted </param>
+/// <param name="bbox"> The screen's bounding box </param>
+/// <param name="dispatch"> Mesages that are dispached here </param>
+/// <returns> A ```ReactElement``` to be rendered </returns>
 let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) (mousePos: XYPos) (portTypeToNotHighlight: PortType option) (bbox: BBox) (dispatch : Msg -> unit) = 
     let selectedSet =
         match selectedSymbols with
@@ -1846,8 +1890,7 @@ let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) 
 
 
 
-
-//----------------------interface to Issie-----------------------------//
+//----------------------Interface to Issie-----------------------------//
 /// <summary> Extracts the component from the symbol model using the component's ID </summary>
 /// <param name="symModel"> The current symbol model </param>
 /// <param name="sId"> The desired component's ID </param>
@@ -1881,4 +1924,6 @@ let translatePortToIssieFormat (symModel: Model) (portId: PortId): (ComponentId 
     | Some x ->
         foundPort.HostId,x,foundPort.PortType
     | None -> failwithf "won't happen"
+
+
 
