@@ -87,7 +87,6 @@ let pointsToBBox (p1: XYPos) (p2: XYPos) =
 
     toBBox minX minY (maxX - minX) (maxY - minY)
 
-
 let containsPoint (p: XYPos) (bb: BBox) =
     p.X >= bb.Pos.X
     && p.X <= (bb.Pos.X + bb.Width)
@@ -104,6 +103,12 @@ let overlaps (b1: BBox) (b2: BBox): bool =
         || isLeftOf b1 b2
         || isLeftOf b2 b1
     )
+
+/// Checks if two bounding boxes are vertically overlapping. 
+/// Takes two bounding boxes and returns ```true``` if the y-coordinates of the two boxes intersect at any point
+let verticalOverlap (box1: BBox) (box2: BBox) : bool = 
+    let isAbove (bb1: BBox) (bb2: BBox) = (bb1.Pos.Y + bb1.Height) <= bb2.Pos.Y
+    not (isAbove box1 box2 || isAbove box2 box1)
 
 let getScreen (pos: XYPos) (zoom: float) : BBox =
     let screenWidth = (window.innerWidth |> float) / zoom
