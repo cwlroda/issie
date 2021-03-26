@@ -1,5 +1,10 @@
 # HLP 2021 Project
-This is the HLP group project for team 5.
+This is the HLP group project for team 5. The code is made to act as the GUI library for the Issie application. 
+It's aim is to be able to replace the currently used library. The code allows you to add a different range of symbols to your canvas and connect them together using wires.
+The symbol creation is handled by the [symbol.fs](./src/Render/symbol.fs) while the wire creation is handled by [buswire.fs] (./src/Render/buswire.fs). The sheet module written in [sheet.fs] (./src/Render/sheet.fs) is used for the overall control of the system with function such as copy, past, drag, and select etc.
+
+
+
 ## Running the Demo
 
 #### First time running
@@ -36,7 +41,7 @@ To see an exhaustive list of features, refer to [feature_summary.md](./docs/feat
   * Marcus
 ###### BusWire
   * Wei Loon
-  * Sofia
+  * Sofia Jegnell
 ###### Sheet
   * Ole
   * Ben
