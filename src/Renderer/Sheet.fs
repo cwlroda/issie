@@ -947,8 +947,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     |> posAdd model.MousePosition
                     |> snapToGrid
 
-                printfn "%A" p
-
                 Symbol.updateCompoment comp p comp.Label
             )
             |> List.map (Symbol.AddSymbol >> Symbol >> Cmd.ofMsg)
