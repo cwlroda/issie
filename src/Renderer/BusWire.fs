@@ -19,6 +19,7 @@ type Direction =
     | Vertical
     | Horizontal
 
+/// Segments that form a wire. 
 type WireSegment =
     {
         StartPos: XYPos
