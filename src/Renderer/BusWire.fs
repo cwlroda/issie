@@ -87,6 +87,8 @@ type SegBBRenderProps =
 let isVertical (relPos: XYPos): bool =
     abs (relPos.X) <= abs (relPos.Y)
 
+/// Creates a standard bounding box for the wire segements 
+/// Takes the start and end position of the wires and widh and returns a bounding box
 let createSegBB (startPos: XYPos) (endPos: XYPos) (width: float) : BBox =
     match posDiff endPos startPos with
     // left to right
@@ -105,6 +107,8 @@ let createSegBB (startPos: XYPos) (endPos: XYPos) (width: float) : BBox =
     | _ ->
         toBBox 0. 0. 0. 0.
 
+/// checks the width of the given ports and checks if the connection is valid. 
+/// Takes the port ids of the two ports of interest as well as the current symbol model. Returns a result of either the correct width or error string
 let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortId) : Result<int, string> =
     let srcSym =
         Symbol.findPort sModel srcPortId
@@ -145,18 +149,25 @@ let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortI
         | _ -> widthMatching
     | _ -> widthMatching
 
+///Takes the current wire model and a wire Id and returns the wire
 let findWire (wModel: Model) (wId: ConnectionId): Wire =
     match Map.tryFind wId wModel.WX with
     | Some vWire -> vWire
     | None -> failwithf "Invalid Id passed"
 
+/// Takes two position and returns ture if the positions are the same and false otherwise
 let isSegmentAtPort (pos1: XYPos) (pos2: XYPos) =
     if pos1 = pos2 then true else false
 
+/// Checkes if a position is inside a wire segement bounding box
+/// Takes ```width``` for the desired width for the bounding box, the position of interest and the start and endpos of the wire segment
 let ptCloseToSeg (width: float) (pos:XYPos) (startPt: XYPos) (endPt: XYPos): bool =
         createSegBB startPt endPt width |> (containsPoint pos)
 
-// finds closest wire segment to mouse position
+/// finds the closest wire segment of a given wire to mouse position
+/// Takes a wire and the position of interest and returns the index of the wire segement of the segment which is closest to the given position
+/// NOTE: the function fails if the position is not inside the bounding box of any of the segements of the given wire 
+/// - i.e. should only be called on a selected wire
 let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
     let index =
         wire.Segments
@@ -168,7 +179,8 @@ let findClosestSegment (wire: Wire) (pos: XYPos) : SegmentIndex =
     | None ->      
         failwithf $"This shouldn't happen! - WireSegements: {wire.Segments} and pos: {pos}"
 
-// creates deafult wire segment
+/// Creates deafult wire segment.
+/// Given a start position and an end position returns a WireSegement record
 let makeWireSegment (startPos: XYPos) (endPos: XYPos) : WireSegment =
     let direction =
         match isVertical (posDiff startPos endPos) with
@@ -181,11 +193,15 @@ let makeWireSegment (startPos: XYPos) (endPos: XYPos) : WireSegment =
         Direction = direction
     }
 
+///Checks if two bounding boxes are vertically overlapping. 
+/// Takes two boudning boxes and returns ```true``` if the y-coordinates of the two boxes intersect at any point
 let verticalOverlap (box1: BBox) (box2: BBox) = 
     let isAbove (bb1: BBox) (bb2: BBox) = (bb1.Pos.Y + bb1.Height) <= bb2.Pos.Y
     not (isAbove box1 box2 || isAbove box2 box1)
 
-// autoconnect wire segments
+/// Adjusted the start and end position of each wire segments so that the segment connects.
+/// Given a segement list, it returns another segement list where start position of the next segement matches the end position of the current segement
+/// (the first and last segement only connects at their end position and start position respectivly)
 let autoConnect (segList: WireSegment list) : WireSegment list =
     let adjSeg (index: int) : WireSegment =
         match List.tryItem index segList with
@@ -211,7 +227,9 @@ let autoConnect (segList: WireSegment list) : WireSegment list =
         | _ -> s
     )
 
-// smart routing algorithm
+/// Smart routing algorithm. 
+/// Takes the current symbol model, wire of interest and segement list and uses a recursing algorithem
+/// to find the short path while avoiding collsions with symbols. Returns the updated ```wireSegement lis``` 
 let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list) : WireSegment list =
     let srcPortPos = Symbol.portPos sModel wire.SrcPort
     let tgtPortPos = Symbol.portPos sModel wire.TargetPort
@@ -226,7 +244,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
         |> List.map (Symbol.getSymbolFromSymbolId sModel)
         |> List.exists (fun sym -> overlaps segBBox (Symbol.symbolBBox sModel sym.Id))
 
-    // reroute segments recursively
+    /// reroute segments recursively
     let rec avoid (seg: WireSegment) (index: int) (dir: bool) (d: int) : WireSegment =
         let offset = if dir then gridSize else -gridSize
 
@@ -251,7 +269,7 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
                 avoid newSeg index dir (d + 1)
             | false -> seg
 
-    // bidirectional recursion to shorten path
+    /// bidirectional recursion to shorten path
     let rec routing (depth: int) (newSegList: WireSegment list) : WireSegment list =
         match depth with
         | x when x > 1 -> newSegList
@@ -322,7 +340,9 @@ let smartRouting (sModel: Symbol.Model) (wire: Wire) (segList: WireSegment list)
             | false -> newSegList
 
     routing 0 segList
-
+///Makes the inital auto routing of a wire.
+///Takes the current symbol model and the wire and 
+/// returns a list of wire segements which are defined based on the relative position between the wires input and output port
 let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
     let startPos = Symbol.portPos sModel wire.SrcPort
     let endPos = Symbol.portPos sModel wire.TargetPort
@@ -362,6 +382,8 @@ let autoRoute (sModel: Symbol.Model) (wire: Wire) : WireSegment list =
     |> List.pairwise
     |> List.map (fun (startPos, endPos) -> makeWireSegment startPos endPos)
 
+///Takes two port ids and checks if they are of opposite type - i.e. one output and one input
+/// Returns a result record of either a tuple with the given ids if the types are correct or an error string
 let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<PortId * PortId, string> =
     let getType pId = (Symbol.portType sModel pId)
 
@@ -371,9 +393,15 @@ let typesValid (port1: PortId, port2: PortId) (sModel: Symbol.Model) : Result<Po
     | PortType.Input, PortType.Output -> Ok (port2, port1)
     | _ -> failwithf "Invalid connection!"
 
+/// Checks if an input has multiple wires connected to it.
+/// Given the current wire model, a wire id and an id of the input port.
+/// Returns true if there is already another wire connected and false otherwise
 let notAvaliableInput (wModel: Model) (wId: ConnectionId) (inputId: PortId): bool =
     Map.exists (fun _ w -> (w.Id <> wId) && (w.TargetPort = inputId)) wModel.WX
 
+/// Given the current wire and symbol model, two port ids and connection id option creates 
+/// a wire if the connection is valid i.e. the two ports of are not of the same time otherwise returns None.
+/// If suplied with an connection id it creates the wire with the given id (logically a wire which exist has been connected to a new port) otherwise generates a new id.
 let createWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) (conId: ConnectionId Option) : Wire option =
     let createId =
         function
@@ -412,6 +440,8 @@ let createWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: Po
         }
     | _ -> None
 
+/// Takes current symbol and wire model and a bounding box and returns a list of 
+/// all the connection ids of the wires which exist in the given boudning box
 let wiresInScreen (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : ConnectionId list =
     wModel.WX
     |> Map.filter (fun _ w ->
@@ -423,7 +453,11 @@ let wiresInScreen (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : Connecti
     |> Map.toList
     |> List.map fst
 
-// specific wire update when symbol updates
+
+/// Given the current wire and symbol models, a list of the symbols of interest and a bounding box
+/// updates all wires which have not been manual modified previously (i.e. manual overrid set to false) in the given bounding box.
+/// Also smartRoutes the wires which are connected to the symbol with the given ids, irrelevent if they have been manually modified (resets manual overrid to false).
+/// Returns a list of the updated wire map 
 let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId list) (bbox: BBox) : Map<ConnectionId, Wire> =
     let pIds =
         symIds
@@ -457,6 +491,7 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
             | false -> w
     )
 
+/// Given a wire returns the string which contains the points formated to give the apporiate SVG path element
 let pathDefString (w: Wire) =  
     let relMove (startSeg: WireSegment) (endSeg: WireSegment) =
         let adjPos = 
@@ -504,7 +539,9 @@ let singleWireView =
                     ] []
             ]
         )
-
+/// Given the current wire model, the id of the selected wire and the position updatesthe selected segements and the connected segements
+/// according to the relative movement given by the ```pos``` and the ```lastPos```.
+/// Returns a wire with the updated ```Segements```
 let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
     let wire = findWire wModel wId
     let diff = snapToGrid (posDiff pos wire.LastDragPos)
@@ -552,10 +589,15 @@ let manualRouting (wModel: Model) (wId: ConnectionId) (pos: XYPos): Wire =
             ManualOverride = true
     }
 
+/// Given the current wire and symbol models, the ```index``` of the segement of interest, the current postion of the segments ending of interest,
+/// the id of the port to which the connection should be and the wire. Returns an updated with with a segements adjusted to ensure that the endpoint of the wires sits on the port.
 let fitConnection (wModel: Model) (sModel: Symbol.Model) (index: SegmentIndex) (segCurrentPos: XYPos) (newPortId: PortId)  (wire: Wire) : Wire = 
     let updatedWire = {wire with SelectedSegment = index; LastDragPos = segCurrentPos; Segments = wire.Segments}
     manualRouting {wModel with WX = Map.add updatedWire.Id updatedWire wModel.WX} updatedWire.Id (Symbol.portPos sModel newPortId)
 
+
+/// Given the current wire and symbol model and a wire. Checks that the port ids of the wire are correctly updated to the current position of the wire endings.
+/// Returns a wire with correctly updated ```portId``` and routed segments.
 let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : Wire =
     match wire.SelectedSegment with
     | x when x = 0 || x = wire.Segments.Length - 1 ->
@@ -583,6 +625,7 @@ let checkPortConnections (wModel: Model) (sModel: Symbol.Model) (wire: Wire) : W
         | _ -> failwithf "Stray wire!"
     | _ -> wire
 
+/// ???? 
 let updateWireValidity (wModel: Model) (sModel: Symbol.Model) (wire: Wire): Wire =
     match createWire wModel sModel wire.SrcPort wire.TargetPort (Some wire.Id) with
     | Some newWire -> 
@@ -592,6 +635,8 @@ let updateWireValidity (wModel: Model) (sModel: Symbol.Model) (wire: Wire): Wire
         }
     | None -> wire
 
+/// Takes the current wire and symbol model and goes through all the wire connection to update the wire instances for if manual reconnectins have been made
+/// and ensure that all wires are have the correctly routed segements and valid connections.
 let updateConnections (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
     let updatedWX = Map.map (fun _ w -> checkPortConnections wModel sModel w) wModel.WX
     let updatedModel = {wModel with WX = updatedWX}
@@ -599,6 +644,8 @@ let updateConnections (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId,
     updatedWX
     |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
+/// Given the current symbol and wire models and two port ids creates a new wire instance, routes it and checks the validitiy of the wire
+/// Returns an updated ```Model.WX```  map which includes the new connection if the connection was valid.
 let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortId) : Map<ConnectionId, Wire> =
     match createWire wModel sModel port1 port2 None with
     | Some wire -> 
@@ -610,12 +657,13 @@ let addWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: PortI
         |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
     | None -> wModel.WX
 
-///Given a connectionId deletes the given wire
+///Given a connectionId deletes the given wire and returns the updated ``Model.WX```  map
 let deleteWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Map<ConnectionId, Wire> =
     let updatedModel = {wModel with WX = Map.remove wId wModel.WX}
     updatedModel.WX
     |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
+ ///  Given a list of symbol ids deletes all the wires connnected to the symbol, i.e. removes them from ``Model.WX```  map
 let deleteWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
     let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
 
@@ -632,6 +680,7 @@ let deleteWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: Compone
     updatedWX
     |> Map.map (fun _ w -> updateWireValidity updatedModel sModel w)
 
+ /// Given the wire and symbol model and a list of symbol ids returns a map of all wires (organised by ids) which has at least one end connected to one of the symbols by the given ```sIdLst``` ids  
 let getWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
     let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
 
@@ -642,6 +691,7 @@ let getWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentI
         | _ -> true
     )
 
+ ///Given the wire and symbol models and symbol id list returns a map (organised by ids) of all the wires which create a connation between any two symbols (or one symbol connected to iteslf)
 let getConnectedWires (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
     let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
 
@@ -656,12 +706,14 @@ let getConnectedWires (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentI
 let setWireColor (wModel: Model) (wId: ConnectionId) (c: HighLightColor): Wire =
     {findWire wModel wId with WireColor = c}
 
+/// Given a wire returns the correct colour depending on its attribute
 let getWireColor (w: Wire): HighLightColor =
     match w with
     | w when w.Error <> None -> Red
     | w when  w.WireWidth < 4 -> Blue
     | _ -> Purple
 
+ /// Gvien the wire model, a wire id and a position updates the ``Model.WX```  map such that the wire with the given id is set up to start dragging correctly
 let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionId, Wire> =
     let wire = findWire wModel wId
 
@@ -679,11 +731,13 @@ let startDrag (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionI
             LastDragPos = pos
             Segments = updatedSegs
         } wModel.WX
-
+/// Given the wire model, a wire id and position returns ``Model.WX```  map with the wire with the given ids wire segemetns updated relative to the ```pos```
 let dragging (wModel: Model) (wId: ConnectionId) (pos: XYPos) : Map<ConnectionId, Wire> =
     wModel.WX
     |> Map.add wId (manualRouting wModel wId pos)
 
+/// Given the wire and symbol model goes through the wire model to ensure all wires are correcly routed and update the attributes accrodingly
+/// Returns the updated ``Model.WX```  map
 let endDrag (wModel: Model) (sModel: Symbol.Model) : Map<ConnectionId, Wire> =
     updateConnections wModel sModel
 
@@ -736,6 +790,7 @@ let singleLabelView =
                 ][]
             ])
 
+/// Given a segements return an ```XYPos``` whcih gives the postion for a wire label for the given segment
 let adjLabelPos (seg: WireSegment) : XYPos =
     match posDiff seg.StartPos seg.EndPos with
     | relDiff when relDiff.X > 10.  ->  posDiff seg.StartPos (posOf 7.5 12.5)
@@ -800,7 +855,10 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
             @ [singleWireView props]
             
         ) [] ) 
+        
 
+/// Given the wire and symbol models and a bouding box updates the routing of all wires which has ```ManualOVerride``` set to false
+/// Returns the updated ``Model.WX```  map
 let routingUpdate (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : Map<ConnectionId, Wire> =
     let visibleWires = wiresInScreen wModel sModel bbox
 
@@ -862,7 +920,7 @@ let init (sModel: Symbol.Model) () =
             Debug = false
         }
     
-    [1..100]
+    [1..25]
     |> List.fold (fun acc _ ->
         let s1, s2 =
             outList.[rng.Next(0, n-1)],
@@ -874,7 +932,7 @@ let init (sModel: Symbol.Model) () =
 
 //---------------Other interface functions--------------------//
 
-//Calculates the distance between a point and a wire segment
+///Calculates the distance between a point and a two other points which is used to define a start and end point of a wire segment
 let distPtToSeg (pt: XYPos) ((startPt, endPt): XYPos * XYPos) = //(wSeg: WireSegment) =
     let ptToPtA = posOf (pt.X - endPt.X) (pt.Y - endPt.Y)
     let ptAToB = posOf (endPt.X - startPt.X) (endPt.Y - startPt.Y)
@@ -887,11 +945,13 @@ let distPtToSeg (pt: XYPos) ((startPt, endPt): XYPos * XYPos) = //(wSeg: WireSeg
 
     abs (crossProd) / magPtAToPtB
 
+/// Gvien a position and a wire returns the shortest distance between the given point and the wire
 let distPtToWire (pt: XYPos) (wire: Wire) =
     wire.Segments
     |> List.map (fun s -> distPtToSeg pt (s.StartPos, s.EndPos))
     |> List.maxBy (~-)
 
+/// Given a position and a wire returns true if the pos lies within the bouding boxes of the wire segements which make up the wire and false otherwise
 let isTargetWire (pt: XYPos) (wire: Wire) =
     //let ptCloseToSeg (pos:XYPos) (startPt: XYPos) (endPt: XYPos): bool =
     //    createSegBB startPt endPt 5. |> (containsPoint pos)
@@ -905,7 +965,8 @@ let isTargetWire (pt: XYPos) (wire: Wire) =
         true
     | None -> false
 
-/// Give position finds the wire which is within a few pixels. If there are multiple chooses the closest one
+/// Give position finds the wire which is within a few pixels. If there are multiple chooses the closest wire one
+/// Returns a ```ConnectionId``` option
 let getTargetedWire (wModel: Model) (pos: XYPos): ConnectionId Option =
     let closestWire (lst: (ConnectionId * Wire) list): ConnectionId =
         List.minBy (fun (_, w) -> distPtToWire pos w) lst
@@ -920,6 +981,8 @@ let getTargetedWire (wModel: Model) (pos: XYPos): ConnectionId Option =
     | [] -> None
     | lst -> Some(closestWire lst)
 
+/// Given the wire and symbol model returns a list of the type Error
+// which contains the id of the wire which has the error a position of the input port of the wire and a string explaining the error
 let getErrors (wModel: Model) (sModel: Symbol.Model): Error list =
     Map.fold (fun lst _ w ->
         match w.Error with
@@ -932,6 +995,7 @@ let getErrors (wModel: Model) (sModel: Symbol.Model): Error list =
         | None -> lst
     ) [] wModel.WX
 
+/// Given the wire model returns a list of all portIds of the input ports which are connected to the given source port (output port)
 let getAllPidEnds (wModel: Model) (pIdSrc: PortId) : PortId List =
     wModel.WX
     |> Map.toList
@@ -941,12 +1005,15 @@ let getAllPidEnds (wModel: Model) (pIdSrc: PortId) : PortId List =
     |> List.map (fun (_,w) -> w.TargetPort) 
 
 
-//----------------------interface to Issie-----------------------//
+//----------------------interface to Issie-----------------------/
+/// Given a list of wire Segments returns a list where each tuple defines one of the vertices which make up the wire segement
 let wireSegLstToVerticesLst (wSegs: WireSegment list) : (float * float) list = 
     let incompleteLstVert = List.map (fun (s:WireSegment) -> s.EndPos) wSegs
     [wSegs.[0].StartPos] @ incompleteLstVert
      |> List.map (fun pos -> (pos.X, pos.Y))   
 
+///Convert the information contained in the Wire with the given id to a Issie Connection type instance 
+///Given the wire and symbol model and a wire id returns a ```Connection``` instance which has attributes which matches the wire with the given id
 let extractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Connection =
     let wire = findWire wModel wId
    
@@ -958,12 +1025,13 @@ let extractWire (wModel: Model) (sModel: Symbol.Model) (wId: ConnectionId) : Con
         Vertices = (wireSegLstToVerticesLst wire.Segments)
 
     }
-
+/// Takes a symbol id and returns a list of Connection which described the Wires connected to the given symbol
 let extractSymbolWires (wModel: Model) (sModel: Symbol.Model)  (sId: ComponentId): Connection list = 
     let connectedWires = getConnectedWires wModel sModel  [sId]
     Map.toList connectedWires
     |> List.map (fun (wId, w) -> extractWire wModel sModel wId)
 
+/// Returns a list of Connection which describe all the wire connections in the given model
 let extractAllWires (wModel: Model) (sModel: Symbol.Model) : Connection List = 
     wModel.WX
     |> Map.fold (fun connLst wId w -> [extractWire wModel sModel wId]@connLst) []
