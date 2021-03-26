@@ -345,8 +345,12 @@ let wiresInScreen (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : Connecti
     |> Map.toList
     |> List.map fst
 
-/// <summary> Calculates the distance between a point and a two other points which is used to define a start and end point of a wire segment
-let distPtToSeg (pt: XYPos) ((startPt, endPt): XYPos * XYPos) = //(wSeg: WireSegment) =
+/// <summary> Calculates the distance between a point and a wire segment </summary>
+/// <param name="pt"> Point of interest </param>
+/// <param name="startPt"> Start position of wire segment </param>
+/// <param name="endPt"> End position of wire segment </param>
+/// <returns> ```float``` distance between point and wire segment </returns>
+let distPtToSeg (pt: XYPos) (startPt: XYPos) (endPt: XYPos) : float =
     let ptToPtA = posOf (pt.X - endPt.X) (pt.Y - endPt.Y)
     let ptAToB = posOf (endPt.X - startPt.X) (endPt.Y - startPt.Y)
 
@@ -361,7 +365,7 @@ let distPtToSeg (pt: XYPos) ((startPt, endPt): XYPos * XYPos) = //(wSeg: WireSeg
 /// Given a position and a wire returns the shortest distance between the given point and the wire
 let distPtToWire (pt: XYPos) (wire: Wire) =
     wire.Segments
-    |> List.map (fun s -> distPtToSeg pt (s.StartPos, s.EndPos))
+    |> List.map (fun s -> distPtToSeg pt s.StartPos s.EndPos)
     |> List.maxBy (~-)
 
 /// Given a position and a wire returns true if the pos lies within the bounding boxes of the wire segments which make up the wire and false otherwise
