@@ -132,3 +132,22 @@ Wires with errornous connections will be highlighed red. These include
 
 ### 6. Cancelling Operations
 1. ```esc``` cancels all intermediate-stage operations
+
+## Performance 
+### 1. Improvements to code
+To ensure that our programme is smooth even for extremely large libraries, we have implemented these improvements:
+1. Only symbols that are in the current screen are rendered (They will still be updated nonetheless).
+2. Put a cap on auto-routing path searches
+
+### 2. Results 
+Currently our programme supports up to 100 symbols and 100 wires moving concurrently, before lag starts to kick in. 
+The speed tests are also conducted to see check for perfomance:
+1. Select All
+    - 400 Symbols : 5.5s
+2. Copy/Paste
+    - Only Symbols : Instantaneous
+    - 50 Symbols, 50 Wires : 7.28s
+    - 50 Symbols, 100 Wires : 21.43s
+    
+
+
