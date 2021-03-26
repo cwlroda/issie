@@ -48,17 +48,15 @@ type Model =
     }
 
 type Msg =
-    | AddSymbol                                             // Performs Wire Routings when a Symbol is Created
-    | DeleteSymbols of CommonTypes.ComponentId list         // Performs Wire Routings/Deletions when Symbols are being Deleted
-    | DraggingSymbols of CommonTypes.ComponentId list       // Performs Wire Routings when Symbols are being Dragged
-    | AddWire of (PortId * PortId)                          // Create a Wire between Two Ports (Must be Ports of Opposite Polarity)
-    | DeleteWire of ConnectionId                            // Deletes a Wire
-    | SetColor of color: HighLightColor                     // Sets the Colour of a Wire
-    | StartDrag of wId: ConnectionId * pos: XYPos           // Starts Dragging a Wire's Segment
-    | Dragging of wId: ConnectionId * pos: XYPos            // Still Dragging the Wire's Segment
-    | EndDrag                                               // Complete the Dragging Process 
-    | RoutingUpdate                                         // Refreshes Wire Routings
-    | Debug                                                 // Enable Wire Bounding Boxes to be Seen (Debug Mode)
+    | DeleteSymbols of CommonTypes.ComponentId list             // Performs Wire Routings/Deletions when Symbols are being Deleted
+    | DraggingSymbols of CommonTypes.ComponentId list * BBox    // Performs Wire Routings when Symbols are being Dragged
+    | AddWire of (PortId * PortId)                              // Create a Wire between Two Ports (Must be Ports of Opposite Polarity)
+    | DeleteWire of ConnectionId                                // Deletes a Wire
+    | StartDrag of wId: ConnectionId * pos: XYPos               // Starts Dragging a Wire's Segment
+    | Dragging of wId: ConnectionId * pos: XYPos                // Still Dragging the Wire's Segment
+    | EndDrag                                                   // Complete the Dragging Process 
+    | RoutingUpdate of BBox                                     // Refreshes Wire Routings
+    | Debug                                                     // Enable Wire Bounding Boxes to be Seen (Debug Mode)
 
 
 type WireRenderProps =
@@ -414,25 +412,41 @@ let createWire (wModel: Model) (sModel: Symbol.Model) (port1: PortId) (port2: Po
         }
     | _ -> None
 
+let wiresInScreen (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : ConnectionId list =
+    wModel.WX
+    |> Map.filter (fun _ w ->
+        let srcPos = Symbol.portPos sModel w.SrcPort
+        let tgtPos = Symbol.portPos sModel w.TargetPort
+
+        (containsPoint srcPos bbox) || (containsPoint tgtPos bbox)
+    )
+    |> Map.toList
+    |> List.map fst
+
 // specific wire update when symbol updates
-let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId list) : Map<ConnectionId, Wire> =
+let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId list) (bbox: BBox) : Map<ConnectionId, Wire> =
     let pIds =
         symIds
         |> List.fold (fun acc symId -> acc @ Symbol.getPortsFromSymbols sModel [symId]) []
+
+    let visibleWires = wiresInScreen wModel sModel bbox
     
     wModel.WX
     |> Map.map (fun _ w ->
-        match List.contains w.SrcPort pIds || List.contains w.TargetPort pIds with
+        match List.contains w.Id visibleWires with
         | true ->
-            let segList = autoRoute sModel w
-            {w with
-                Segments = smartRouting sModel w segList
-                ManualOverride = false
-            }
-        | false ->
-            match w.ManualOverride with
-            | true -> w
-            | false -> {w with Segments = smartRouting sModel w w.Segments}
+            match List.contains w.SrcPort pIds || List.contains w.TargetPort pIds with
+            | true ->
+                let segList = autoRoute sModel w
+                {w with
+                    Segments = smartRouting sModel w segList
+                    ManualOverride = false
+                }
+            | false ->
+                match w.ManualOverride with
+                | true -> w
+                | false -> {w with Segments = smartRouting sModel w w.Segments}
+        | false -> w
     )
 
 let pathDefString (w: Wire) =  
@@ -787,22 +801,27 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
         
 
 
-let routingUpdate (sModel: Symbol.Model) (wireMap: Map<ConnectionId, Wire>) : Map<ConnectionId, Wire> =
-    wireMap
-    |> Map.filter (fun _ w -> not w.ManualOverride)
+let routingUpdate (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : Map<ConnectionId, Wire> =
+    let visibleWires = wiresInScreen wModel sModel bbox
+
+    wModel.WX
     |> Map.map (fun _ w ->
-        {w with Segments = smartRouting sModel w w.Segments}
+        match List.contains w.Id visibleWires with
+        | true ->
+            match w.ManualOverride with
+            | false ->
+                {w with Segments = smartRouting sModel w w.Segments}
+            | true -> w
+        | false -> w
     )
 
 
 let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     match msg with
-    | AddSymbol ->
-        { model with WX = routingUpdate sModel model.WX }, Cmd.none
     | DeleteSymbols sIdLst ->
         { model with WX = deleteWiresOfSymbols model sModel sIdLst }, Cmd.none
-    | DraggingSymbols sIdLst ->
-        { model with WX = updateSymWires model sModel sIdLst }, Cmd.none
+    | DraggingSymbols (sIdLst, bbox) ->
+        { model with WX = updateSymWires model sModel sIdLst bbox }, Cmd.none
     | AddWire (wMsgId1, wMsgId2) ->
         let wxUpdated = addWire model sModel wMsgId1 wMsgId2
         { model with WX = wxUpdated }, Cmd.none
@@ -818,21 +837,40 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     | EndDrag ->
         let wxUpdated = endDrag model sModel
         { model with WX = wxUpdated }, Cmd.none
-    | SetColor c ->
-        let wxUpdated =
-            Map.map (fun wId _ -> setWireColor model wId c) model.WX
-        { model with WX = wxUpdated }, Cmd.none
-    | RoutingUpdate ->
-        { model with WX = routingUpdate sModel model.WX }, Cmd.none
+    | RoutingUpdate bbox ->
+        { model with WX = routingUpdate model sModel bbox }, Cmd.none
     | Debug ->
         { model with Debug = not model.Debug }, Cmd.none
 ///Dummy function to initialize for demo
-let init () =
-    {
-        WX = Map.empty
-        WireAnnotation = true
-        Debug = false
-    }, Cmd.none
+let init (sModel: Symbol.Model) () =
+    let rng = System.Random 0
+    let inList, outList =
+        Symbol.allPortsInModel sModel
+        |> Map.toList
+        |> List.partition (fun (_, p) -> p.PortType = PortType.Output)
+
+    let inList, outList =
+        inList |> List.map fst,
+        outList |> List.map fst
+
+    let n = min inList.Length outList.Length
+
+    let model =
+        {
+            WX = Map.empty
+            WireAnnotation = true
+            Debug = false
+        }
+    
+    [1..100]
+    |> List.fold (fun acc i ->
+        let s1, s2 =
+            outList.[rng.Next(0, n-1)],
+            inList.[rng.Next(0, n-1)]
+
+        {acc with WX = addWire acc sModel s1 s2}
+    ) model
+    , Cmd.none
 
 //---------------Other interface functions--------------------//
 

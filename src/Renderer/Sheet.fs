@@ -40,7 +40,6 @@ type Model = {
     Selection: SelectionState
     CopyState: CopyState
     MousePosition: XYPos
-    ClickPosition: XYPos
     PanX: float
     PanY: float
     Zoom: float
@@ -298,35 +297,37 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | AreaSelect (start, _, additive) ->
             { model with DragState=AreaSelect (start, p, additive)}, Cmd.none
         | DragState.Symbol (_, prevWire) ->
-                let selectedSymbols =
-                    match model.Selection with
-                    | Symbols s -> s
-                    | _ -> failwithf "Can only drag if there is a selection"
+            let selectedSymbols =
+                match model.Selection with
+                | Symbols s -> s
+                | _ -> failwithf "Can only drag if there is a selection"
 
-                { model with DragState=DragState.Symbol (true, prevWire) }
-                , Cmd.batch [
-                    Cmd.ofMsg (Symbol (Symbol.Dragging (selectedSymbols, (snapToGrid p), mouseIsDown)))
-                    Cmd.ofMsg (Wire (BusWire.DraggingSymbols selectedSymbols))
-                ]
+            let screenBBox = getScreen (posOf -model.PanX -model.PanY) model.Zoom
+
+            { model with DragState=DragState.Symbol (true, prevWire) }
+            , Cmd.batch [
+                Cmd.ofMsg (Symbol (Symbol.Dragging (selectedSymbols, (snapToGrid p), mouseIsDown)))
+                Cmd.ofMsg (Wire (BusWire.DraggingSymbols (selectedSymbols, screenBBox)))
+            ]
         | DragState.Wire (_, prevWireModel) ->
             match model.Selection with
-                | SelectionState.Wire wId ->
-                    let currentMousePos = model.MousePosition
-                    let w = BusWire.findWire model.Wire wId
-                    let selSeg = w.SelectedSegment
-                    let prevPortType = 
-                        match selSeg with
-                        | x when x = 0 -> 
-                            Some (CommonTypes.PortType.Output)
-                        | x when x = w.Segments.Length - 1 -> 
-                            Some (CommonTypes.PortType.Input)
-                        |_ -> None 
-                    { model with 
-                        DragState=DragState.Wire (true, prevWireModel)
-                        PrevPortType = prevPortType 
-                    }
-                    , Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
-                | _ -> failwithf "Can only drag if there is a selection"
+            | SelectionState.Wire wId ->
+                let currentMousePos = model.MousePosition
+                let w = BusWire.findWire model.Wire wId
+                let selSeg = w.SelectedSegment
+                let prevPortType = 
+                    match selSeg with
+                    | x when x = 0 -> 
+                        Some (CommonTypes.PortType.Output)
+                    | x when x = w.Segments.Length - 1 -> 
+                        Some (CommonTypes.PortType.Input)
+                    |_ -> None 
+                { model with 
+                    DragState=DragState.Wire (true, prevWireModel)
+                    PrevPortType = prevPortType 
+                }
+                , Cmd.ofMsg (Wire (BusWire.Dragging (wId, snapToGrid p)))
+            | _ -> failwithf "Can only drag if there is a selection"
         | WireCreation (pId, _) ->
             { model with DragState=WireCreation (pId, p) }, Cmd.none
         | Pan (origPan, panStart, _) ->
@@ -427,7 +428,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             { model with
                 Selection = Empty
                 DragState = AreaSelect (p, p, false)
-                ClickPosition = p
             }, Cmd.none
 
     let rec batchInfer (symModel:Symbol.Model) (pIdStart:CommonTypes.PortId) (pIdEnd:CommonTypes.PortId) (createOrDelete:CommonTypes.CreateOrDelete) (visited:CommonTypes.PortId list) (iterations:int): Symbol.Model =
@@ -605,11 +605,13 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                         batchInfer acc wire.SrcPort wire.TargetPort CommonTypes.CreateOrDelete.Delete [] 0
                     ) model.Symbol
 
+                let panBBox = getScreen (posOf -model.PanX -model.PanY) model.Zoom
+
                 let remainingMsg = 
                     [
                         Cmd.ofMsg (Wire (BusWire.DeleteSymbols sIdLst))
                         Cmd.ofMsg (Symbol (Symbol.DeleteSymbols sIdLst))
-                        Cmd.ofMsg (Wire (BusWire.RoutingUpdate))
+                        Cmd.ofMsg (Wire (BusWire.RoutingUpdate panBBox))
                         Cmd.ofMsg <| SaveState (model.Wire, model.Symbol)
                     ]
                 { model with 
@@ -874,7 +876,6 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 if Symbol.symbolsCollide selectedSymbols model.Symbol then model, Cmd.none else
                     newModel, Cmd.batch [
                         Cmd.ofMsg (Symbol (Symbol.EndDragging))
-                        // Cmd.ofMsg (Wire (BusWire.EndDragSymbols))
                         saveStateIfDraggedCmd didDrag prevWireModel
                     ]
             | DragState.WireCreation (pIdStart, p) ->
@@ -990,7 +991,9 @@ let view (model: Model) (dispatch: Msg -> unit) =
             Some <| Symbol.portType model.Symbol pId
         | _ -> None
 
-    let symbolSvg = Symbol.view model.Symbol selectedSymbols model.MousePosition portTypeToNotHighlight sDispatch
+    let screenBBox = getScreen (posOf -model.PanX -model.PanY) model.Zoom
+
+    let symbolSvg = Symbol.view model.Symbol selectedSymbols model.MousePosition portTypeToNotHighlight screenBBox sDispatch
 
     let wDispatch wMsg = dispatch (Wire wMsg)
     let selectedWire =
@@ -1010,7 +1013,7 @@ let view (model: Model) (dispatch: Msg -> unit) =
 
 let init () =
     let sModel, sCmds = Symbol.init ()
-    let wModel, wCmds = (BusWire.init) ()
+    let wModel, wCmds = BusWire.init sModel ()
     {
         Wire = wModel
         Symbol = sModel
@@ -1018,7 +1021,6 @@ let init () =
         DragState = NotDragging
         CopyState = Uninitialized
         MousePosition = posOf 0. 0.
-        ClickPosition = posOf 0. 0.
         PanX = 0.
         PanY = 0.
         Zoom = 1.
