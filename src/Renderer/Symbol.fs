@@ -843,7 +843,7 @@ let createNewSymbol (index:int)  =
 
 /// Dummy function for test. The real init would probably have no symbols.
 let init () =
-    [1..50]
+    [1..100]
     
     |> List.map (fun x -> createNewSymbol (x))
     |> List.map (fun sym -> (sym.Id, sym))

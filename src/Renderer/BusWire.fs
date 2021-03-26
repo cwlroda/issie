@@ -446,7 +446,15 @@ let updateSymWires (wModel: Model) (sModel: Symbol.Model) (symIds: ComponentId l
                 match w.ManualOverride with
                 | true -> w
                 | false -> {w with Segments = smartRouting sModel w w.Segments}
-        | false -> w
+        | false ->
+            match List.contains w.SrcPort pIds || List.contains w.TargetPort pIds with
+            | true ->
+                let segList = autoRoute sModel w
+                {w with
+                    Segments = smartRouting sModel w segList
+                    ManualOverride = false
+                }
+            | false -> w
     )
 
 let pathDefString (w: Wire) =  
@@ -733,12 +741,6 @@ let adjLabelPos (seg: WireSegment) : XYPos =
     | relDiff when relDiff.X > 10.  ->  posDiff seg.StartPos (posOf 7.5 12.5)
     | _ -> posDiff seg.StartPos (posOf -7.5 12.5)
 
-
-
-
-
-
-
 let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel: Symbol.Model) (dispatch: Dispatch<Msg>) =
     g [] (
         wModel.WX
@@ -798,8 +800,6 @@ let view (wModel: Model) (selectedWire: CommonTypes.ConnectionId option) (sModel
             @ [singleWireView props]
             
         ) [] ) 
-        
-
 
 let routingUpdate (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : Map<ConnectionId, Wire> =
     let visibleWires = wiresInScreen wModel sModel bbox
@@ -814,7 +814,6 @@ let routingUpdate (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : Map<Conn
             | true -> w
         | false -> w
     )
-
 
 let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
     match msg with
@@ -841,6 +840,7 @@ let update (msg: Msg) (model: Model) (sModel: Symbol.Model): Model * Cmd<Msg> =
         { model with WX = routingUpdate model sModel bbox }, Cmd.none
     | Debug ->
         { model with Debug = not model.Debug }, Cmd.none
+
 ///Dummy function to initialize for demo
 let init (sModel: Symbol.Model) () =
     let rng = System.Random 0
@@ -862,7 +862,7 @@ let init (sModel: Symbol.Model) () =
             Debug = false
         }
     
-    [1..25]
+    [1..100]
     |> List.fold (fun acc _ ->
         let s1, s2 =
             outList.[rng.Next(0, n-1)],
