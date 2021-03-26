@@ -333,7 +333,7 @@ let checkPortWidths (sModel: Symbol.Model) (srcPortId: PortId) (tgtPortId: PortI
 /// <param name="wModel"> Wire ```Model``` </param>
 /// <param name="sModel"> Symbol ```Model``` </param>
 /// <param name="bbox"> ```BBox``` </param>
-/// <returns> ```ConnectionId list``` of the wires which are visible in the current screen </returns>
+/// <returns> ```ConnectionId``` list of the wires which are visible in the current screen </returns>
 let wiresInScreen (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : ConnectionId list =
     wModel.WX
     |> Map.filter (fun _ w ->
@@ -346,10 +346,10 @@ let wiresInScreen (wModel: Model) (sModel: Symbol.Model) (bbox: BBox) : Connecti
     |> List.map fst
 
 /// <summary> Calculates the distance between a point and a wire segment </summary>
-/// <param name="pt"> Point of interest </param>
+/// <param name="pt"> ```XYPos``` </param>
 /// <param name="startPt"> Start position of wire segment </param>
 /// <param name="endPt"> End position of wire segment </param>
-/// <returns> ```float``` distance between point and wire segment </returns>
+/// <returns> ```float``` </returns>
 let distPtToSeg (pt: XYPos) (startPt: XYPos) (endPt: XYPos) : float =
     let ptToPtA = posOf (pt.X - endPt.X) (pt.Y - endPt.Y)
     let ptAToB = posOf (endPt.X - startPt.X) (endPt.Y - startPt.Y)
@@ -362,14 +362,20 @@ let distPtToSeg (pt: XYPos) (startPt: XYPos) (endPt: XYPos) : float =
 
     abs (crossProd) / magPtAToPtB
 
-/// Given a position and a wire returns the shortest distance between the given point and the wire
-let distPtToWire (pt: XYPos) (wire: Wire) =
+/// <summary> Finds the shortest distance between a point and a wire </summary>
+/// <param name="pt"> ```XYPos``` </param>
+/// <param name="wire"> ```Wire``` </param>
+/// <returns> ```float``` </returns>
+let distPtToWire (pt: XYPos) (wire: Wire) : float =
     wire.Segments
     |> List.map (fun s -> distPtToSeg pt s.StartPos s.EndPos)
     |> List.maxBy (~-)
 
-/// Given a position and a wire returns true if the pos lies within the bounding boxes of the wire segments which make up the wire and false otherwise
-let isTargetWire (pt: XYPos) (wire: Wire) =
+/// <summary> Checks if point is inside any of the bounding boxes of a wire's segments </summary>
+/// <param name="pt"> ```XYPos``` </param>
+/// <param name="wire"> ```Wire``` </param>
+/// <returns> ```true``` if point is inside any bounding box, and false otherwise </returns>
+let isTargetWire (pt: XYPos) (wire: Wire) : bool =
     let res =
         wire.Segments
         |> List.tryFindIndex (fun s -> ptCloseToSeg pt s.StartPos s.EndPos 5.)
@@ -378,9 +384,11 @@ let isTargetWire (pt: XYPos) (wire: Wire) =
     | Some idx -> true
     | None -> false
 
-/// Given a position finds the wire which is within a few pixels. If there are multiple chooses the closest wire
-/// Returns a ```ConnectionId``` option
-let getTargetedWire (wModel: Model) (pos: XYPos): ConnectionId Option =
+/// <summary> Finds the closest wire within a few pixels to a point </summary>
+/// <param name="wModel"> Wire ```Model``` </param>
+/// <param name="pos"> ```XYPos``` </param>
+/// <returns> ```Option``` with ```Some ConnectionId``` if wire is found, and ```None``` otherwise </returns>
+let getTargetedWire (wModel: Model) (pos: XYPos) : ConnectionId Option =
     let closestWire (lst: (ConnectionId * Wire) list): ConnectionId =
         List.minBy (fun (_, w) -> distPtToWire pos w) lst
         |> fst
@@ -394,9 +402,10 @@ let getTargetedWire (wModel: Model) (pos: XYPos): ConnectionId Option =
     | [] -> None
     | lst -> Some(closestWire lst)
 
-/// Given the wire and symbol model returns a list of the type Error
-/// which contains the id of the wire which has the error, a position of the wire's input port and a string explaining the error
-let getErrors (wModel: Model) (sModel: Symbol.Model): Error list =
+/// <summary> Gets all wire errors </summary>
+/// <param name="wModel"> Wire ```Model``` </param>
+/// <returns> ```Error``` list </returns>
+let getErrors (wModel: Model) : Error list =
     Map.fold (fun lst _ w ->
         match w.Error with
         | Some errStr ->
@@ -407,16 +416,23 @@ let getErrors (wModel: Model) (sModel: Symbol.Model): Error list =
         | None -> lst
     ) [] wModel.WX
 
-/// Given the wire model returns a list of all portIds of the input ports which are connected to the given source port (output port)
+/// <summary> Gets all IDs of the input ports which are connected to the given output port </summary>
+/// <param name="wModel"> Wire ```Model``` </param>
+/// <param name="pIdSrc"> ```PortId``` </param>
+/// <returns> ```PortId``` list </returns>
 let getAllPidEnds (wModel: Model) (pIdSrc: PortId) : PortId List =
     wModel.WX
     |> Map.toList
-    |> List.filter (fun (_,w) ->
+    |> List.filter (fun (_, w) ->
         w.SrcPort = pIdSrc
     )
-    |> List.map (fun (_,w) -> w.TargetPort)
+    |> List.map (fun (_, w) -> w.TargetPort)
 
-/// Given the wire and symbol model and a list of symbol ids returns a map of all wires which has at least one end connected to one of the symbols by the given ```sIdLst``` ids  
+/// <summary> Gets all wires which have at least one end connected to any of the given symbols </summary>
+/// <param name="wModel"> Wire ```Model``` </param>
+/// <param name="sModel"> Symbol ```Model``` </param>
+/// <param name="sIdLst"> ```ComponentId``` list </param>
+/// <returns> ```Map&lt;ConnectionId, Wire&gt;``` </returns>
 let getWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
     let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
 
@@ -427,7 +443,11 @@ let getWiresOfSymbols (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentI
         | _ -> true
     )
 
-/// Given the wire and symbol models and symbol id list returns a map (organised by ids) of all the wires which create a connection between any two symbols (or one symbol connected to itself)
+/// <summary> Gets all wires which have both ends connected to any of the given symbols </summary>
+/// <param name="wModel"> Wire ```Model``` </param>
+/// <param name="sModel"> Symbol ```Model``` </param>
+/// <param name="sIdLst"> ```ComponentId``` list </param>
+/// <returns> ```Map&lt;ConnectionId, Wire&gt;``` </returns>
 let getConnectedWires (wModel: Model) (sModel: Symbol.Model) (sIdLst: ComponentId list) : Map<ConnectionId, Wire> =
     let pIdList = Symbol.getPortsFromSymbols sModel sIdLst
 
