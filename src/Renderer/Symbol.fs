@@ -77,7 +77,10 @@ let posAdd  (a:XYPos) (b:XYPos) =
 /// Converts two floats into ```XYPos```.
 let posOf x y = {X=x;Y=y}
 
-/// Checks if a component is within a boundary.
+/// Checks if a ```Component``` is within a boundary.
+/// Returns ```true``` if it is, and ```false``` otherwise.
+/// Takes in the ```Component``` top-left and bottom right positions as ```XYPos```.
+/// Also takes in the boundary's top-left and bottom right positions as ```XYPos```. 
 let withinSelectedBoundary (compTopLeft:XYPos) (compBotRight:XYPos) (boundTopLeft:XYPos) (boundBotRight:XYPos) :bool =
     match compTopLeft,compBotRight with
         | point1,point2 when 
@@ -135,7 +138,7 @@ let allPortsInModel (symModel: Model) : Map<PortId, Port> =
         ) acc (combinedPortsMap elem)
     ) Map.empty
 
-/// Given a Port ```port```, find its parent symbol in the symbol model ```symModel```.
+/// Given a ```Port```, find its parent symbol in the symbol ```Model```.
 let findSymbolFromPort (symModel: Model) (port: Port) : Symbol =
     symModel.[port.HostId]
 
