@@ -24,4 +24,20 @@
 	[<Erase>]
 	type PortId = | PortId of string
 	```
-```
+### PortWidth
+        ```
+   	[<Erase>]
+   	type PortWidth = | PortWidth of int
+	```
+### segmentIndex
+	```
+	[<Erase>]
+	type SegmentIndex     =  int
+	```
+### CreateOrDelete 
+	```
+	[<Erase>]
+	type CreateOrDelete = 
+	| Create
+	| Delete
+	```
