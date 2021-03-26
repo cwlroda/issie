@@ -221,18 +221,19 @@ let symbolType (symModel: Model) (compId: ComponentId) : ComponentType =
 let symbolLabel (symModel: Model) (compId: ComponentId) : string = 
     (Map.find compId symModel).Component.Label
 
-let componentBBox (comp: Component) : BBox =
+let componentBBox (allowableWidth : int) (comp: Component): BBox =
     {
         Pos = {X = comp.X - gridSize; Y = comp.Y}
-        Width = comp.W + (gridSize * 2.)
+        Width = comp.W + (gridSize * (2.+ float (allowableWidth)))
         Height = comp.H
     }
 
 let symbolBBox (symModel: Model) (compId: ComponentId) : BBox =
     let foundSymbol = 
         Map.find compId symModel
-
-    componentBBox foundSymbol.Component
+    match foundSymbol.Component.Type with
+    |Not | Nand | Nor | Xnor -> componentBBox 1 foundSymbol.Component
+    |_ -> componentBBox 0 foundSymbol.Component
 
 let subtractPortWidth (pw1:PortWidth) (pw2:PortWidth) :PortWidth = 
     let (PortWidth w1) = pw1
@@ -1480,6 +1481,20 @@ let private renderSymbol =
                         match portNumber with
                         |portCheck when portCheck >= 0 ->
                             g[] [
+                                circle 
+                                    (Seq.append [
+                                        Cx (absPos()).X
+                                        Cy (absPos()).Y
+                                        R 2.5
+                                    ] (viewPortLinesStaticComponent port ))[]
+                                let (PortWidth wid) = port.Width
+                                if selectedBool = true && (wid > 0) then
+                                    text (Seq.append [
+                                        X (snd dynamicContent)
+                                        Y ((absPos()).Y - 20.)
+                                        ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
+                                else nothing
+
                                 match compType with 
                                 | Not | Nand | Nor | Xnor ->
                                     match port.PortType with
@@ -1502,20 +1517,6 @@ let private renderSymbol =
                                         ]
                                     |_ -> nothing
                                 | _ -> nothing
-                                
-                                circle 
-                                    (Seq.append [
-                                        Cx (absPos()).X
-                                        Cy (absPos()).Y
-                                        R 2.5
-                                    ] (viewPortLinesStaticComponent port ))[]
-                                let (PortWidth wid) = port.Width
-                                if selectedBool = true && (wid > 0) then
-                                    text (Seq.append [
-                                        X (snd dynamicContent)
-                                        Y ((absPos()).Y - 20.)
-                                        ] (viewPortBusIndicatorTextStaticComponent port)) [str <| string (port.Width)]
-                                else nothing
                             ]
                         |_ -> nothing
                     )
