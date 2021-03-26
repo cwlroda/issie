@@ -1845,21 +1845,19 @@ let view (model : Model) (selectedSymbols: CommonTypes.ComponentId list option) 
     |> ofList
 
 
-//---------------Other interface functions--------------------//
-
-
-/// Return the output Buswire width (in bits) if this can be calculated based on known
-/// input wire widths, for the symbol wId. The types used here are possibly wrong, since
-/// this calculation is based on ports, and the skeleton code does not implement ports or
-/// port ids. If This is done the inputs could be expressed in terms of port Ids.
-let calculateOutputWidth (wId: ConnectionId) (outputPortNumber: int) (inputPortWidths: int option list) : int option =
-    failwithf "Not implemented"
 
 
 //----------------------interface to Issie-----------------------------//
+/// <summary> Extracts the component from the symbol model using the component's ID </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="sId"> The desired component's ID </param>
+/// <returns> The desired component, represented by ```Component``` </returns>
 let extractComponent (symModel: Model) (sId:ComponentId) : Component= 
     (getSymbolFromSymbolId symModel sId).Component
 
+/// <summary> Extracts all components from the symbol model</summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <returns> A list of all components, represented by ```Component list``` </returns>
 let extractComponents (symModel: Model) : Component list = 
     symModel
     |> Map.toList
@@ -1871,8 +1869,11 @@ let extractComponents (symModel: Model) : Component list =
 // Our team has created a type PortId to represent ports. 
 // Issie may not recognise this, hence it might be useful for Issie if we translate 
 // PortId into (ComponentId, PortNumber, PortType) Instead
-
-let translatePortToIssieFormat (symModel: Model) (portId: PortId): (ComponentId*PortNumber*PortType) =
+/// <summary> Translates ```PortID``` into a tuple of ```ComponentId * PortNumber * PortType``` for Issie convenience </summary>
+/// <param name="symModel"> The current symbol model </param>
+/// <param name="portId"> The desired port's ID </param>
+/// <returns> The translated port information, represented by ```ComponentId * PortNumber * PortType``` </returns>
+let translatePortToIssieFormat (symModel: Model) (portId: PortId): (ComponentId * PortNumber * PortType) =
     let foundPort = 
         portId
         |> findPort symModel
