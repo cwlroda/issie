@@ -8,14 +8,17 @@ open Elmish.React
 
 open Helpers
 
+/// Type used for any other model contained in Sheet's model.
 type SubModel = BusWire.Model * Symbol.Model
 
+/// Type used for the elements to be created for copy and paste.
 type CreateElements =
     {
         Symbols: (CommonTypes.Component) list
         Wires: (CommonTypes.PortId * CommonTypes.PortId) list
     }
 
+/// Type representing the currnt function of the mouse.
 type DragState =
     | Wire of bool * SubModel
     | Symbol of bool * SubModel
@@ -24,11 +27,13 @@ type DragState =
     | Pan of XYPos * XYPos * XYPos
     | NotDragging
 
+/// Type representing what the user has currently selected.
 type SelectionState =
     | Wire of CommonTypes.ConnectionId
     | Symbols of CommonTypes.ComponentId list
     | Empty
 
+/// Type to store what has been copied.
 type CopyState =
     | Copied of CreateElements * int
     | Uninitialized
@@ -50,6 +55,7 @@ type Model = {
     PrevPortType: CommonTypes.PortType Option
 }
 
+/// Type for all messages coming into the renderer.
 type KeyboardMsg =
     | AltC
     | AltV
@@ -64,10 +70,12 @@ type KeyboardMsg =
     | INS
     | AltShiftD
 
+/// Type to store if the user is currently pressing any modifier keys.
 type Modifier =
     | Control
     | NoModifier
 
+/// Sheet messages type.
 type Msg =
     | UpdateSize of float * float
     | SaveState of SubModel
@@ -77,10 +85,11 @@ type Msg =
     | KeyPress of KeyboardMsg
     | MouseMsg of MouseT * Modifier
 
-/// Constants that will be turned into settings at a later date
+/// Constants which could be turned into settings at a later date
 let gridSize = 10
 let undoHistorySize = 50
 
+/// Generates all SVG for sheet components.
 let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispatch<Msg>) =
     let borderSize = 3.
     let mDown (ev: Types.MouseEvent) = ev.buttons <> 0.
@@ -281,15 +290,16 @@ let displaySvgWithZoom (model: Model) (svgReact: ReactElement) (dispatch: Dispat
         ]
     ]
 
-
-    
+/// Sheet's update function.
 let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
+    /// Returns a save state command of prevWireModel if didDrag = true.
     let saveStateIfDraggedCmd didDrag prevWireModel =
         if didDrag then
             Cmd.ofMsg (SaveState prevWireModel)
         else
             Cmd.none
 
+    /// Updates the model and sends appropriate dragging messages from dragging the mouse to the point p.
     let processDrag p mouseIsDown =
         let model = { model with MousePosition=p}
 
@@ -338,6 +348,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             }, Cmd.none
         | _ -> model, Cmd.none
 
+    /// Updates the model from the user panning.
     let updatePan model origPan panStart panEnd =
         let diffX = (panEnd.X - panStart.X)
         let diffY = (panEnd.Y - panStart.Y)
@@ -347,6 +358,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             MousePosition = posDiff model.MousePosition <| posOf diffX diffY
         }
 
+    /// Resets the model appropriately if a drag is interrupted, e.g
+    /// by middle clicking, or  moving the mouse outside of the canvas.
     let handleInterruptAction model =
         let newModel = {model with DragState=NotDragging}
 
@@ -382,6 +395,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             , Cmd.none
         | _ -> newModel, Cmd.none
 
+    /// Updates the model and sends necessary commands based on
+    /// where the user has clicked down.
     let handleLeftClick model p m =
         let targetedPort = Symbol.getTargetedPort model.Symbol p
         let selectedWire = BusWire.getTargetedWire model.Wire p
@@ -430,6 +445,7 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                 DragState = AreaSelect (p, p, false)
             }, Cmd.none
 
+    /// Width inferrence of a set of ports, based on if a wire is being created or deleted.
     let rec batchInfer (symModel:Symbol.Model) (pIdStart:CommonTypes.PortId) (pIdEnd:CommonTypes.PortId) (createOrDelete:CommonTypes.CreateOrDelete) (visited:CommonTypes.PortId list) (iterations:int): Symbol.Model =
         if iterations > 100 then symModel else
         let createMsg = Symbol.CreateInference (pIdStart,pIdEnd)
@@ -516,8 +532,8 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
                     batchInfer newModel pIdStart pIdEnd CommonTypes.CreateOrDelete.Create [] (iterations + 1)
                 else symModel
 
+    /// Update model and create appropriate commands for keyboard shortcuts.
     let handleKeyPress key =
-
         match key with
         | AltA ->
             let selectedSymbols = Symbol.getAllSymbols model.Symbol
@@ -726,6 +742,9 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | AltShiftD ->
             model, Cmd.ofMsg (Wire (BusWire.Debug))
 
+    /// Handle (update state and generate appropriate commands for) all mouse messages,
+    /// based on the mouse operation (down / up / drag), its new position,
+    /// and if Ctrl is pressed. This depends on the current mouse state.
     let handleMouseMsg mT modifier =
         match (mT.Op, mT.Pos, modifier) with
         | (Down, p, mods) ->
@@ -916,17 +935,21 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
         | (Leave, _, _) -> handleInterruptAction model
         | (Move, p, _) -> processDrag p false
 
+    /// Call helper functions above based on the incoming message.
     match msg with
+    /// Update the size of the canvas if the surrounding div is resized.
     | UpdateSize (w, h) ->
         { model with
             Width=w
             Height=h
         }, Cmd.none
+    /// Update the UndoList with the current model.
     | SaveState savedSubModel ->
         { model with
             UndoList = List.truncate undoHistorySize <| savedSubModel :: model.UndoList
             RedoList = []
         }, Cmd.none
+    /// Send messages to add new symbols and wires, and select newly created symbols.
     | CreateObjects {Symbols=symData;Wires=wireData} -> 
         let addSymbolCommand =
             let middleOfSymbols =
@@ -973,20 +996,25 @@ let update (msg: Msg) (model: Model): Model * Cmd<Msg> =
             addWireCommand
             Cmd.ofMsg (Symbol (Symbol.StartDragging (createdSymbols, snapToGrid newModel.MousePosition)))
         ]
+    /// Pass Symbol messages onto Symbol.
     | Symbol sMsg ->
         let sModel, sCmd = Symbol.update sMsg model.Symbol
 
         { model with Symbol = sModel }
         , Cmd.map Symbol sCmd
+    /// Pass Wire messages onto Wire.
     | Wire wMsg ->
         let wModel, wCmd = BusWire.update wMsg model.Wire model.Symbol
 
         { model with Wire = wModel }
         , Cmd.map Wire wCmd
+    /// Send key presses to the helper function.
     | KeyPress k -> handleKeyPress k
+    /// Send mouse messages to the helper function.
     | MouseMsg (mT, modifier) -> handleMouseMsg mT modifier
 
-
+/// Sheet's view function. Gets SVG from Symbol and wire and then displays that
+/// along with Sheet's SVG.
 let view (model: Model) (dispatch: Msg -> unit) =
     let sDispatch sMsg = dispatch (Symbol sMsg)
     let selectedSymbols =
@@ -1019,7 +1047,8 @@ let view (model: Model) (dispatch: Msg -> unit) =
 
     displaySvgWithZoom model symbolsAndWiresSvg dispatch
 
-
+/// Initialises Sheet's model, and sends commands to Symbol
+/// and BusWire to initialise theirs.
 let init () =
     let sModel, sCmds = Symbol.init ()
     let wModel, wCmds = BusWire.init sModel ()
