@@ -51,7 +51,8 @@ type Msg =
 
 //---------------------------------helper types and functions----------------//
 
-
+/// Cuts the length of the input ```string``` to match the ```threshold```.
+/// Replaces any excess characters with ```..``` .
 let processingString (inputString) (thresholdLength) = 
     let beforeProcessingLength = String.length inputString
     if beforeProcessingLength > thresholdLength then
@@ -65,14 +66,21 @@ let processingString (inputString) (thresholdLength) =
             intermediateStep + ".."
         else inputString
 
+/// Subtracts two ```XYPos```, returning another ```XYPos``` corresponding to ```a - b```.
 let posDiff (a:XYPos) (b:XYPos) =
     {X=a.X-b.X; Y=a.Y-b.Y}
 
+/// Adds two ```XYPos```, returning another ```XYPos``` corresponding to ```a + b```.
 let posAdd  (a:XYPos) (b:XYPos) =
     {X=a.X+b.X; Y=a.Y+b.Y}
 
+/// Converts two floats into ```XYPos```.
 let posOf x y = {X=x;Y=y}
 
+/// Checks if a ```Component``` is within a boundary.
+/// Returns ```true``` if it is, and ```false``` otherwise.
+/// Takes in the ```Component``` top-left and bottom right positions as ```XYPos```.
+/// Also takes in the boundary's top-left and bottom right positions as ```XYPos```. 
 let withinSelectedBoundary (compTopLeft:XYPos) (compBotRight:XYPos) (boundTopLeft:XYPos) (boundBotRight:XYPos) :bool =
     match compTopLeft,compBotRight with
         | point1,point2 when 
@@ -83,7 +91,7 @@ let withinSelectedBoundary (compTopLeft:XYPos) (compBotRight:XYPos) (boundTopLef
         | _ -> false
 
 
-
+/// Returns a combined ```Map<PortId, Port>``` of all valid input ports and output ports in a ```Symbol```.
 let combinedPortsMap (sym: Symbol) : Map<PortId, Port> =
     let filledPortList (portMap: Map<PortId, Port>) : Map<PortId, Port> = 
         portMap
@@ -91,13 +99,14 @@ let combinedPortsMap (sym: Symbol) : Map<PortId, Port> =
 
     Map.fold (fun acc k v -> Map.add k v acc) (filledPortList sym.Component.InputPorts) (filledPortList sym.Component.OutputPorts)
 
-let findPortFromNumAndType (sym: Symbol) (portNum: PortNumber) (portType: PortType) =
+/// Returns the specific ```Port``` in a symbol given the ```Symbol```, ```PortNumber``` and ```PortType```.
+let findPortFromNumAndType (sym: Symbol) (portNum: PortNumber) (portType: PortType): Port =
     combinedPortsMap sym
     |> Map.toList
     |> List.find ( fun (_,port) -> (port.PortNumber = Some portNum && port.PortType= portType))
     |> snd
 
-
+/// Returns all valid ```PortId``` that are in the list of symbols ```sIdLst```.
 let getPortsFromSymbols (symModel: Model) (sIdLst: ComponentId list) : PortId list =
     let symList =
         symModel
@@ -114,11 +123,13 @@ let getPortsFromSymbols (symModel: Model) (sIdLst: ComponentId list) : PortId li
         )
     ) []
 
+/// Returns all the symbols contained in the symbol ```Model``` as a ```ComponentId list```. 
 let getAllSymbols (symModel: Model) : ComponentId list =
     symModel
     |> Map.toList
     |> List.map fst
 
+/// Returns all valid ```Ports``` contained in the symbol ```Model```.
 let allPortsInModel (symModel: Model) : Map<PortId, Port> = 
     symModel
     |> Map.fold (fun acc _ elem -> 
@@ -127,10 +138,14 @@ let allPortsInModel (symModel: Model) : Map<PortId, Port> =
         ) acc (combinedPortsMap elem)
     ) Map.empty
 
-
+/// Given a ```Port```, find its parent symbol in the symbol ```Model```.
 let findSymbolFromPort (symModel: Model) (port: Port) : Symbol =
     symModel.[port.HostId]
 
+/// Given a position,
+/// return the ```ComponentId``` of a symbol that is in the symbol ```Model```
+/// as an option if the position ```pos``` is within the symbol. 
+/// Returns ```None``` otherwise.
 let getTargetedSymbol (symModel: Model) (pos:XYPos) : ComponentId Option = 
     let foundSymId = 
         symModel
@@ -145,6 +160,7 @@ let getTargetedSymbol (symModel: Model) (pos:XYPos) : ComponentId Option =
         | Some symId -> Some symId
         | None -> None
 
+/// Given an bounding box area ```bbox```, return a list of ```ComponentId``` in the symbol ```Model``` that intersecting with ```bbox```.
 let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     symModel
     |> Map.filter
@@ -155,9 +171,11 @@ let getSymbolsInTargetArea (symModel:Model) (bbox:BBox) : ComponentId List =
     |> Map.toList
     |> List.map fst
 
+/// Given a ```PortId``` in a symbol ```Model``` return the entire ```Port```.
 let findPort (symModel: Model) (portId: PortId) : Port =
     (allPortsInModel symModel).[portId]
 
+/// Given a ```PortId``` in a symbol ```Model``` return its position as an ```XYPos```.
 let portPos (symModel: Model) (portId: PortId) : XYPos = 
     let foundPort = findPort symModel portId
     let foundSymbol = findSymbolFromPort symModel foundPort
@@ -166,12 +184,13 @@ let portPos (symModel: Model) (portId: PortId) : XYPos =
         Y = foundPort.PortPos.Y + foundSymbol.Component.Y
     }
 
-let nearbyPorts (symModel: Model) (pos: XYPos) : Port list = 
+/// Given a position ```pos```, return all ports in the symbol ```Model``` that are within the ```threshold``` from ```pos```.
+let nearbyPorts (symModel: Model) (pos: XYPos) (threshold: float) : Port list = 
     allPortsInModel symModel
     |> Map.filter
         (fun _ port ->
             portPos symModel port.PortId
-            |> posDist pos <= 10.
+            |> posDist pos <= threshold
         )
     |> Map.toList
     |> List.map snd
@@ -181,46 +200,63 @@ let nearbyPorts (symModel: Model) (pos: XYPos) : Port list =
             |> posDist pos
         )
 
+/// Given a position ```pos```,
+/// return the ```PortId``` of a port that is in the symbol ```Model```
+/// as an option if ```pos``` is within 10 pixels from the port.
+/// Returns ```None``` otherwise.
 let getTargetedPort (symModel: Model) (pos: XYPos) : PortId Option =
-    match nearbyPorts symModel pos with
+    match nearbyPorts symModel pos 10. with
     | nearestPort::_ -> Some nearestPort.PortId
     | [] -> None
 
+/// Given a position ```pos```,
+/// return the ```PortId``` of a port that is in the symbol ```Model```
+/// as an option if ```pos``` within 10 pixels from the port,
+/// and its ```PortType``` matches ```portType```.
+/// Returns ```None``` otherwise.
 let getSpecificPort (symModel: Model) (pos: XYPos) (portType: PortType) : PortId Option =
     let portList =
-        nearbyPorts symModel pos
+        nearbyPorts symModel pos 10.
         |> List.filter (fun p -> p.PortType = portType)
     
     match portList with
     | nearestPort::_ -> Some nearestPort.PortId
     | [] -> None
 
+/// Given a symbol's ```ComponentId``` in a symbol ```Model```, return the position of its top left corner as an ```XYPos```.
 let symbolPos (symModel: Model) (sId: ComponentId) : XYPos = 
     Map.find sId symModel
     |> (fun sym -> {X=sym.Component.X;Y=sym.Component.Y})
 
+/// Given a ```PortId``` in a symbol ```Model```, return its ```PortType```.
 let portType (symModel: Model) (portId: PortId) : PortType = 
     let foundPort = findPort symModel portId
     foundPort.PortType
 
+/// Given a ```PortId``` in a symbol ```Model```, return its ```PortWidth```.
 let portWidth (symModel: Model) (portId: PortId) : int option = 
     let foundPort = findPort symModel portId
 
     match foundPort.Width with
     | PortWidth x -> Some x
 
+/// Given a symbol's ```ComponentId``` in a symbol ```Model```, return the said ```symbol```. 
 let getSymbolFromSymbolId (symModel: Model) (symId: ComponentId) : Symbol = 
     Map.find symId symModel
 
+/// Given a ```PortId``` in a symbol ```Model```, return the parent symbol's ```ComponentId```.
 let getHostId (symModel: Model) (portId: PortId) : ComponentId = 
     (findPort symModel portId).HostId
 
+/// Given a symbol's ```ComponentId``` in a symbol ```Model```, return the said symbol's ```ComponentType```.
 let symbolType (symModel: Model) (compId: ComponentId) : ComponentType = 
     (Map.find compId symModel).Component.Type
 
+/// Given a symbol's ```ComponentId``` in a symbol ```Model```, return the said symbol's label.
 let symbolLabel (symModel: Model) (compId: ComponentId) : string = 
     (Map.find compId symModel).Component.Label
 
+/// Given a ```Component``` and some tolerance, calculate its bounding box.
 let componentBBox (allowableWidth : int) (comp: Component): BBox =
     {
         Pos = {X = comp.X - gridSize; Y = comp.Y}
@@ -228,6 +264,7 @@ let componentBBox (allowableWidth : int) (comp: Component): BBox =
         Height = comp.H
     }
 
+/// Given a symbol's ```ComponentId``` in a symbol ```Model```, calculate the symbol's bounding box as a ```BBox```.
 let symbolBBox (symModel: Model) (compId: ComponentId) : BBox =
     let foundSymbol = 
         Map.find compId symModel
@@ -235,34 +272,20 @@ let symbolBBox (symModel: Model) (compId: ComponentId) : BBox =
     | Not | Nand | Nor | Xnor -> componentBBox 1 foundSymbol.Component
     | _ -> componentBBox 0 foundSymbol.Component
 
+/// Subtracts two ```PortWidth```, returning a ```PortWidth``` corresponding to ```pw1 - pw2```.
 let subtractPortWidth (pw1:PortWidth) (pw2:PortWidth) :PortWidth = 
     let (PortWidth w1) = pw1
     let (PortWidth w2) = pw2
     PortWidth (w1-w2)
 
+/// Adds two ```PortWidth```, returning a ```PortWidth``` corresponding to ```pw1 + pw2```.
 let addPortWidth (pw1:PortWidth) (pw2:PortWidth): PortWidth =
     let (PortWidth w1) = pw1
     let (PortWidth w2) = pw2
     PortWidth (w1+w2)
 
-let portsInRange (model: Model) (mousePos: XYPos) (range: float) : PortId list =
-    let nearbyPorts = 
-        allPortsInModel model
-        |> Map.filter
-            (fun _ port ->
-                portPos model port.PortId
-                |> posDist mousePos < range
-            )
-        |> Map.toList
-        |> List.map snd
-        |> List.sortBy
-            (fun port ->
-                portPos model port.PortId
-                |> posDist mousePos
-            )
-
-    List.map(fun port -> port.PortId) nearbyPorts
-
+/// Given a list of symbol ```ComponentId``` in a symbol ```Model```, returns ```true``` they are overlapping with any other symbols in the symbol.
+/// Returns ```false``` if they are not.
 let symbolsCollide (idLst : ComponentId list) (model : Model) : bool = 
     idLst
     |> List.collect (fun sId ->
@@ -273,8 +296,6 @@ let symbolsCollide (idLst : ComponentId list) (model : Model) : bool =
     |> List.length
     |> (<) 0
 
-let mulOfFive (input:float)  : float = 
-    10. * float (int (input / 10.))
     
 //-----------------------------Skeleton Model Type for symbols----------------//
 
