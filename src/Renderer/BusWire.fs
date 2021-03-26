@@ -863,7 +863,7 @@ let init (sModel: Symbol.Model) () =
         }
     
     [1..25]
-    |> List.fold (fun acc i ->
+    |> List.fold (fun acc _ ->
         let s1, s2 =
             outList.[rng.Next(0, n-1)],
             inList.[rng.Next(0, n-1)]
