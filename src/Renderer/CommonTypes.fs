@@ -53,6 +53,11 @@ module CommonTypes
     type SegmentIndex     =  int
 
     [<Erase>]
+    type Orientation = 
+        | Vertical
+        | Horizontal
+
+    [<Erase>]
     type CreateOrDelete = 
         | Create
         | Delete
