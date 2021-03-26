@@ -25,3 +25,16 @@ Extracts all the wires connected to symbol with the given component id and retur
 Returns a list of connections where each connection is the map of a wire from the Wire type to the connection type. 
 
 ### Functions in Sheet
+Sheet contains the following Interface Messages which can be used by ISSIE for all top-level renderer functionality. The keyboard shortcuts were abstracted to have functional names, as ISSIE may only want to call certain messages when the Renderer portion of the UI is in focus, for example.
+
+* `CreateObjects of CreateElements` - The `CreateElements` type contains a list of components and list of wires to be added to the renderer.
+* `Copy` - To copy the selected objects to the renderer clipboard.
+* `Paste` - Paste the renderer objects currently in the clipboard.
+* `Undo` - Return to the previous state.
+* `Redo` - Cancel the most recent undo.
+* `DeleteSelected` - Delete the currently selected symbols and wires.
+* `CancelAction` - Cancel the action currently occurring in the renderer, for example dragging an object, or placing a new symbol.
+* `SelectAll` - Select all symbols.
+* `Zoom of ZoomRequest` - Zoom the sheet. The ZoomRequest DU consists of In, Out or Reset.
+* `ToggleWireDebug` - Toggle wire debugging - when debugging, the bounding boxes of wires are displayed.
+* `MouseMsg of MouseT * Modifier` - Send a mouse message to the renderer. MouseT contains information about which mouse button is pressed, the position of the mouse and if the mouse was clicked up / down / moved, etc. Modifier describes if the Control key was being held during the action.
