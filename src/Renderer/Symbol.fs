@@ -270,7 +270,7 @@ let portType (symModel: Model) (portId: PortId) : PortType =
 /// <summary> Given a port id in a symbol model, return its port width. </summary>
 /// <param name="symModel"> The current symbol model </param>
 /// <param name="portId"> The desired port's port ID </param>>
-/// <returns> The desired port's port width, represented by ```PortWidth``` </returns>
+/// <returns> The desired port's port width, represented by ```int option``` </returns>
 let portWidth (symModel: Model) (portId: PortId) : int option = 
     let foundPort = findPort symModel portId
 
