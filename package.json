@@ -52,7 +52,7 @@
     "react-dom": "^16.9.0",
     "rechart": "^0.0.1",
     "source-map-support": "0.5.19",
-    "tippy.js": "^6.2.6",
+    "tippy.js": "^6.3.7",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
