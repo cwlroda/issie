@@ -42,7 +42,7 @@
     }
   },
   "dependencies": {
-    "bulma": "^0.9.0",
+    "bulma": "^0.9.3",
     "draw2d": "^1.0.38",
     "electron-devtools-installer": "^3.1.0",
     "font-awesome": "^4.7.0",
